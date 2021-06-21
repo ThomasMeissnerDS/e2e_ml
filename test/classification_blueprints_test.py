@@ -72,7 +72,7 @@ def load_titanic_data():
     return test_df, test_target, val_df, val_df_target, test_categorical_cols
 
 
-def blueprint_binary_test_titanic(blueprint='lgbm'):
+def blueprint_binary_test_titanic(blueprint='logistic_regression'):
     test_df, test_target, val_df, val_df_target, test_categorical_cols = load_titanic_data()
     titanic_auto_ml = cb.BluePrint(dataframe=test_df,
                                    target_variable=test_target,
