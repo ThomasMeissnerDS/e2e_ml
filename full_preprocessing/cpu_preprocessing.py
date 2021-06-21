@@ -89,6 +89,7 @@ class MlPipeline:
         self.optuna_studies = {}
         self.predicted_classes = {}
         self.predicted_probs = {}
+        self.evaluation_scores = {}
         self.xg_boost_regression = None
         self.xgboost_objective = None
         self.prediction_mode = prediction_mode

@@ -2,7 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/classification/classification.iml" filepath="$PROJECT_DIR$/classification/classification.iml" />
+      <module fileurl="file://$PROJECT_DIR$/classification_old/classification_old.iml" filepath="$PROJECT_DIR$/classification_old/classification_old.iml" />
+      <module fileurl="file://$PROJECT_DIR$/classification_old/classification_tests.iml" filepath="$PROJECT_DIR$/classification_old/classification_tests.iml" />
       <module fileurl="file://$PROJECT_DIR$/e2e_ml.iml" filepath="$PROJECT_DIR$/e2e_ml.iml" />
     </modules>
   </component>

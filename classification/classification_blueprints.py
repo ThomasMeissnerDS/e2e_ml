@@ -1,4 +1,5 @@
 from classification.classification_models import ClassificationModels
+import numpy as np
 
 
 class BluePrint(ClassificationModels):
@@ -35,9 +36,10 @@ class BluePrint(ClassificationModels):
             self.logistic_regression_train()
         self.data_scaling()
         self.logistic_regression_predict()
+        self.classification_eval('logistic_regression')
         self.prediction_mode = True
 
-    def ml_bp01_train_test_binary_full_processing_xgb_prob(self, df=None):
+    def ml_bp01_multiclass_full_processing_xgb_prob(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -69,9 +71,10 @@ class BluePrint(ClassificationModels):
         else:
             self.xg_boost_train(autotune=True)
         self.xgboost_predict()
+        self.classification_eval('xgboost')
         self.prediction_mode = True
 
-    def ml_bp02_train_test_binary_full_processing_lgbm_prob(self, df=None):
+    def ml_bp02_multiclass_full_processing_lgbm_prob(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -106,9 +109,10 @@ class BluePrint(ClassificationModels):
             except Exception:
                 self.lgbm_train(tune_mode='simple', run_on='cpu', gpu_use_dp=False)
         self.lgbm_predict()
+        self.classification_eval('lgbm')
         self.prediction_mode = True
 
-    def ml_bp03_train_test_binary_full_processing_sklearn_stacking_ensemble(self, df=None):
+    def ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -141,9 +145,11 @@ class BluePrint(ClassificationModels):
         else:
             self.sklearn_ensemble_train()
         self.sklearn_ensemble_predict()
+        algorithm = 'sklearn_ensemble'
+        self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
         self.prediction_mode = True
 
-    def ml_bp04_train_test_binary_full_processing_blended_ensemble(self, df=None):
+    def ml_bp04_binary_full_processing_blended_ensemble(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -198,4 +204,5 @@ class BluePrint(ClassificationModels):
             predicted_classes = np.asarray([np.argmax(line) for line in blended_probs])
         self.predicted_probs = {f"{algorithm}": blended_probs}
         self.predicted_classes = {f"{algorithm}": predicted_classes}
+        self.classification_eval(algorithm=algorithm, pred_probs=blended_probs, pred_class=predicted_classes)
         self.prediction_mode = True

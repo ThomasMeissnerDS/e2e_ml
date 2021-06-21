@@ -1,25 +1,10 @@
-import cpu_preprocessing
+from full_preprocessing import cpu_preprocessing
 from pandas.core.common import SettingWithCopyWarning
-from sklearn import model_selection
-from sklearn import preprocessing
-from sklearn.preprocessing import MinMaxScaler
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from category_encoders import *
-from imblearn.over_sampling import SMOTE
-from sklearn.ensemble import IsolationForest
-from sklearn.cluster import DBSCAN
-from sklearn.mixture import GaussianMixture
-from sklearn.experimental import enable_iterative_imputer
-from sklearn.impute import IterativeImputer
-from sklearn.model_selection import cross_val_score
-from boostaroota import BoostARoota
 import optuna
 import xgboost as xgb
 import lightgbm as lgb
 from lightgbm import LGBMClassifier
-import sklearn
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.ensemble import StackingClassifier
 from sklearn.linear_model import LogisticRegression
@@ -27,11 +12,12 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.metrics import matthews_corrcoef
-from sklearn.utils import class_weight
+from sklearn.metrics import roc_auc_score
 from sklearn.metrics import f1_score
+from sklearn.utils import class_weight
+from sklearn.metrics import confusion_matrix, classification_report
 import shap
-import gc
-import pickle
+import matplotlib.pyplot as plt
 import warnings
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
@@ -62,20 +48,100 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
         self.preprocess_decisions[f"probability_threshold"] = best_threshold
         return self.preprocess_decisions[f"probability_threshold"]
 
-    def shap_explanations(self, model, test_df, cols):
+    def shap_explanations(self, model, test_df, cols, explainer='tree', algorithm=None):
         """
         See explanations under:
         https://medium.com/rapids-ai/gpu-accelerated-shap-values-with-xgboost-1-3-and-rapids-587fad6822
         :param model: Trained ML model
         :param test_df: Test data to predict on.
+        :param explainer: Set "tree" for TreeExplainer. Otherwise uses KernelExplainer.
+        :param algorithm: Define name of the chosen ml algorithm as a string.
         :return: Returns plot of feature importance and interactions.
         """
         # print the JS visualization code to the notebook
         shap.initjs()
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_train)
-        shap.summary_plot(shap_values, X_train, plot_type="bar")
+        if explainer == 'tree':
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(X_test)
+            shap.summary_plot(shap_values, X_test, plot_type="bar", show=False)
+            plt.savefig(f'{algorithm}Shap_feature_importance.png')
+            plt.show()
+        else:
+            model_shap_explainer = shap.KernelExplainer(model.predict, X_test)
+            model_shap_values = model_shap_explainer.shap_values(X_test)
+            shap.summary_plot(model_shap_values, X_test, show=False)
+            plt.savefig(f'{algorithm}Shap_feature_importance.png')
+            plt.show()
+
+    def classification_eval(self, algorithm, pred_probs=None, pred_class=None):
+        """
+        Takes in the algorithm name. This is needed to grab saved predictions and to store cvlassification scores
+        of different evaluation functions within the class. Returns the evaluation dictionary.
+        :param algorithm: Name of the used algorithm
+        :param pred_probs: Probabilities of predictions
+        :param pred_class: Predicted classes
+        :return: Returns the evaluation dictionary.
+        """
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            """
+            We need a fallback logic as we might receive different types of data.
+            If pred_class will not work with numpy arrays and needs the .any() function.
+            """
+            try:
+                if pred_class:
+                    y_hat = pred_class
+                else:
+                    y_hat = self.predicted_classes[f"{algorithm}"]
+            except Exception:
+                if pred_class.any():
+                    y_hat = pred_class
+                else:
+                    y_hat = self.predicted_classes[f"{algorithm}"]
+
+            try:
+                if pred_probs:
+                    y_hat_probs = pred_probs
+                else:
+                    y_hat_probs = self.predicted_probs[f"{algorithm}"]
+            except Exception:
+                if pred_probs.any():
+                    y_hat_probs = pred_probs
+                else:
+                    y_hat_probs = self.predicted_probs[f"{algorithm}"]
+
+            """
+            Calculating Matthews, ROC_AUC score and different F1 scores.
+            """
+            try:
+                matthews = matthews_corrcoef(Y_test, y_hat)
+            except Exception:
+                matthews = 0
+            print(f"The Matthew correlation is {matthews}")
+
+            roc_auc = roc_auc_score(Y_test, y_hat_probs)
+            print(f"The ROC_AUC score is {roc_auc}")
+            f1_score_macro = f1_score(Y_test, y_hat, average='macro')
+            print(f"The macro F1 score is {f1_score_macro}")
+            f1_score_micro = f1_score(Y_test, y_hat, average='micro')
+            print(f"The micro F1 score is {f1_score_micro}")
+            f1_score_weighted = f1_score(Y_test, y_hat, average='weighted')
+            print(f"The weighted F1 score is {f1_score_weighted}")
+
+            full_classification_report = classification_report(Y_test, y_hat)
+            print(full_classification_report)
+            self.evaluation_scores[f"{algorithm}"] = {
+                'matthews': matthews,
+                'roc_auc': roc_auc,
+                'f1_score_macro': f1_score_macro,
+                'f1_score_micro': f1_score_micro,
+                'f1_score_weighted': f1_score_weighted,
+                'classfication_report': full_classification_report
+            }
+            return self.evaluation_scores
 
     def logistic_regression_train(self):
         algorithm = 'logistic_regression'
@@ -368,17 +434,6 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
-            def lgb_matth_score(y_hat, dmat):
-                # TODO: FIX IT
-                print(y_hat)
-                actuals = dmat.get_label() if isinstance(dmat, lgb.Dataset) else dmat
-                print(actuals)
-                pred = y_hat.reshape(-1, len(np.unique(actuals))) # if swopped returns shape 3
-                pred_labels = np.asarray([np.argmax(line) for line in pred])
-                matthew = matthews_corrcoef(actuals, pred_labels)
-                higher_is_better = True
-                return 'matthew', matthew, higher_is_better
-
             if self.class_problem == 'binary':
                 def objective(trial):
                     dtrain = lgb.Dataset(X_train, label=Y_train)
@@ -577,6 +632,7 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
             level1 = GradientBoostingClassifier()
             # define the stacking ensemble
             model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+            print(X_train.info())
             model.fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -610,10 +666,11 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
                 predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+            # TODO: REPLACE SHAP as sklearn is not supported by TreeExplainer yet.
             try:
-                self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
             except Exception:
-                self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+                self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
