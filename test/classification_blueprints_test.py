@@ -96,7 +96,7 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression'):
         titanic_auto_ml.ml_bp00_train_test_binary_full_processing_log_reg_prob()
         print("Start prediction on holdout dataset")
         titanic_auto_ml.ml_bp00_train_test_binary_full_processing_log_reg_prob(val_df)
-        val_y_hat = titanic_auto_ml.predicted_classes['sklearn_ensemble']
+        val_y_hat = titanic_auto_ml.predicted_classes['logistic_regression']
     else:
         pass
 
@@ -109,4 +109,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression'):
     print(matthews)
 
 
-blueprint_binary_test_titanic(blueprint='sklearn_ensemble')
+blueprint_binary_test_titanic(blueprint='blended_ensemble')

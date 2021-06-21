@@ -39,9 +39,12 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
             try:
                 matthews = matthews_corrcoef(targets, blended_pred)
             except Exception:
-                partial_probs = np.asarray([line[1] for line in probs])
-                blended_pred = partial_probs > iteration
-                matthews = matthews_corrcoef(targets, blended_pred)
+                try:
+                    partial_probs = np.asarray([line[1] for line in probs])
+                    blended_pred = partial_probs > iteration
+                    matthews = matthews_corrcoef(targets, blended_pred)
+                except Exception:
+                    matthews = 0
             if matthews > max_matthew:
                 max_matthew = matthews
                 best_threshold = iteration
@@ -60,17 +63,21 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
         """
         # print the JS visualization code to the notebook
         shap.initjs()
-        X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+        if self.prediction_mode:
+            to_pred = test_df
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            to_pred = X_test
         if explainer == 'tree':
             explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(X_test)
-            shap.summary_plot(shap_values, X_test, plot_type="bar", show=False)
+            shap_values = explainer.shap_values(to_pred)
+            shap.summary_plot(shap_values, to_pred, plot_type="bar", show=False)
             plt.savefig(f'{algorithm}Shap_feature_importance.png')
             plt.show()
         else:
-            model_shap_explainer = shap.KernelExplainer(model.predict, X_test)
-            model_shap_values = model_shap_explainer.shap_values(X_test)
-            shap.summary_plot(model_shap_values, X_test, show=False)
+            model_shap_explainer = shap.KernelExplainer(model.predict, to_pred)
+            model_shap_values = model_shap_explainer.shap_values(to_pred)
+            shap.summary_plot(model_shap_values, to_pred, show=False)
             plt.savefig(f'{algorithm}Shap_feature_importance.png')
             plt.show()
 
@@ -172,15 +179,16 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict_proba(X_test)
+            self.threshold_refiner(predicted_probs, Y_test)
             if self.class_problem == 'binary':
                 partial_probs = np.asarray([line[1] for line in predicted_probs])
                 predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
             try:
-                self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
             except Exception:
-                self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+                self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
@@ -666,7 +674,6 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
                 predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
-            # TODO: REPLACE SHAP as sklearn is not supported by TreeExplainer yet.
             try:
                 self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
             except Exception:
