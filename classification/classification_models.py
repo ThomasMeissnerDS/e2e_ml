@@ -1,4 +1,4 @@
-from full_preprocessing import cpu_preprocessing
+from full_processing import postprocessing
 from pandas.core.common import SettingWithCopyWarning
 import numpy as np
 import optuna
@@ -22,7 +22,7 @@ import warnings
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 
-class ClassificationModels(cpu_preprocessing.MlPipeline):
+class ClassificationModels(postprocessing.FullPipeline):
     def threshold_refiner(self, probs, targets):
         """
         Loops through predicted class probabilities in binary contexts and measures performance with
@@ -51,105 +51,6 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
         self.preprocess_decisions[f"probability_threshold"] = best_threshold
         return self.preprocess_decisions[f"probability_threshold"]
 
-    def shap_explanations(self, model, test_df, cols, explainer='tree', algorithm=None):
-        """
-        See explanations under:
-        https://medium.com/rapids-ai/gpu-accelerated-shap-values-with-xgboost-1-3-and-rapids-587fad6822
-        :param model: Trained ML model
-        :param test_df: Test data to predict on.
-        :param explainer: Set "tree" for TreeExplainer. Otherwise uses KernelExplainer.
-        :param algorithm: Define name of the chosen ml algorithm as a string.
-        :return: Returns plot of feature importance and interactions.
-        """
-        # print the JS visualization code to the notebook
-        shap.initjs()
-        if self.prediction_mode:
-            to_pred = test_df
-        else:
-            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            to_pred = X_test
-        if explainer == 'tree':
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(to_pred)
-            shap.summary_plot(shap_values, to_pred, plot_type="bar", show=False)
-            plt.savefig(f'{algorithm}Shap_feature_importance.png')
-            plt.show()
-        else:
-            model_shap_explainer = shap.KernelExplainer(model.predict, to_pred)
-            model_shap_values = model_shap_explainer.shap_values(to_pred)
-            shap.summary_plot(model_shap_values, to_pred, show=False)
-            plt.savefig(f'{algorithm}Shap_feature_importance.png')
-            plt.show()
-
-    def classification_eval(self, algorithm, pred_probs=None, pred_class=None):
-        """
-        Takes in the algorithm name. This is needed to grab saved predictions and to store cvlassification scores
-        of different evaluation functions within the class. Returns the evaluation dictionary.
-        :param algorithm: Name of the used algorithm
-        :param pred_probs: Probabilities of predictions
-        :param pred_class: Predicted classes
-        :return: Returns the evaluation dictionary.
-        """
-        if self.prediction_mode:
-            pass
-        else:
-            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            """
-            We need a fallback logic as we might receive different types of data.
-            If pred_class will not work with numpy arrays and needs the .any() function.
-            """
-            try:
-                if pred_class:
-                    y_hat = pred_class
-                else:
-                    y_hat = self.predicted_classes[f"{algorithm}"]
-            except Exception:
-                if pred_class.any():
-                    y_hat = pred_class
-                else:
-                    y_hat = self.predicted_classes[f"{algorithm}"]
-
-            try:
-                if pred_probs:
-                    y_hat_probs = pred_probs
-                else:
-                    y_hat_probs = self.predicted_probs[f"{algorithm}"]
-            except Exception:
-                if pred_probs.any():
-                    y_hat_probs = pred_probs
-                else:
-                    y_hat_probs = self.predicted_probs[f"{algorithm}"]
-
-            """
-            Calculating Matthews, ROC_AUC score and different F1 scores.
-            """
-            try:
-                matthews = matthews_corrcoef(Y_test, y_hat)
-            except Exception:
-                matthews = 0
-            print(f"The Matthew correlation is {matthews}")
-
-            roc_auc = roc_auc_score(Y_test, y_hat_probs)
-            print(f"The ROC_AUC score is {roc_auc}")
-            f1_score_macro = f1_score(Y_test, y_hat, average='macro')
-            print(f"The macro F1 score is {f1_score_macro}")
-            f1_score_micro = f1_score(Y_test, y_hat, average='micro')
-            print(f"The micro F1 score is {f1_score_micro}")
-            f1_score_weighted = f1_score(Y_test, y_hat, average='weighted')
-            print(f"The weighted F1 score is {f1_score_weighted}")
-
-            full_classification_report = classification_report(Y_test, y_hat)
-            print(full_classification_report)
-            self.evaluation_scores[f"{algorithm}"] = {
-                'matthews': matthews,
-                'roc_auc': roc_auc,
-                'f1_score_macro': f1_score_macro,
-                'f1_score_micro': f1_score_micro,
-                'f1_score_weighted': f1_score_weighted,
-                'classfication_report': full_classification_report
-            }
-            return self.evaluation_scores
-
     def logistic_regression_train(self):
         algorithm = 'logistic_regression'
         if self.prediction_mode:
@@ -161,7 +62,7 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
             self.trained_models[f"{algorithm}"] = model
             return self.trained_models
 
-    def logistic_regression_predict(self):
+    def logistic_regression_predict(self, feat_importance=True):
         algorithm = 'logistic_regression'
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
@@ -185,10 +86,15 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
                 predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
-            try:
-                self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
-            except Exception:
-                self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
+
+            if feat_importance:
+                self.runtime_warnings(warn_about='shap_cpu')
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
+            else:
+                pass
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
@@ -391,7 +297,7 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
                 self.trained_models[f"{algorithm}"] = model
                 return self.trained_models
 
-    def xgboost_predict(self, show_shap=True):
+    def xgboost_predict(self, feat_importance=True):
         """
         Predicts on test & also new data given the prediction_mode is activated in the class.
         :return: Updates class attributes by its predictions.
@@ -426,7 +332,11 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
                     predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
                 else:
                     predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
-                self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
+
+                if feat_importance:
+                    self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
+                else:
+                    pass
                 self.predicted_probs[f"{algorithm}"] = {}
                 self.predicted_classes[f"{algorithm}"] = {}
                 self.predicted_probs[f"{algorithm}"] = predicted_probs
@@ -584,7 +494,7 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
                 self.trained_models[f"{algorithm}"] = model
                 return self.trained_models
 
-    def lgbm_predict(self):
+    def lgbm_predict(self, feat_importance=True):
         algorithm = 'lgbm'
         model = self.trained_models[f"{algorithm}"]
         if self.prediction_mode:
@@ -607,10 +517,14 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
                 predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
-            try:
-                self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
-            except Exception:
-                self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+
+            if feat_importance:
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            else:
+                pass
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
@@ -646,7 +560,7 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
             self.trained_models[f"{algorithm}"] = model
             return self.trained_models
 
-    def sklearn_ensemble_predict(self):
+    def sklearn_ensemble_predict(self, feat_importance=True):
         """
         Predicts on test & also new data given the prediction_mode is activated in the class.
         :return: Updates class attributes by its predictions.
@@ -674,10 +588,15 @@ class ClassificationModels(cpu_preprocessing.MlPipeline):
                 predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
-            try:
-                self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
-            except Exception:
-                self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
+
+            if feat_importance:
+                self.runtime_warnings(warn_about='shap_cpu')
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
+            else:
+                pass
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs

@@ -4,7 +4,6 @@ from sklearn import preprocessing
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from category_encoders import *
 from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import IsolationForest
@@ -12,30 +11,13 @@ from sklearn.cluster import DBSCAN
 from sklearn.mixture import GaussianMixture
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
-from sklearn.model_selection import cross_val_score
 from boostaroota import BoostARoota
-import optuna
-import xgboost as xgb
-import lightgbm as lgb
-from lightgbm import LGBMClassifier
-import sklearn
-from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
-from sklearn.ensemble import StackingClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
-from sklearn.metrics import matthews_corrcoef
-from sklearn.utils import class_weight
-from sklearn.metrics import f1_score
-import shap
 import gc
-import pickle
 import warnings
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 
-class MlPipeline:
+class PreProcessing:
     """
     The preprocessing base class expects a Pandas dataframe and the target variable at least.
     Date columns and categorical columns can be passed as lists additionally for respective preprocessing.

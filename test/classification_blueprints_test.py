@@ -109,4 +109,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression'):
     print(matthews)
 
 
-blueprint_binary_test_titanic(blueprint='blended_ensemble')
+blueprint_binary_test_titanic(blueprint='logistic_regression')

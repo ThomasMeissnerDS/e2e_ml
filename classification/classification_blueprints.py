@@ -36,7 +36,7 @@ class BluePrint(ClassificationModels):
             self.logistic_regression_train()
         self.data_scaling()
         algorithm='logistic_regression'
-        self.logistic_regression_predict()
+        self.logistic_regression_predict(feat_importance=True)
         self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
         self.prediction_mode = True
 
@@ -71,7 +71,7 @@ class BluePrint(ClassificationModels):
             pass
         else:
             self.xg_boost_train(autotune=True)
-        self.xgboost_predict()
+        self.xgboost_predict(feat_importance=True)
         self.classification_eval('xgboost')
         self.prediction_mode = True
 
@@ -109,7 +109,7 @@ class BluePrint(ClassificationModels):
                 self.lgbm_train(tune_mode='simple', run_on='gpu', gpu_use_dp=True)
             except Exception:
                 self.lgbm_train(tune_mode='simple', run_on='cpu', gpu_use_dp=False)
-        self.lgbm_predict()
+        self.lgbm_predict(feat_importance=True)
         self.classification_eval('lgbm')
         self.prediction_mode = True
 
@@ -145,7 +145,7 @@ class BluePrint(ClassificationModels):
             pass
         else:
             self.sklearn_ensemble_train()
-        self.sklearn_ensemble_predict()
+        self.sklearn_ensemble_predict(feat_importance=True)
         algorithm = 'sklearn_ensemble'
         self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
         self.prediction_mode = True
