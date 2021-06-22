@@ -108,5 +108,10 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression'):
         matthews = 0
     print(matthews)
 
+    if matthews > 0:
+        return print('The test ran successfully.')
+    else:
+        return print('The test failed. Please investigate.')
+
 
 blueprint_binary_test_titanic(blueprint='logistic_regression')
