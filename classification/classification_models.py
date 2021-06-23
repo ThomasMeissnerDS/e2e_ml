@@ -173,7 +173,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         'verbose': 0,
                         'tree_method': 'gpu_hist', #use GPU for training
                         'num_class': Y_train.nunique(),
-                        'max_depth': 2,  #maximum depth of the decision trees being trained
+                        'max_depth': lgbm_best_param["max_depth"],  #maximum depth of the decision trees being trained
                         'alpha': lgbm_best_param["alpha"],
                         'lambda': lgbm_best_param["lambda"],
                         'num_leaves': lgbm_best_param["num_leaves"],

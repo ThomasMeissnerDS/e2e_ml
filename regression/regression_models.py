@@ -14,6 +14,145 @@ warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 class RegressionModels(postprocessing.FullPipeline):
 
+    def xg_boost_train(self, param=None, steps=None, autotune=False, tune_mode='accurate'):
+        """
+        Trains an XGboost model by the given parameters.
+        :param param: Takes a dictionary with custom parameter settings.
+        :param steps: Integer higher than 0. Defines maximum training steps.
+        :param objective: Will be deprecated.
+        :param use_case: Chose 'binary' or 'regression'
+        :return:
+        """
+        if self.prediction_mode:
+            pass
+        else:
+            if autotune:
+                X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+                D_train = xgb.DMatrix(X_train, label=Y_train)
+                D_test = xgb.DMatrix(X_test, label=Y_test)
+
+                def objective(trial):
+                    param = {
+                        'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
+                        'eval_metric': 'mae',
+                        'verbose': 0,
+                        'tree_method': 'gpu_hist', #use GPU for training
+                        'max_depth': trial.suggest_int('max_depth', 2, 30),  #maximum depth of the decision trees being trained
+                        'alpha': trial.suggest_loguniform('alpha', 1e-8, 10.0),
+                        'lambda': trial.suggest_loguniform('lambda', 1e-8, 10.0),
+                        'num_leaves': trial.suggest_int('num_leaves', 2, 256),
+                        'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
+                        'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
+                        'eta': trial.suggest_loguniform('eta', 0.1, 0.3),
+                        'steps': trial.suggest_int('steps', 2, 70000),
+                        'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 5)
+                    }
+                    pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-mae")
+                    if tune_mode == 'simple':
+                        eval_set = [(D_train, 'train'), (D_test, 'test')]
+                        model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
+                                          evals=eval_set, callbacks=[pruning_callback])
+                        preds = model.predict(D_test)
+                        mae = mean_absolute_error(Y_test, preds)
+                        return mae
+                    else:
+                        result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
+                                        as_pandas=True, seed=42, callbacks=[pruning_callback])
+                        return result['test-mae-mean'].mean()
+
+                algorithm = 'xgboost'
+                if tune_mode == 'simple':
+                    study = optuna.create_study(direction='maximize')
+                else:
+                    study = optuna.create_study(direction='minimize')
+                study.optimize(objective, n_trials=10)
+                self.optuna_studies[f"{algorithm}"] = {}
+                #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+                #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+                lgbm_best_param = study.best_trial.params
+                param = {
+                    'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
+                    'eval_metric': 'mae',
+                    'verbose': 0,
+                    'tree_method': 'gpu_hist', #use GPU for training
+                    'max_depth': lgbm_best_param["max_depth"],  #maximum depth of the decision trees being trained
+                    'alpha': lgbm_best_param["alpha"],
+                    'lambda': lgbm_best_param["lambda"],
+                    'num_leaves': lgbm_best_param["num_leaves"],
+                    'subsample': lgbm_best_param["subsample"],
+                    'min_child_samples': lgbm_best_param["min_child_samples"],
+                    'eta': lgbm_best_param["eta"],
+                    'steps': lgbm_best_param["steps"],
+                    'num_parallel_tree': lgbm_best_param["num_parallel_tree"]
+                }
+                eval_set = [(D_train, 'train'), (D_test, 'test')]
+                model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
+                                  evals=eval_set)
+                self.trained_models[f"{algorithm}"] = {}
+                self.trained_models[f"{algorithm}"] = model
+                return self.trained_models
+
+            else:
+                X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+                D_train = xgb.DMatrix(X_train, label=Y_train)
+                D_test = xgb.DMatrix(X_test, label=Y_test)
+                algorithm = 'xgboost'
+                if not param:
+                    param = {
+                        'eta': 0.001, #learning rate,
+                        #'gamma': 5, #Minimum loss reduction required to make a further partition on a leaf node of the tree. The larger gamma is, the more conservative the algorithm will be.
+                        'verbosity': 0, #0 (silent), 1 (warning), 2 (info), 3 (debug)
+                        'alpha' : 10, #L1 regularization term on weights. Increasing this value will make model more conservative. (default = 0)
+                        'lambda': 15, #L2 regularization term on weights. Increasing this value will make model more conservative. (default = 1)
+                        'subsample': 0.8,
+                        'eval_metric' : "mlogloss", #'mlogloss','auc','rmsle'
+                        #'colsample_bytree': 0.3,
+                        'max_depth': 2, #maximum depth of the decision trees being trained
+                        'tree_method': 'gpu_hist', #use GPU for training
+                        'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
+                        'steps': 50000
+                        } #the number of classes in the dataset
+                else:
+                    param = param
+
+                eval_set = [(D_train, 'train'), (D_test, 'test')]
+                model = xgb.train(param, D_train, num_boost_round=50000, early_stopping_rounds=10,
+                                  evals=eval_set)
+                self.trained_models[f"{algorithm}"] = {}
+                self.trained_models[f"{algorithm}"] = model
+                return self.trained_models
+
+    def xgboost_predict(self, feat_importance=True):
+        """
+        Predicts on test & also new data given the prediction_mode is activated in the class.
+        :return: Updates class attributes by its predictions.
+        """
+        algorithm = 'xgboost'
+        if self.prediction_mode:
+            D_test = xgb.DMatrix(self.dataframe)
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.predict(D_test)
+            self.predicted_values[f"{algorithm}"] = {}
+            self.predicted_values[f"{algorithm}"] = predicted_probs
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            D_test = xgb.DMatrix(X_test, label=Y_test)
+            try:
+                D_test_sample = xgb.DMatrix(X_test.sample(10000, random_state=42), label=Y_test)
+            except:
+                D_test_sample = xgb.DMatrix(X_test, label=Y_test)
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.predict(D_test)
+            self.predicted_values[f"{algorithm}"] = {}
+            self.predicted_values[f"{algorithm}"] = predicted_probs
+
+            if feat_importance:
+                self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
+            else:
+                pass
+
     def lgbm_train(self, tune_mode='accurate', run_on='gpu', gpu_use_dp=True):
         if self.prediction_mode:
             pass
