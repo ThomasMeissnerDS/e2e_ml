@@ -20,6 +20,7 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import RepeatedKFold
+from sklearn.linear_model import LinearRegression
 import shap
 import matplotlib.pyplot as plt
 import warnings
@@ -27,6 +28,37 @@ warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 
 class RegressionModels(postprocessing.FullPipeline):
+    def linear_regression_train(self):
+        algorithm = 'linear_regression'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = LinearRegression(random_state=0).fit(X_train, Y_train)
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            return self.trained_models
+
+    def linear_regression_predict(self, feat_importance=True):
+        algorithm = 'linear_regression'
+        if self.prediction_mode:
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.predict(self.dataframe)
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.predict(X_test)
+
+            if feat_importance:
+                self.runtime_warnings(warn_about='shap_cpu')
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
+            else:
+                pass
+        self.predicted_values[f"{algorithm}"] = {}
+        self.predicted_values[f"{algorithm}"] = predicted_probs
 
     def xg_boost_train(self, param=None, steps=None, autotune=False, tune_mode='accurate'):
         """
@@ -401,5 +433,5 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted
-        return self.predicted_probs
+        return self.predicted_values
 

@@ -97,6 +97,11 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression'):
         print("Start prediction on holdout dataset")
         titanic_auto_ml.ml_bp00_train_test_binary_full_processing_log_reg_prob(val_df)
         val_y_hat = titanic_auto_ml.predicted_classes['logistic_regression']
+    elif blueprint == 'ngboost':
+        titanic_auto_ml.ml_bp04_multiclass_full_processing_ngboost()
+        print("Start prediction on holdout dataset")
+        titanic_auto_ml.ml_bp04_multiclass_full_processing_ngboost(val_df)
+        val_y_hat = titanic_auto_ml.predicted_classes['ngboost']
     else:
         pass
 
@@ -114,4 +119,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression'):
         return print('The test failed. Please investigate.')
 
 
-blueprint_binary_test_titanic(blueprint='logistic_regression')
+blueprint_binary_test_titanic(blueprint='ngboost')

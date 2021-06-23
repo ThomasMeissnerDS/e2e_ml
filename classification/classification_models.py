@@ -5,6 +5,9 @@ import optuna
 import xgboost as xgb
 import lightgbm as lgb
 from lightgbm import LGBMClassifier
+from ngboost import NGBClassifier
+from ngboost.distns import k_categorical, Bernoulli
+from ngboost.scores import LogScore, CRPScore
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.ensemble import StackingClassifier
 from sklearn.linear_model import LogisticRegression
@@ -15,6 +18,7 @@ from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import f1_score
 from sklearn.utils import class_weight
+from sklearn.model_selection import cross_val_score
 from sklearn.metrics import confusion_matrix, classification_report
 import shap
 import matplotlib.pyplot as plt
@@ -262,8 +266,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 classes_weights = class_weight.compute_sample_weight(
                     class_weight='balanced',
-                    y=Y_train
-                )
+                    y=Y_train)
                 D_train = xgb.DMatrix(X_train, label=Y_train, weight=classes_weights)
                 D_test = xgb.DMatrix(X_test, label=Y_test)
                 algorithm = 'xgboost'
@@ -601,4 +604,126 @@ class ClassificationModels(postprocessing.FullPipeline):
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
             self.predicted_classes[f"{algorithm}"] = predicted_classes
+        return self.predicted_probs
+
+    def ngboost_train(self, tune_mode='accurate'):
+        """
+        Trains an Ngboost regressor.
+        :return: Updates class attributes by its predictions.
+        """
+        algorithm = 'ngboost'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            classes_weights = class_weight.compute_sample_weight(
+                class_weight='balanced',
+                y=Y_train)
+            nb_classes = k_categorical(Y_train.nunique())
+            try:
+                Y_train = Y_train.astype(int)
+                Y_test = Y_test.astype(int)
+            except Exception:
+                Y_train = np.int(Y_train)
+                Y_test = np.int(Y_test)
+
+            def objective(trial):
+                param = {
+                    'n_estimators': trial.suggest_int('n_estimators', 2, 50000),
+                    'minibatch_frac': trial.suggest_uniform('minibatch_frac', 0.4, 1.0),
+                    'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 0.1)
+                }
+                if tune_mode == 'simple':
+                    model = NGBClassifier(n_estimators=param["n_estimators"],
+                                         minibatch_frac=param["minibatch_frac"],
+                                         Dist=nb_classes,
+                                         learning_rate=param["learning_rate"]).fit(X_train,
+                                                                                   Y_train,
+                                                                                   X_val=X_test,
+                                                                                   Y_val=Y_test,
+                                                                                   sample_weight=classes_weights,
+                                                                                   early_stopping_rounds=10)
+                    pred_labels = model.predict(X_test)
+                    try:
+                        matthew = matthews_corrcoef(Y_test, pred_labels)
+                    except Exception:
+                        matthew = 0
+                    return matthew
+                else:
+                    model = NGBClassifier(n_estimators=param["n_estimators"],
+                                         minibatch_frac=param["minibatch_frac"],
+                                         Dist=nb_classes,
+                                         learning_rate=param["learning_rate"],
+                                         random_state=42)
+                    try:
+                        scores = cross_val_score(model, X_train, Y_train, cv=5, scoring='f1_weighted',
+                                                 fit_params={'X_val': X_test,
+                                                             'Y_val': Y_test,
+                                                             'sample_weight': classes_weights,
+                                                             'early_stopping_rounds': 10})
+                        mae = np.mean(scores)
+                    except Exception:
+                        mae = 0
+                    return mae
+            algorithm = 'ngboost'
+            study = optuna.create_study(direction='maximize')
+            study.optimize(objective, n_trials=20)
+            #self.optuna_studies[f"{algorithm}"] = {}
+            #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            #self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+            #self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+            lgbm_best_param = study.best_trial.params
+            param = {
+                'Dist': nb_classes,
+                'n_estimators': lgbm_best_param["n_estimators"],
+                'minibatch_frac': lgbm_best_param["minibatch_frac"],
+                'learning_rate': lgbm_best_param["learning_rate"]
+            }
+            model = NGBClassifier(n_estimators=param["n_estimators"],
+                                 minibatch_frac=param["minibatch_frac"],
+                                 Dist=nb_classes,
+                                 learning_rate=param["learning_rate"],
+                                 random_state=42).fit(X_train,
+                                                      Y_train,
+                                                      X_val=X_test,
+                                                      Y_val=Y_test,
+                                                      sample_weight=classes_weights,
+                                                      early_stopping_rounds=10)
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            return self.trained_models
+
+    def ngboost_predict(self, feat_importance=True):
+        """
+        Predicts on test & also new data given the prediction_mode is activated in the class.
+        :return: Updates class attributes by its predictions.
+        """
+        algorithm = 'ngboost'
+        model = self.trained_models[f"{algorithm}"]
+        if self.prediction_mode:
+            X_test = self.dataframe
+            predicted_probs = model.predict_proba(X_test)
+            predicted_classes = predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            predicted_probs = model.predict(X_test)
+            if Y_train.nunique()>2:
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+            else:
+                self.threshold_refiner(predicted_probs, Y_test)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+            if feat_importance:
+                self.runtime_warnings(warn_about='shap_cpu')
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            else:
+                pass
+        self.predicted_probs[f"{algorithm}"] = {}
+        self.predicted_classes[f"{algorithm}"] = {}
+        self.predicted_probs[f"{algorithm}"] = predicted_probs
+        self.predicted_classes[f"{algorithm}"] = predicted_classes
         return self.predicted_probs
