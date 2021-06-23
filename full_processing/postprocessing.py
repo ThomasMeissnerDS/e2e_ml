@@ -142,12 +142,12 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                 if pred_reg:
                     y_hat = pred_reg
                 else:
-                    y_hat = self.predicted_classes[f"{algorithm}"]
+                    y_hat = self.predicted_values[f"{algorithm}"]
             except Exception:
                 if pred_reg.any():
                     y_hat = pred_reg
                 else:
-                    y_hat = self.predicted_classes[f"{algorithm}"]
+                    y_hat = self.predicted_values[f"{algorithm}"]
 
             """
             Calculating Matthews, ROC_AUC score and different F1 scores.

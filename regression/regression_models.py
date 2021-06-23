@@ -12,6 +12,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 from lightgbm import LGBMRegressor
 from ngboost import NGBRegressor
+from ngboost.distns import Exponential, Normal, LogNormal
 from sklearn import linear_model
 from sklearn.linear_model import SGDRegressor, BayesianRidge, ARDRegression
 from sklearn.svm import LinearSVR
@@ -313,7 +314,7 @@ class RegressionModels(postprocessing.FullPipeline):
             self.predicted_values[f"{algorithm}"] = predicted
         return self.predicted_probs
 
-    def ngboost_train(self):
+    def ngboost_train(self, tune_mode='accurate'):
         """
         Trains an Ngboost regressor.
         :return: Updates class attributes by its predictions.
@@ -323,7 +324,53 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            model = NGBRegressor().fit(X_train, Y_train, X_val=X_test, Y_val=Y_test, early_stopping_rounds=10)
+
+            def objective(trial):
+                param = {
+                    'Dist': trial.suggest_categorical('Dist', [Normal, LogNormal, Exponential]),
+                    'n_estimators': trial.suggest_int('n_estimators', 2, 50000),
+                    'minibatch_frac': trial.suggest_uniform('minibatch_frac', 0.4, 1.0),
+                    'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 0.1)
+                }
+                if tune_mode == 'simple':
+                    model = NGBRegressor(n_estimators=param["n_estimators"],
+                                         minibatch_frac=param["minibatch_frac"],
+                                         Dist=param["Dist"],
+                                         learning_rate=param["learning_rate"]).fit(X_train, Y_train, X_val=X_test, Y_val=Y_test, early_stopping_rounds=10)
+                    preds = model.predict(X_test)
+                    mae = mean_absolute_error(Y_test, preds)
+                    return mae
+                else:
+                    model = NGBRegressor(n_estimators=param["n_estimators"],
+                                         minibatch_frac=param["minibatch_frac"],
+                                         Dist=param["Dist"],
+                                         learning_rate=param["learning_rate"],
+                                         random_state=42)
+                    scores = cross_val_score(model, X_train, Y_train, cv=5, scoring='neg_mean_squared_error',
+                                             fit_params={'X_val': X_test, 'Y_val': Y_test, 'early_stopping_rounds': 10})
+                    mae = np.mean(scores)
+                    return mae
+            algorithm = 'ngboost'
+            study = optuna.create_study(direction='minimize')
+            study.optimize(objective, n_trials=20)
+            #self.optuna_studies[f"{algorithm}"] = {}
+            #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            #self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+            #self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+            lgbm_best_param = study.best_trial.params
+            param = {
+                'Dist': lgbm_best_param["Dist"],
+                'n_estimators': lgbm_best_param["n_estimators"],
+                'minibatch_frac': lgbm_best_param["minibatch_frac"],
+                'learning_rate': lgbm_best_param["learning_rate"],
+                'random_state': 42
+            }
+            model = NGBRegressor(n_estimators=param["n_estimators"],
+                                 minibatch_frac=param["minibatch_frac"],
+                                 Dist=param["Dist"],
+                                 learning_rate=param["learning_rate"]).fit(X_train, Y_train, X_val=X_test, Y_val=Y_test,
+                                                                           early_stopping_rounds=10)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             return self.trained_models
@@ -347,9 +394,9 @@ class RegressionModels(postprocessing.FullPipeline):
             if feat_importance:
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
             else:
                 pass
             self.predicted_values[f"{algorithm}"] = {}
