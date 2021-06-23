@@ -5,7 +5,20 @@ import optuna
 import xgboost as xgb
 import lightgbm as lgb
 from lightgbm import LGBMClassifier
+from sklearn.ensemble import StackingRegressor
+from sklearn.linear_model import RidgeCV
+from sklearn.svm import LinearSVR
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+from lightgbm import LGBMRegressor
+from ngboost import NGBRegressor
+from sklearn import linear_model
+from sklearn.linear_model import SGDRegressor, BayesianRidge, ARDRegression
+from sklearn.svm import LinearSVR
 from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import RepeatedKFold
 import shap
 import matplotlib.pyplot as plt
 import warnings
@@ -242,3 +255,104 @@ class RegressionModels(postprocessing.FullPipeline):
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted_probs
         return self.predicted_probs
+
+    def sklearn_ensemble_train(self):
+        """
+        Trains an sklearn stacking classifier ensemble.
+        :return: Updates class attributes by its predictions.
+        """
+        algorithm = 'sklearn_ensemble'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            level0 = list()
+            level0.append(('rfr', RandomForestRegressor(n_jobs=-1)))
+            level0.append(('gbr', GradientBoostingRegressor(random_state=0)))
+            level0.append(('byr', BayesianRidge()))
+            level0.append(('sgd', SGDRegressor()))
+            level0.append(('svr', LinearSVR()))
+            level0.append(('ard', ARDRegression()))
+            level0.append(('lgb', LGBMRegressor()))
+            level0.append(('lr', RidgeCV()))
+            # define meta learner model
+            level1 = GradientBoostingRegressor()
+            # define the stacking ensemble
+            model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5)
+            print(X_train.info())
+            model.fit(X_train, Y_train)
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            return self.trained_models
+
+    def sklearn_ensemble_predict(self, feat_importance=True):
+        """
+        Predicts on test & also new data given the prediction_mode is activated in the class.
+        :return: Updates class attributes by its predictions.
+        """
+        algorithm = 'sklearn_ensemble'
+        model = self.trained_models[f"{algorithm}"]
+        if self.prediction_mode:
+            X_test = self.dataframe
+            predicted = model.predict(X_test)
+            self.predicted_values[f"{algorithm}"] = {}
+            self.predicted_values[f"{algorithm}"] = predicted
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            predicted = model.predict(X_test)
+
+            if feat_importance:
+                self.runtime_warnings(warn_about='shap_cpu')
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
+            else:
+                pass
+            self.predicted_values[f"{algorithm}"] = {}
+            self.predicted_values[f"{algorithm}"] = predicted
+        return self.predicted_probs
+
+    def ngboost_train(self):
+        """
+        Trains an Ngboost regressor.
+        :return: Updates class attributes by its predictions.
+        """
+        algorithm = 'ngboost'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = NGBRegressor().fit(X_train, Y_train, X_val=X_test, Y_val=Y_test, early_stopping_rounds=10)
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            return self.trained_models
+
+    def ngboost_predict(self, feat_importance=True):
+        """
+        Predicts on test & also new data given the prediction_mode is activated in the class.
+        :return: Updates class attributes by its predictions.
+        """
+        algorithm = 'ngboost'
+        model = self.trained_models[f"{algorithm}"]
+        if self.prediction_mode:
+            X_test = self.dataframe
+            predicted = model.predict(X_test)
+            self.predicted_values[f"{algorithm}"] = {}
+            self.predicted_values[f"{algorithm}"] = predicted
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            predicted = model.predict(X_test)
+
+            if feat_importance:
+                self.runtime_warnings(warn_about='shap_cpu')
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
+            else:
+                pass
+            self.predicted_values[f"{algorithm}"] = {}
+            self.predicted_values[f"{algorithm}"] = predicted
+        return self.predicted_probs
+

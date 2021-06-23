@@ -1,6 +1,7 @@
 import regression.regression_blueprints as rb
 import pandas as pd
 from sklearn.metrics import mean_absolute_error
+# track memory consumption in terminal: dmesg
 
 
 def load_housingprices_data():
@@ -31,23 +32,35 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
                                    target_variable=test_target,
                                    categorical_columns=test_categorical_cols)
     if blueprint == 'lgbm':
-        titanic_auto_ml.ml_bp12_regressions_full_processing_lgbm_prob()
+        titanic_auto_ml.ml_bp12_regressions_full_processing_lgbm()
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp12_regressions_full_processing_lgbm_prob(val_df)
+        titanic_auto_ml.ml_bp12_regressions_full_processing_lgbm(val_df)
         val_y_hat = titanic_auto_ml.predicted_values['lgbm']
-
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
     elif blueprint == 'xgboost':
-        titanic_auto_ml.ml_bp11_regression_full_processing_xgb_prob()
+        titanic_auto_ml.ml_bp11_regression_full_processing_xgboost()
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp11_regression_full_processing_xgb_prob(val_df)
+        titanic_auto_ml.ml_bp11_regression_full_processing_xgboost(val_df)
         val_y_hat = titanic_auto_ml.predicted_values['xgboost']
-
+        mae = mean_absolute_error(val_df_target, val_y_hat)
+        print(mae)
+    elif blueprint == 'sklearn_ensemble':
+        titanic_auto_ml.ml_bp13_regression_full_processing_sklearn_stacking_ensemble()
+        print("Start prediction on holdout dataset")
+        titanic_auto_ml.ml_bp13_regression_full_processing_sklearn_stacking_ensemble(val_df)
+        val_y_hat = titanic_auto_ml.predicted_values['sklearn_ensemble']
+        mae = mean_absolute_error(val_df_target, val_y_hat)
+        print(mae)
+    elif blueprint == 'ngboost':
+        titanic_auto_ml.ml_bp14_regressions_full_processing_ngboost()
+        print("Start prediction on holdout dataset")
+        titanic_auto_ml.ml_bp14_regressions_full_processing_ngboost(val_df)
+        val_y_hat = titanic_auto_ml.predicted_values['ngboost']
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
     else:
         pass
 
 
-blueprint_regression_test_housingprices(blueprint='xgboost')
+blueprint_regression_test_housingprices(blueprint='ngboost')
