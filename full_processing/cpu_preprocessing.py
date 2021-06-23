@@ -25,27 +25,30 @@ class PreProcessing:
     """
     def __init__(self, dataframe, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None,
-                 prediction_mode=False, preprocess_decisions=None, trained_model=None):
+                 prediction_mode=False, preprocess_decisions=None, trained_model=None, ml_task=None):
         self.dataframe = dataframe
         self.dataframe.columns = self.dataframe.columns.astype(str)
-        try:
-            if dataframe[target_variable].nunique() > 2:
-                self.class_problem = 'multiclass'
-                self.num_classes = dataframe[target_variable].nunique()
-            elif dataframe[target_variable].nunique() == 2:
-                self.class_problem = 'binary'
-                self.num_classes = 2
-            else:
-                pass
-        except Exception:
-            if len(np.unique(np.array(target_variable))) > 2:
-                self.class_problem = 'multiclass'
-                self.num_classes = len(np.unique(np.array(target_variable)))
-            elif len(np.unique(np.array(target_variable))) == 2:
-                self.class_problem = 'binary'
-                self.num_classes = 2
-            else:
-                pass
+        if not ml_task:
+            try:
+                if dataframe[target_variable].nunique() > 2:
+                    self.class_problem = 'multiclass'
+                    self.num_classes = dataframe[target_variable].nunique()
+                elif dataframe[target_variable].nunique() == 2:
+                    self.class_problem = 'binary'
+                    self.num_classes = 2
+                else:
+                    pass
+            except Exception:
+                if len(np.unique(np.array(target_variable))) > 2:
+                    self.class_problem = 'multiclass'
+                    self.num_classes = len(np.unique(np.array(target_variable)))
+                elif len(np.unique(np.array(target_variable))) == 2:
+                    self.class_problem = 'binary'
+                    self.num_classes = 2
+                else:
+                    pass
+        else:
+            self.class_problem = ml_task
         self.date_columns = date_columns
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
@@ -71,6 +74,7 @@ class PreProcessing:
         self.optuna_studies = {}
         self.predicted_classes = {}
         self.predicted_probs = {}
+        self.predicted_values = {}
         self.evaluation_scores = {}
         self.xg_boost_regression = None
         self.xgboost_objective = None
