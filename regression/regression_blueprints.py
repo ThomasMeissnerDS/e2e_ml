@@ -35,7 +35,6 @@ class BluePrint(RegressionModels):
         else:
             self.xg_boost_train(autotune=True)
         self.xgboost_predict(feat_importance=True)
-        self.classification_eval('xgboost')
         self.prediction_mode = True
 
     def ml_bp12_regressions_full_processing_lgbm_prob(self, df=None):

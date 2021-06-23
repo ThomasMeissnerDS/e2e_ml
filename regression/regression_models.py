@@ -37,7 +37,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         'eval_metric': 'mae',
                         'verbose': 0,
                         'tree_method': 'gpu_hist', #use GPU for training
-                        'max_depth': trial.suggest_int('max_depth', 2, 30),  #maximum depth of the decision trees being trained
+                        'max_depth': trial.suggest_int('max_depth', 2, 10),  #maximum depth of the decision trees being trained
                         'alpha': trial.suggest_loguniform('alpha', 1e-8, 10.0),
                         'lambda': trial.suggest_loguniform('lambda', 1e-8, 10.0),
                         'num_leaves': trial.suggest_int('num_leaves', 2, 256),
@@ -65,7 +65,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     study = optuna.create_study(direction='maximize')
                 else:
                     study = optuna.create_study(direction='minimize')
-                study.optimize(objective, n_trials=10)
+                study.optimize(objective, n_trials=30)
                 self.optuna_studies[f"{algorithm}"] = {}
                 #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
