@@ -34,7 +34,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            model = LinearRegression(random_state=0).fit(X_train, Y_train)
+            model = LinearRegression().fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             return self.trained_models
