@@ -2,6 +2,7 @@ from pandas.core.common import SettingWithCopyWarning
 from sklearn import model_selection
 from sklearn import preprocessing
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import TimeSeriesSplit
 import numpy as np
 import pandas as pd
 from category_encoders import *
@@ -23,17 +24,27 @@ class PreProcessing:
     Date columns and categorical columns can be passed as lists additionally for respective preprocessing.
     A unique identifier (i.e. an ID column) can be passed as well to preserve this information for later processing.
     """
-    def __init__(self, dataframe, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
+    def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None,
                  prediction_mode=False, preprocess_decisions=None, trained_model=None, ml_task=None):
-        self.dataframe = dataframe
-        self.dataframe.columns = self.dataframe.columns.astype(str)
+        self.dataframe = datasource
+
+        # check which type the data source is
+        if isinstance(datasource, np.ndarray):
+            self.source_format = 'numpy array'
+        elif isinstance(datasource, pd.DataFrame):
+            self.source_format = 'Pandas dataframe'
+            self.dataframe.columns = self.dataframe.columns.astype(str)
+        else:
+            self.source_format = 'Unknown, not recommened'
+
+        # check if we face a classification problem and check how many classes we have
         if not ml_task:
             try:
-                if dataframe[target_variable].nunique() > 2:
+                if datasource[target_variable].nunique() > 2:
                     self.class_problem = 'multiclass'
-                    self.num_classes = dataframe[target_variable].nunique()
-                elif dataframe[target_variable].nunique() == 2:
+                    self.num_classes = datasource[target_variable].nunique()
+                elif datasource[target_variable].nunique() == 2:
                     self.class_problem = 'binary'
                     self.num_classes = 2
                 else:
@@ -125,6 +136,42 @@ class PreProcessing:
         X_train, X_test, Y_train, Y_test = self.df_dict["X_train"], self.df_dict["X_test"], self.df_dict["Y_train"], self.df_dict["Y_test"]
         return X_train, X_test, Y_train, Y_test
 
+    def np_array_wrap_test_train_to_dict(self, Y_train, Y_test):
+        """
+        Takes in X_train & X_test parts and updates the class instance dictionary.
+        :param Y_train: Numpy array
+        :param Y_test: Numpy array
+        :return: Class dictionary
+        """
+        if self.prediction_mode:
+            pass
+        else:
+            self.df_dict = {'Y_train': Y_train,
+                            'Y_test': Y_test}
+            return self.df_dict
+
+    def np_array_unpack_test_train_dict(self):
+        """
+        This function takes in the class dictionary holding test and train split and unpacks it.
+        :return: X_train, X_test as dataframes. Y_train, Y_test as numpy array.
+        """
+        Y_train, Y_test = self.df_dict["Y_train"], self.df_dict["Y_test"]
+        return Y_train, Y_test
+
+    def sort_columns_alphabetically(self):
+        """
+        Takes a dataframe and sorts its columns alphabetically. This increases pipelines robustness in cases
+        where the input data might have been changed in order.
+        :return: Updates class instance. Returns dictionary.
+        """
+        if self.prediction_mode:
+            self.dataframe = self.dataframe.sort_index(axis=1)
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train = X_train.sort_index(axis=1)
+            X_test = X_test.sort_index(axis=1)
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
     def label_encoder_decoder(self, target, mode='fit', direction='encode'):
         if direction == 'encode' and mode == 'fit':
             le = preprocessing.LabelEncoder()
@@ -194,13 +241,33 @@ class PreProcessing:
             del X_test[self.target_variable]
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         elif how == 'time':
-            X_train = self.dataframe[(self.dataframe[split_by_col] < split_date)]
-            X_test = self.dataframe[(self.dataframe[split_by_col] >= split_date)]
-            Y_train = X_train[self.target_variable]
-            Y_test = X_test[self.target_variable]
-            del X_train[self.target_variable]
-            del X_test[self.target_variable]
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            if self.source_format == 'numpy array':
+                length = self.dataframe.size
+                train_length = int(length*train_size)
+                test_length = length-train_length
+                Y_train, Y_test = self.dataframe[:train_length], self.dataframe[:test_length]
+                return self.np_array_wrap_test_train_to_dict(Y_train, Y_test)
+            elif self.source_format == 'Pandas dataframe':
+                length = len(self.dataframe.index)
+                train_length = int(length*0.80)
+                test_length = length-train_length
+                if not split_by_col:
+                    self.dataframe = self.dataframe.sort_index()
+                elif split_by_col:
+                    self.dataframe = self.dataframe.sort_values(by=[split_by_col])
+                else:
+                    pass
+                if split_date:
+                    X_train = self.dataframe[(self.dataframe.split_by_col < split_date)]
+                    X_test = self.dataframe[(self.dataframe.split_by_col >= split_date)]
+                else:
+                    X_train = self.dataframe.head(train_length)
+                    X_test = self.dataframe.tail(test_length)
+                Y_train = X_train[self.target_variable]
+                Y_test = X_test[self.target_variable]
+                del X_train[self.target_variable]
+                del X_test[self.target_variable]
+                return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         else:
             raise Exception("Please provide a split method.")
 

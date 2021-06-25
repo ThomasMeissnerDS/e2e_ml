@@ -8,6 +8,33 @@ plt.style.use('fivethirtyeight')
 
 
 class TimeSeriesPreprocessing(postprocessing.FullPipeline):
+    def time_series_unpacking(self):
+        """
+        Takes the datasource dictionary within the class and unpacks it, depending on the provided source format.
+        :return: Returns unpacked data objects.
+        """
+        if self.source_format == 'numpy array':
+            Y_train, Y_test = self.np_array_unpack_test_train_dict()
+            return Y_train, Y_test
+        elif self.source_format == 'Pandas dataframe':
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            return X_train, X_test, Y_train, Y_test
+
+    def time_series_wrap_test_train_to_dict(self, X_train=None, X_test=None, Y_train=None, Y_test=None):
+        """
+        Takes either four Pandas dataframes and series or two numpy arrays and packs them into the class
+        dictionary.
+        :param X_train: Pandas dataframe (optional)
+        :param X_test: Pandas dataframe (optional)
+        :param Y_train: Pandas series or numpy array
+        :param Y_test: Pandas series or numpy array
+        :return: Updates class and return dictionary.
+        """
+        if self.source_format == 'numpy array':
+            return self.np_array_wrap_test_train_to_dict(Y_train, Y_test)
+        elif self.source_format == 'Pandas dataframe':
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
     def augmented_dickey_fuller_test(self):
         """
         The Dickey Fuller test is one of the most popular statistical tests. It can be used to determine the

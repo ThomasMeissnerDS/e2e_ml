@@ -30,6 +30,7 @@ class BluePrint(ClassificationModels):
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
         self.automated_feature_selection(metric='logloss')
+        self.sort_columns_alphabetically()
         if skip_train:
             pass
         else:
@@ -67,6 +68,7 @@ class BluePrint(ClassificationModels):
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
         self.automated_feature_selection(metric='logloss')
+        self.sort_columns_alphabetically()
         if skip_train:
             pass
         else:
@@ -102,6 +104,7 @@ class BluePrint(ClassificationModels):
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
         self.automated_feature_selection(metric='logloss')
+        self.sort_columns_alphabetically()
         if skip_train:
             pass
         else:
@@ -140,6 +143,7 @@ class BluePrint(ClassificationModels):
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
         self.automated_feature_selection(metric='logloss')
+        self.sort_columns_alphabetically()
         self.smote_data()
         if skip_train:
             pass
@@ -177,6 +181,7 @@ class BluePrint(ClassificationModels):
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
         self.automated_feature_selection(metric='logloss')
+        self.sort_columns_alphabetically()
         if skip_train:
             pass
         else:
