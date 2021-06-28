@@ -35,7 +35,7 @@ class TimeSeriesPreprocessing(postprocessing.FullPipeline):
         elif self.source_format == 'Pandas dataframe':
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def augmented_dickey_fuller_test(self):
+    def augmented_dickey_fuller_test(self, window):
         """
         The Dickey Fuller test is one of the most popular statistical tests. It can be used to determine the
         presence of unit root in the series, and hence help us understand if the series is stationary or not.
@@ -48,8 +48,8 @@ class TimeSeriesPreprocessing(postprocessing.FullPipeline):
         """
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         # Determing rolling statistics
-        rolmean = Y_train.rolling(window=3).mean()
-        rolstd = Y_train.rolling(window=3).std()
+        rolmean = Y_train.rolling(window=window).mean()
+        rolstd = Y_train.rolling(window=window).std()
         # Plot rolling statistics:
         plt.plot(Y_train, color='blue', label='Original')
         plt.plot(rolmean, color='red', label='Rolling Mean')

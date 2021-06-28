@@ -2,7 +2,7 @@ from regression.regression_models import RegressionModels
 import numpy as np
 
 
-class BluePrint(RegressionModels):
+class RegressionBluePrint(RegressionModels):
     def ml_bp10_train_test_regression_full_processing_linear_reg(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,

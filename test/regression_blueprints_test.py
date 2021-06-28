@@ -28,7 +28,7 @@ def load_housingprices_data():
 
 def blueprint_regression_test_housingprices(blueprint='lgbm'):
     test_df, test_target, val_df, val_df_target, test_categorical_cols = load_housingprices_data()
-    titanic_auto_ml = rb.BluePrint(datasource=test_df,
+    titanic_auto_ml = rb.RegressionBluePrint(datasource=test_df,
                                    target_variable=test_target,
                                    categorical_columns=test_categorical_cols)
     if blueprint == 'lgbm':

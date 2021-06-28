@@ -2,7 +2,7 @@ from classification.classification_models import ClassificationModels
 import numpy as np
 
 
-class BluePrint(ClassificationModels):
+class ClassificationBluePrint(ClassificationModels):
     def ml_bp00_train_test_binary_full_processing_log_reg_prob(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,

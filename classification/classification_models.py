@@ -153,7 +153,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                             matthew = matthews_corrcoef(Y_test, pred_labels)
                             return matthew
                         else:
-                            result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
+                            result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'],
+                                            early_stopping_rounds=10, nfold=10,
                                             as_pandas=True, seed=42, callbacks=[pruning_callback])
                             #avg_result = (result['train-mlogloss-mean'].mean() + result['test-mlogloss-mean'].mean())/2
                             return result['test-mlogloss-mean'].mean()
@@ -222,7 +223,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                             matthew = matthews_corrcoef(Y_test, pred_labels)
                             return matthew
                         else:
-                            result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
+                            result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'],
+                                            early_stopping_rounds=10, nfold=10,
                                             as_pandas=True, seed=42, callbacks=[pruning_callback])
                             #avg_result = (result['train-mlogloss-mean'].mean() + result['test-mlogloss-mean'].mean())/2
                             return result['test-mlogloss-mean'].mean()
@@ -383,7 +385,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         matthew = matthews_corrcoef(Y_test, pred_labels)
                         return matthew
                     else:
-                        result = lgb.cv(param, train_set=dtrain, nfold=5,num_boost_round=param['num_boost_round'],
+                        result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
                                         early_stopping_rounds=10, callbacks=[pruning_callback], seed=42, verbose_eval=False)
                         avg_result = np.mean(np.array(result["multi_logloss-mean"]))
                         return avg_result
@@ -453,7 +455,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         matthew = matthews_corrcoef(Y_test, pred_labels)
                         return matthew
                     else:
-                        result = lgb.cv(param, train_set=dtrain, nfold=5, num_boost_round=param['num_boost_round'],
+                        result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
                                         early_stopping_rounds=10, callbacks=[pruning_callback], seed=42, verbose_eval=False)
                         #fobj=lgb_matth_score)
                         print(result)
