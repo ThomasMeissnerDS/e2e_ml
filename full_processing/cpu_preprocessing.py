@@ -467,9 +467,9 @@ class PreProcessing:
                 pass
 
             if how == 'static':
-                self.dataframe = static_filling(self.dataframe, cols)
+                self.dataframe[cols] = static_filling(self.dataframe, cols)
             elif how == 'iterative_imputation':
-                self.dataframe = iterative_imputation(self.dataframe, params=self.preprocess_decisions[f"fill_nulls_params"])
+                self.dataframe[cols] = iterative_imputation(self.dataframe, params=self.preprocess_decisions[f"fill_nulls_params"])
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -479,8 +479,8 @@ class PreProcessing:
                 cols = selected_cols
 
             if how == 'static':
-                X_train = static_filling(X_train, cols)
-                X_test = static_filling(X_test, cols)
+                X_train[cols] = static_filling(X_train, cols)
+                X_test[cols] = static_filling(X_test, cols)
                 self.preprocess_decisions[f"fill_nulls_how"] = how
                 self.preprocess_decisions[f"fill_nulls_params"] = cols
             elif how == 'iterative_imputation':
