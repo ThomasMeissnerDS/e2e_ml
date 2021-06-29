@@ -1,5 +1,6 @@
 from regression.regression_models import RegressionModels
 import numpy as np
+import logging
 
 
 class RegressionBluePrint(RegressionModels):
@@ -10,6 +11,7 @@ class RegressionBluePrint(RegressionModels):
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Updates class attributes by its predictions.
         """
+        logging.info('Start blueprint.')
         try:
             if df.empty:
                 skip_train = False
@@ -40,6 +42,7 @@ class RegressionBluePrint(RegressionModels):
         self.linear_regression_predict(feat_importance=True)
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
+        logging.info('Finished blueprint.')
 
     def ml_bp11_regression_full_processing_xgboost(self, df=None):
         """
@@ -48,6 +51,7 @@ class RegressionBluePrint(RegressionModels):
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Updates class attributes by its predictions.
         """
+        logging.info('Start blueprint.')
         try:
             if df.empty:
                 skip_train = False
@@ -76,6 +80,7 @@ class RegressionBluePrint(RegressionModels):
         self.xgboost_predict(feat_importance=True)
         self.regression_eval('xgboost')
         self.prediction_mode = True
+        logging.info('Finished blueprint.')
 
     def ml_bp12_regressions_full_processing_lgbm(self, df=None):
         """
@@ -84,6 +89,7 @@ class RegressionBluePrint(RegressionModels):
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Updates class attributes by its predictions.
         """
+        logging.info('Start blueprint.')
         try:
             if df.empty:
                 skip_train = False
@@ -115,6 +121,7 @@ class RegressionBluePrint(RegressionModels):
         self.lgbm_predict(feat_importance=True)
         self.regression_eval('lgbm')
         self.prediction_mode = True
+        logging.info('Finished blueprint.')
 
     def ml_bp13_regression_full_processing_sklearn_stacking_ensemble(self, df=None):
         """
@@ -123,6 +130,7 @@ class RegressionBluePrint(RegressionModels):
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Updates class attributes by its predictions.
         """
+        logging.info('Start blueprint.')
         try:
             if df.empty:
                 skip_train = False
@@ -152,6 +160,7 @@ class RegressionBluePrint(RegressionModels):
         algorithm = 'sklearn_ensemble'
         self.regression_eval('sklearn_ensemble')
         self.prediction_mode = True
+        logging.info('Finished blueprint.')
 
     def ml_bp14_regressions_full_processing_ngboost(self, df=None):
         """
@@ -160,6 +169,7 @@ class RegressionBluePrint(RegressionModels):
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Updates class attributes by its predictions.
         """
+        logging.info('Start blueprint.')
         try:
             if df.empty:
                 skip_train = False
@@ -188,3 +198,4 @@ class RegressionBluePrint(RegressionModels):
         self.ngboost_predict(feat_importance=True)
         self.regression_eval('ngboost')
         self.prediction_mode = True
+        logging.info('Finished blueprint.')

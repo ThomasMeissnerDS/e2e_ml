@@ -1,5 +1,6 @@
 from classification.classification_models import ClassificationModels
 import numpy as np
+import logging
 
 
 class ClassificationBluePrint(ClassificationModels):
@@ -10,6 +11,7 @@ class ClassificationBluePrint(ClassificationModels):
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Updates class attributes by its predictions.
         """
+        logging.info('Start blueprint.')
         try:
             if df.empty:
                 skip_train = False
@@ -40,6 +42,7 @@ class ClassificationBluePrint(ClassificationModels):
         self.logistic_regression_predict(feat_importance=True)
         self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
         self.prediction_mode = True
+        logging.info('Finished blueprint.')
 
     def ml_bp01_multiclass_full_processing_xgb_prob(self, df=None):
         """
@@ -48,6 +51,7 @@ class ClassificationBluePrint(ClassificationModels):
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Updates class attributes by its predictions.
         """
+        logging.info('Start blueprint.')
         try:
             if df.empty:
                 skip_train = False
@@ -76,6 +80,7 @@ class ClassificationBluePrint(ClassificationModels):
         self.xgboost_predict(feat_importance=True)
         self.classification_eval('xgboost')
         self.prediction_mode = True
+        logging.info('Finished blueprint.')
 
     def ml_bp02_multiclass_full_processing_lgbm_prob(self, df=None):
         """
@@ -84,6 +89,7 @@ class ClassificationBluePrint(ClassificationModels):
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Updates class attributes by its predictions.
         """
+        logging.info('Start blueprint.')
         try:
             if df.empty:
                 skip_train = False
@@ -115,6 +121,7 @@ class ClassificationBluePrint(ClassificationModels):
         self.lgbm_predict(feat_importance=True)
         self.classification_eval('lgbm')
         self.prediction_mode = True
+        logging.info('Finished blueprint.')
 
     def ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble(self, df=None):
         """
@@ -123,6 +130,7 @@ class ClassificationBluePrint(ClassificationModels):
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Updates class attributes by its predictions.
         """
+        logging.info('Start blueprint.')
         try:
             if df.empty:
                 skip_train = False
@@ -153,6 +161,7 @@ class ClassificationBluePrint(ClassificationModels):
         algorithm = 'sklearn_ensemble'
         self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
         self.prediction_mode = True
+        logging.info('Finished blueprint.')
 
     def ml_bp04_multiclass_full_processing_ngboost(self, df=None):
         """
@@ -161,6 +170,7 @@ class ClassificationBluePrint(ClassificationModels):
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Updates class attributes by its predictions.
         """
+        logging.info('Start blueprint.')
         try:
             if df.empty:
                 skip_train = False
@@ -189,3 +199,4 @@ class ClassificationBluePrint(ClassificationModels):
         self.ngboost_predict(feat_importance=True)
         self.classification_eval('ngboost')
         self.prediction_mode = True
+        logging.info('Finished blueprint.')

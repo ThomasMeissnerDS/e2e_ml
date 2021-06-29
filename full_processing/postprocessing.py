@@ -5,6 +5,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 import shap
 import matplotlib.pyplot as plt
 import warnings
+import logging
 
 
 class FullPipeline(cpu_preprocessing.PreProcessing):
@@ -18,6 +19,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
         :param algorithm: Define name of the chosen ml algorithm as a string.
         :return: Returns plot of feature importance and interactions.
         """
+        logging.info('Started creating SHAP values.')
         # print the JS visualization code to the notebook
         shap.initjs()
         if self.prediction_mode:
@@ -37,6 +39,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             shap.summary_plot(model_shap_values, to_pred, show=False)
             plt.savefig(f'{algorithm}Shap_feature_importance.png')
             plt.show()
+        logging.info('Finished creating SHAP values.')
 
     def runtime_warnings(self, warn_about='shap_cpu'):
         """
@@ -62,8 +65,10 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
         :return: Returns the evaluation dictionary.
         """
         if self.prediction_mode:
+            logging.info('Skipped classification evaluation due to prediction mode.')
             pass
         else:
+            logging.info('Started classification evaluation.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             """
             We need a fallback logic as we might receive different types of data.
@@ -119,6 +124,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                 'f1_score_weighted': f1_score_weighted,
                 'classfication_report': full_classification_report
             }
+            logging.info('Finished classification evaluation.')
             return self.evaluation_scores
 
     def regression_eval(self, algorithm, pred_probs=None, pred_reg=None):
@@ -131,8 +137,10 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
         :return: Returns the evaluation dictionary.
         """
         if self.prediction_mode:
+            logging.info('Skipped regression evaluation due to prediction mode.')
             pass
         else:
+            logging.info('Started regression evaluation.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             """
             We need a fallback logic as we might receive different types of data.
@@ -170,4 +178,5 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                 'RMSE': root_mean_squared_error_score,
                 'median_absolute_error': median_absolute_error_score
             }
+            logging.info('Finished regression evaluation.')
             return self.evaluation_scores

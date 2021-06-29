@@ -3,6 +3,7 @@ from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.stattools import kpss
 import matplotlib.pyplot as plt
 import pandas as pd
+import logging
 
 plt.style.use('fivethirtyeight')
 
