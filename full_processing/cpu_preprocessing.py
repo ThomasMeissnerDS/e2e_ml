@@ -136,6 +136,11 @@ class PreProcessing:
                             'Y_train': Y_train,
                             'Y_test': Y_test}
             logging.info('Finished wrapping dataframe dictionary')
+            del X_train,
+            del X_test,
+            del Y_train,
+            del Y_test
+            _ = gc.collect()
             return self.df_dict
 
     def unpack_test_train_dict(self):
@@ -208,6 +213,8 @@ class PreProcessing:
             le = self.preprocess_decisions["label_encoder"]
             le.inverse_transform(target)
         logging.info('Finished label encoding.')
+        del le
+        _ = gc.collect()
         return target
 
     def data_scaling(self, scaling='minmax'):
@@ -241,6 +248,8 @@ class PreProcessing:
             X_test = pd.DataFrame(X_test, columns=X_train_cols)
             self.data_scaled = True
             logging.info('Finished data scaling.')
+            del scaler
+            _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.data_scaled, self.preprocess_decisions
 
     def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.80):
@@ -268,6 +277,7 @@ class PreProcessing:
                 Y_test = self.label_encoder_decoder(Y_train, mode='predict', direction='encode')
             del X_train[self.target_variable]
             del X_test[self.target_variable]
+            _ = gc.collect()
             logging.info('Finished test train split.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         elif how == 'time':
@@ -317,6 +327,8 @@ class PreProcessing:
             for col in num_columns:
                 dataframe[str(col)+'_binned'] = pd.cut(dataframe[col], bins=nb_bins, labels=False)
                 self.new_sin_cos_col_names.append(str(col)+'_binned')
+            del num_columns
+            _ = gc.collect()
             return dataframe
 
         logging.info('Start numerical binning.')
@@ -395,6 +407,8 @@ class PreProcessing:
                 mask_obs = frequencies[condition].index
                 mask_dict = dict.fromkeys(mask_obs, mask_as)
                 all_data[col] = all_data[col].replace(mask_dict)  # or you could make a copy not to modify original data
+            del cat_columns
+            _ = gc.collect()
             return all_data
 
         logging.info('Start rare feature processing.')
@@ -427,6 +441,9 @@ class PreProcessing:
             db = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=n_jobs).fit(dataframe_red)
             labels = db.labels_
             dataframe['dbscan_cluster'] = labels
+            del db
+            del labels
+            _ = gc.collect()
             return dataframe
 
         def add_gaussian_mixture_clusters(dataframe, n_components=nb_clusters):
@@ -434,6 +451,9 @@ class PreProcessing:
             gaussian.fit(dataframe)
             gaussian_clusters = gaussian.predict(dataframe)
             dataframe["gaussian_clusters"] = gaussian_clusters
+            del gaussian
+            del gaussian_clusters
+            _ = gc.collect()
             return dataframe
 
         logging.info('Start adding clusters as additional features.')
@@ -504,6 +524,8 @@ class PreProcessing:
             imp_mean.fit(dataframe)
             imp_mean.transform(dataframe)
             dataframe = pd.DataFrame(dataframe, columns=dataframe_cols)
+            del imp_mean
+            _ = gc.collect()
             return dataframe
 
         logging.info('Started filling NULLs.')
@@ -574,6 +596,10 @@ class PreProcessing:
                 outlier_predictions_class_test = outlier_predictions_test*-1
                 X_test["isolation_probs"] = outlier_predictions_test
                 X_test["isolation_class"] = outlier_predictions_class_test
+                del outlier_predictions_train
+                del outlier_predictions_test
+                del outlier_predictions_class_train
+                del outlier_predictions_class_test
                 self.preprocess_decisions[f"isolation_forest"] = {}
                 self.preprocess_decisions[f"isolation_forest"]["model"] = outlier_detector
                 self.preprocess_decisions[f"isolation_forest"]["how"] = how
@@ -585,6 +611,9 @@ class PreProcessing:
                 self.preprocess_decisions[f"isolation_forest"] = {}
                 self.preprocess_decisions[f"isolation_forest"]["model"] = outlier_detector
                 self.preprocess_decisions[f"isolation_forest"]["how"] = how
+                del outlier_predictions_train
+            del outlier_detector
+            _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def iqr_remover(self, df, column, threshold=1.5):
@@ -602,7 +631,7 @@ class PreProcessing:
         if self.prediction_mode:
             pass
         else:
-            whisker_width=threshold
+            whisker_width = threshold
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             dataframe_red = X_train.loc[:, X_train.columns.isin(self.num_columns)].copy()
             dataframe_red[self.target_variable] = Y_train
@@ -848,6 +877,8 @@ class PreProcessing:
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
             logging.info('Finished category encoding.')
+            del enc
+            _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def remove_collinearity(self, threshold=0.8):
@@ -868,6 +899,8 @@ class PreProcessing:
                         del_corr.append(colname)
                         if colname in dataset.columns:
                             del dataset[colname] # deleting the column from the dataset
+            del corr_matrix
+            _ = gc.collect()
             return dataset
 
         logging.info('Started removing collinearity.')
@@ -901,6 +934,8 @@ class PreProcessing:
             X_train, Y_train = oversample.fit_resample(X_train, Y_train)
             X_train = pd.DataFrame(X_train, columns=X_train_cols)
             logging.info('Finished SMOTE.')
+            del oversample
+            _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def automated_feature_selection(self, metric='logloss'):
@@ -925,5 +960,7 @@ class PreProcessing:
             X_test = X_test[selected]
             self.selected_feats = selected
             logging.info('Finished automated feature selection.')
+            del br
+            _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
 

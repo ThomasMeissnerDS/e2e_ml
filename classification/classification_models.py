@@ -1,4 +1,5 @@
 from full_processing import postprocessing
+import pandas as pd
 from pandas.core.common import SettingWithCopyWarning
 import numpy as np
 import optuna
@@ -20,6 +21,7 @@ from sklearn.metrics import f1_score
 from sklearn.utils import class_weight
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.inspection import permutation_importance
 import shap
 import matplotlib.pyplot as plt
 import warnings
@@ -565,9 +567,10 @@ class ClassificationModels(postprocessing.FullPipeline):
             self.trained_models[f"{algorithm}"] = model
             return self.trained_models
 
-    def sklearn_ensemble_predict(self, feat_importance=True):
+    def sklearn_ensemble_predict(self, feat_importance=True, importance_alg='permutation'):
         """
         Predicts on test & also new data given the prediction_mode is activated in the class.
+        :param importance_alg: Chose 'permutation' or 'SHAP' (SHAP is very slow due to CPU usage)
         :return: Updates class attributes by its predictions.
         """
         algorithm = 'sklearn_ensemble'
@@ -594,12 +597,22 @@ class ClassificationModels(postprocessing.FullPipeline):
             else:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
 
-            if feat_importance:
+            if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
                     self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
                 except Exception:
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
+            elif feat_importance and importance_alg == 'permutation':
+                result = permutation_importance(
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
+                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                fig, ax = plt.subplots()
+                permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
+                ax.set_title("Feature importances using permutation on full model")
+                ax.set_ylabel("Mean accuracy decrease")
+                fig.tight_layout()
+                plt.show()
             else:
                 pass
             self.predicted_probs[f"{algorithm}"] = {}
@@ -658,7 +671,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                                          learning_rate=param["learning_rate"],
                                          random_state=42)
                     try:
-                        scores = cross_val_score(model, X_train, Y_train, cv=5, scoring='f1_weighted',
+                        scores = cross_val_score(model, X_train, Y_train, cv=10, scoring='f1_weighted',
                                                  fit_params={'X_val': X_test,
                                                              'Y_val': Y_test,
                                                              'sample_weight': classes_weights,
@@ -696,9 +709,10 @@ class ClassificationModels(postprocessing.FullPipeline):
             self.trained_models[f"{algorithm}"] = model
             return self.trained_models
 
-    def ngboost_predict(self, feat_importance=True):
+    def ngboost_predict(self, feat_importance=True, importance_alg='permutation'):
         """
         Predicts on test & also new data given the prediction_mode is activated in the class.
+        :param importance_alg: Chose 'permutation' or 'SHAP' (SHAP is very slow due to CPU usage)
         :return: Updates class attributes by its predictions.
         """
         algorithm = 'ngboost'
@@ -706,22 +720,33 @@ class ClassificationModels(postprocessing.FullPipeline):
         if self.prediction_mode:
             X_test = self.dataframe
             predicted_probs = model.predict_proba(X_test)
-            predicted_classes = predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+            predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
 
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             predicted_probs = model.predict(X_test)
-            if Y_train.nunique()>2:
+            if Y_train.nunique() > 2:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
             else:
                 self.threshold_refiner(predicted_probs, Y_test)
                 predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
-            if feat_importance:
+
+            if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
                     self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
                 except Exception:
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            elif feat_importance and importance_alg == 'permutation':
+                result = permutation_importance(
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
+                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                fig, ax = plt.subplots()
+                permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
+                ax.set_title("Feature importances using permutation on full model")
+                ax.set_ylabel("Mean accuracy decrease")
+                fig.tight_layout()
+                plt.show()
             else:
                 pass
         self.predicted_probs[f"{algorithm}"] = {}

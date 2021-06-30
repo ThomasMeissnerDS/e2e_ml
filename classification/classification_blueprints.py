@@ -157,7 +157,7 @@ class ClassificationBluePrint(ClassificationModels):
             pass
         else:
             self.sklearn_ensemble_train()
-        self.sklearn_ensemble_predict(feat_importance=True)
+        self.sklearn_ensemble_predict(feat_importance=True, importance_alg='permutation')
         algorithm = 'sklearn_ensemble'
         self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
         self.prediction_mode = True
@@ -196,7 +196,7 @@ class ClassificationBluePrint(ClassificationModels):
             pass
         else:
             self.ngboost_train()
-        self.ngboost_predict(feat_importance=True)
+        self.ngboost_predict(feat_importance=True, importance_alg='permutation')
         self.classification_eval('ngboost')
         self.prediction_mode = True
         logging.info('Finished blueprint.')

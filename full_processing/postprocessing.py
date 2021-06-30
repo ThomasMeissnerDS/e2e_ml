@@ -105,8 +105,13 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                 matthews = 0
             print(f"The Matthew correlation is {matthews}")
 
-            roc_auc = roc_auc_score(Y_test, y_hat_probs)
-            print(f"The ROC_AUC score is {roc_auc}")
+            """# TODO: INVESTIGATE ROC_AUC for multiclass
+            if self.class_problem == 'binary':
+                partial_probs = np.asarray([line[1] for line in probs])
+                roc_auc = roc_auc_score(Y_test, partial_probs, multi_class='ovr')
+                print(f"The ROC_AUC score is {roc_auc}")
+            else:
+                pass"""
             f1_score_macro = f1_score(Y_test, y_hat, average='macro')
             print(f"The macro F1 score is {f1_score_macro}")
             f1_score_micro = f1_score(Y_test, y_hat, average='micro')
@@ -118,7 +123,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             print(full_classification_report)
             self.evaluation_scores[f"{algorithm}"] = {
                 'matthews': matthews,
-                'roc_auc': roc_auc,
+                # 'roc_auc': roc_auc,
                 'f1_score_macro': f1_score_macro,
                 'f1_score_micro': f1_score_micro,
                 'f1_score_weighted': f1_score_weighted,
