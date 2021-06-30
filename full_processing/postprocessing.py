@@ -132,7 +132,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             logging.info('Finished classification evaluation.')
             return self.evaluation_scores
 
-    def regression_eval(self, algorithm, pred_probs=None, pred_reg=None):
+    def regression_eval(self, algorithm, pred_reg=None):
         """
         Takes in the algorithm name. This is needed to grab saved predictions and to store regression scores
         of different evaluation functions within the class. Returns the evaluation dictionary.

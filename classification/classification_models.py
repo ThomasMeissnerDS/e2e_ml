@@ -719,7 +719,7 @@ class ClassificationModels(postprocessing.FullPipeline):
             self.trained_models[f"{algorithm}"] = model
             return self.trained_models
 
-    def ngboost_predict(self, feat_importance=True, importance_alg='permutation'):
+    def ngboost_predict(self, feat_importance=True, importance_alg='SHAP'):
         """
         Predicts on test & also new data given the prediction_mode is activated in the class.
         :param importance_alg: Chose 'permutation' or 'SHAP' (SHAP is very slow due to CPU usage)

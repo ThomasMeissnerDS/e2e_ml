@@ -16,6 +16,7 @@ from boostaroota import BoostARoota
 import gc
 import warnings
 import logging
+import pickle
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 
@@ -28,9 +29,11 @@ class PreProcessing:
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None,
                  prediction_mode=False, preprocess_decisions=None, trained_model=None, ml_task=None,
-                 logging_file_path=None):
+                 logging_file_path=None, low_memory_mode=False, save_models_path=None):
 
         self.dataframe = datasource
+        self.low_memory_mode = low_memory_mode
+        self.save_models_path = save_models_path
         self.logging_file_path = logging_file_path
         logging.basicConfig(filename=f'{self.logging_file_path}.log', format='%(asctime)s %(message)s',
                             level=logging.DEBUG)
@@ -97,6 +100,7 @@ class PreProcessing:
         self.xg_boost_regression = None
         self.xgboost_objective = None
         self.prediction_mode = prediction_mode
+        self.best_model = None
         self.excluded = None
         self.num_dtypes = ['int8', 'int16', 'int32', 'int64', 'float16', 'float32', 'float64']
         if not num_columns:
@@ -179,6 +183,31 @@ class PreProcessing:
         Y_train, Y_test = self.df_dict["Y_train"], self.df_dict["Y_test"]
         logging.info('Finished unpacking Numpy dict.')
         return Y_train, Y_test
+
+    def save_load_model_file(self, model_object=None, model_path=None, algorithm=None, algorithm_variant='none',
+                             file_type='.dat', action='save', clean=True):
+        if self.save_models_path:
+            path = self.save_models_path
+        elif model_path:
+            path = model_path
+        else:
+            pass
+        full_path = path+'_'+algorithm+'_'+algorithm_variant+'_'+file_type
+
+        if action == 'save':
+            filehandler = open(full_path, 'wb')
+            pickle.dump(model_object, filehandler)
+            filehandler.close()
+            if clean:
+                del model_object
+                _ = gc.collect()
+        elif action == 'load':
+            filehandler = open(full_path, 'rb')
+            model_object = pickle.load(filehandler)
+            filehandler.close()
+            return model_object
+        else:
+            pass
 
     def sort_columns_alphabetically(self):
         """
