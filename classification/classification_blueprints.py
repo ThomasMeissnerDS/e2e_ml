@@ -39,7 +39,7 @@ class ClassificationBluePrint(ClassificationModels):
             self.logistic_regression_train()
         self.data_scaling()
         algorithm='logistic_regression'
-        self.logistic_regression_predict(feat_importance=True)
+        self.logistic_regression_predict(feat_importance=True, importance_alg='permutation')
         self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
         self.prediction_mode = True
         logging.info('Finished blueprint.')

@@ -39,7 +39,7 @@ class RegressionBluePrint(RegressionModels):
             self.linear_regression_train()
         self.data_scaling()
         algorithm = 'linear_regression'
-        self.linear_regression_predict(feat_importance=True)
+        self.linear_regression_predict(feat_importance=True, importance_alg='permutation')
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info('Finished blueprint.')
@@ -156,7 +156,7 @@ class RegressionBluePrint(RegressionModels):
             pass
         else:
             self.sklearn_ensemble_train()
-        self.sklearn_ensemble_predict(feat_importance=True)
+        self.sklearn_ensemble_predict(feat_importance=True, importance_alg='permutation')
         algorithm = 'sklearn_ensemble'
         self.regression_eval('sklearn_ensemble')
         self.prediction_mode = True
@@ -195,7 +195,7 @@ class RegressionBluePrint(RegressionModels):
             pass
         else:
             self.ngboost_train()
-        self.ngboost_predict(feat_importance=True)
+        self.ngboost_predict(feat_importance=True, importance_alg='permutation')
         self.regression_eval('ngboost')
         self.prediction_mode = True
         logging.info('Finished blueprint.')

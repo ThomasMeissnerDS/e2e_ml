@@ -68,7 +68,7 @@ class ClassificationModels(postprocessing.FullPipeline):
             self.trained_models[f"{algorithm}"] = model
             return self.trained_models
 
-    def logistic_regression_predict(self, feat_importance=True):
+    def logistic_regression_predict(self, feat_importance=True, importance_alg='permutation'):
         algorithm = 'logistic_regression'
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
@@ -93,12 +93,22 @@ class ClassificationModels(postprocessing.FullPipeline):
             else:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
 
-            if feat_importance:
+            if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            elif feat_importance and importance_alg == 'permutation':
+                result = permutation_importance(
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
+                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                fig, ax = plt.subplots()
+                permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
+                ax.set_title("Feature importances using permutation on full model")
+                ax.set_ylabel("Mean accuracy decrease")
+                fig.tight_layout()
+                plt.show()
             else:
                 pass
             self.predicted_probs[f"{algorithm}"] = {}
