@@ -150,8 +150,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                             'lambda': trial.suggest_loguniform('lambda', 1e-8, 10.0),
                             'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                             'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
-                            'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
-                            'eta': trial.suggest_loguniform('eta', 0.1, 0.3),
+                            'min_child_samples': trial.suggest_int('min_child_samples', 5, 1000),
+                            'eta': trial.suggest_loguniform('eta', 1e-6, 0.3),
                             'steps': trial.suggest_int('steps', 2, 70000),
                             'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 5)
                         }
@@ -176,7 +176,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         study = optuna.create_study(direction='maximize')
                     else:
                         study = optuna.create_study(direction='minimize')
-                    study.optimize(objective, n_trials=30)
+                    study.optimize(objective, n_trials=40)
                     self.optuna_studies[f"{algorithm}"] = {}
                     #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -220,8 +220,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                             'lambda': trial.suggest_loguniform('lambda', 1e-8, 10.0),
                             'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                             'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
-                            'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
-                            'eta': trial.suggest_loguniform('eta', 0.001, 0.3), #0.001
+                            'min_child_samples': trial.suggest_int('min_child_samples', 5, 1000),
+                            'eta': trial.suggest_loguniform('eta', 1e-6, 0.3), #0.001
                             'steps': trial.suggest_int('steps', 2, 70000),
                             'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 5)
                         }
@@ -246,7 +246,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         study = optuna.create_study(direction='maximize')
                     else:
                         study = optuna.create_study(direction='minimize')
-                    study.optimize(objective, n_trials=30)
+                    study.optimize(objective, n_trials=40)
                     self.optuna_studies[f"{algorithm}"] = {}
                     #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
