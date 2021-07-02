@@ -558,20 +558,104 @@ class ClassificationModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            level0 = list()
-            level0.append(('lgbm', LGBMClassifier()))
-            level0.append(('lr', LogisticRegression()))
-            level0.append(('kbc', KNeighborsClassifier(2)))
-            level0.append(('gdc', GradientBoostingClassifier()))
-            level0.append(('cart', DecisionTreeClassifier(max_depth=7)))
-            level0.append(('abc', AdaBoostClassifier()))
-            level0.append(('qda', QuadraticDiscriminantAnalysis()))
-            level0.append(('rdf',  RandomForestClassifier(max_depth=7)))
-            # define meta learner model
-            level1 = GradientBoostingClassifier()
-            # define the stacking ensemble
-            model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
-            print(X_train.info())
+
+            def objective(trial):
+                ensemble_variation = trial.suggest_categorical("ensemble_variant", ["2_boosters",
+                                                                                    "3_boosters",
+                                                                                    "trees_forest",
+                                                                                    "reversed_boosters",
+                                                                                    "full_ensemble"])
+                # Step 2. Setup values for the hyperparameters:
+                if ensemble_variation == '2_boosters':
+                    level0 = list()
+                    level0.append(('lgbm', LGBMClassifier()))
+                    level1 = GradientBoostingClassifier()
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                elif ensemble_variation == '3_boosters':
+                    level0 = list()
+                    level0.append(('lgbm', LGBMClassifier()))
+                    level0.append(('abc', AdaBoostClassifier(n_estimators=100)))
+                    level1 = GradientBoostingClassifier()
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                elif ensemble_variation == 'trees_forest':
+                    level0 = list()
+                    level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
+                    level0.append(('rdf',  RandomForestClassifier(max_depth=5)))
+                    level1 = GradientBoostingClassifier()
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                elif ensemble_variation == 'reversed_boosters':
+                    level0 = list()
+                    level0.append(('xgb', GradientBoostingClassifier()))
+                    level0.append(('lgbm', LGBMClassifier()))
+                    level1 = LogisticRegression(class_weight='balanced', max_iter=500, n_jobs=-1)
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                elif ensemble_variation == 'full_ensemble':
+                    level0 = list()
+                    level0.append(('lgbm', LGBMClassifier()))
+                    level0.append(('lr', LogisticRegression(class_weight='balanced', max_iter=500, n_jobs=-1)))
+                    level0.append(('kbc', KNeighborsClassifier(2)))
+                    level0.append(('gdc', GradientBoostingClassifier()))
+                    level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
+                    level0.append(('abc', AdaBoostClassifier(n_estimators=100)))
+                    level0.append(('qda', QuadraticDiscriminantAnalysis()))
+                    level0.append(('rdf',  RandomForestClassifier(max_depth=5)))
+                    # define meta learner model
+                    level1 = GradientBoostingClassifier()
+                    # define the stacking ensemble
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+
+                # Step 3: Scoring method:
+                model.fit(X_train, Y_train)
+                predicted_probs = model.predict_proba(X_test)
+                if self.class_problem == 'binary':
+                    self.threshold_refiner(predicted_probs, Y_test)
+                    partial_probs = np.asarray([line[1] for line in predicted_probs])
+                    predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
+                else:
+                    predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+                matthews = matthews_corrcoef(Y_test, predicted_classes)
+                return matthews
+
+            study = optuna.create_study(direction="maximize")
+            study.optimize(objective, n_trials=10)
+            best_variant = study.best_trial.params["ensemble_variant"]
+            if best_variant == '2_boosters':
+                level0 = list()
+                level0.append(('lgbm', LGBMClassifier()))
+                level1 = GradientBoostingClassifier()
+                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+            elif best_variant == '3_boosters':
+                level0 = list()
+                level0.append(('lgbm', LGBMClassifier()))
+                level0.append(('abc', AdaBoostClassifier()))
+                level1 = GradientBoostingClassifier()
+                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+            elif best_variant == 'trees_forest':
+                level0 = list()
+                level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
+                level0.append(('rdf',  RandomForestClassifier(max_depth=5)))
+                level1 = GradientBoostingClassifier()
+                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+            elif best_variant == 'reversed_boosters':
+                level0 = list()
+                level0.append(('xgb', GradientBoostingClassifier()))
+                level0.append(('lgbm', LGBMClassifier()))
+                level1 = LogisticRegression()
+                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+            elif best_variant == 'full_ensemble':
+                level0 = list()
+                level0.append(('lgbm', LGBMClassifier()))
+                level0.append(('lr', LogisticRegression()))
+                level0.append(('kbc', KNeighborsClassifier(2)))
+                level0.append(('gdc', GradientBoostingClassifier()))
+                level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
+                level0.append(('abc', AdaBoostClassifier()))
+                level0.append(('qda', QuadraticDiscriminantAnalysis()))
+                level0.append(('rdf',  RandomForestClassifier(max_depth=5)))
+                # define meta learner model
+                level1 = GradientBoostingClassifier()
+                # define the stacking ensemble
+                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
             model.fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
