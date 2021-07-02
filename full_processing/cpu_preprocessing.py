@@ -518,13 +518,21 @@ class PreProcessing:
         :return: Updates test and train class attributes.
         """
         if self.prediction_mode:
-            logging.info('Skipped deleting columns with many NULLs due to prediction mode.')
-            pass
+            for high_null_col in self.preprocess_decisions["deleted_high_null_cols"]:
+                del self.dataframe[high_null_col]
+            logging.info('Finished deleting columns with many NULLs.')
         else:
             logging.info('Started deleting columns with many NULLs.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            columns_before = X_train.columns.to_list()
             X_train.dropna(axis=1, thresh=int(threshold*len(X_train)))
-            logging.info('Finished deleting columns with many NULLs.')
+            columns_after = X_train.columns.to_list()
+            deleted_columns = (set(columns_before).difference(columns_after))
+            deleted = []
+            for key in deleted_columns:
+                deleted.append(key)
+            self.preprocess_decisions["deleted_high_null_cols"] = deleted
+            logging.info(f'Finished deleting columns with many NULLs: {deleted}.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     # TODO: Check if parameters can be used via **kwargs argument
