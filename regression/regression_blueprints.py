@@ -20,7 +20,7 @@ class RegressionBluePrint(RegressionModels):
                 skip_train = True
         except AttributeError:
             skip_train = False
-        self.train_test_split()
+        self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=1000)
@@ -60,7 +60,7 @@ class RegressionBluePrint(RegressionModels):
                 skip_train = True
         except AttributeError:
             skip_train = False
-        self.train_test_split()
+        self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=1000)
@@ -98,7 +98,7 @@ class RegressionBluePrint(RegressionModels):
                 skip_train = True
         except AttributeError:
             skip_train = False
-        self.train_test_split()
+        self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=1000)
@@ -139,7 +139,7 @@ class RegressionBluePrint(RegressionModels):
                 skip_train = True
         except AttributeError:
             skip_train = False
-        self.train_test_split()
+        self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=1000)

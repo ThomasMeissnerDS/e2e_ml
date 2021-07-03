@@ -29,7 +29,7 @@ class PreProcessing:
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None,
                  prediction_mode=False, preprocess_decisions=None, trained_model=None, ml_task=None,
-                 logging_file_path=None, low_memory_mode=False, save_models_path=None):
+                 logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
 
         self.dataframe = datasource
         self.low_memory_mode = low_memory_mode
@@ -70,6 +70,7 @@ class PreProcessing:
                     pass
         else:
             self.class_problem = ml_task
+        self.train_split_type = train_split_type
         self.date_columns = date_columns
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
