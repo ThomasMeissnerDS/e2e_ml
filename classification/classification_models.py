@@ -570,29 +570,29 @@ class ClassificationModels(postprocessing.FullPipeline):
                     level0 = list()
                     level0.append(('lgbm', LGBMClassifier()))
                     level1 = GradientBoostingClassifier()
-                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
                 elif ensemble_variation == '3_boosters':
                     level0 = list()
                     level0.append(('lgbm', LGBMClassifier()))
                     level0.append(('abc', AdaBoostClassifier(n_estimators=100)))
                     level1 = GradientBoostingClassifier()
-                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
                 elif ensemble_variation == 'trees_forest':
                     level0 = list()
                     level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
                     level0.append(('rdf',  RandomForestClassifier(max_depth=5)))
                     level1 = GradientBoostingClassifier()
-                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
                 elif ensemble_variation == 'reversed_boosters':
                     level0 = list()
                     level0.append(('xgb', GradientBoostingClassifier()))
                     level0.append(('lgbm', LGBMClassifier()))
-                    level1 = LogisticRegression(class_weight='balanced', max_iter=500, n_jobs=-1)
-                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                    level1 = LogisticRegression(class_weight='balanced', max_iter=500)
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
                 elif ensemble_variation == 'full_ensemble':
                     level0 = list()
                     level0.append(('lgbm', LGBMClassifier()))
-                    level0.append(('lr', LogisticRegression(class_weight='balanced', max_iter=500, n_jobs=-1)))
+                    level0.append(('lr', LogisticRegression(class_weight='balanced', max_iter=500)))
                     level0.append(('kbc', KNeighborsClassifier(2)))
                     level0.append(('gdc', GradientBoostingClassifier()))
                     level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
@@ -602,7 +602,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     # define meta learner model
                     level1 = GradientBoostingClassifier()
                     # define the stacking ensemble
-                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
 
                 # Step 3: Scoring method:
                 model.fit(X_train, Y_train)

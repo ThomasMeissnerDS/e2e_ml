@@ -1,6 +1,7 @@
 from full_processing import postprocessing
 from pandas.core.common import SettingWithCopyWarning
 import numpy as np
+import pandas as pd
 import optuna
 import xgboost as xgb
 import lightgbm as lgb
@@ -322,7 +323,7 @@ class RegressionModels(postprocessing.FullPipeline):
             # define meta learner model
             level1 = GradientBoostingRegressor()
             # define the stacking ensemble
-            model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5)
+            model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
             print(X_train.info())
             model.fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
