@@ -311,20 +311,91 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            level0 = list()
-            level0.append(('rfr', RandomForestRegressor(n_jobs=-1)))
-            level0.append(('gbr', GradientBoostingRegressor(random_state=0)))
-            level0.append(('byr', BayesianRidge()))
-            level0.append(('sgd', SGDRegressor()))
-            level0.append(('svr', LinearSVR()))
-            level0.append(('ard', ARDRegression()))
-            level0.append(('lgb', LGBMRegressor()))
-            level0.append(('lr', RidgeCV()))
-            # define meta learner model
-            level1 = GradientBoostingRegressor()
-            # define the stacking ensemble
-            model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
-            print(X_train.info())
+
+            def objective(trial):
+                ensemble_variation = trial.suggest_categorical("ensemble_variant", ["2_boosters",
+                                                                                    "no_boost_forest",
+                                                                                    "reversed_boosters",
+                                                                                    "full_ensemble"])
+                # Step 2. Setup values for the hyperparameters:
+                if ensemble_variation == '2_boosters':
+                    level0 = list()
+                    level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
+                    level1 = GradientBoostingRegressor(n_estimators=5000)
+                    model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
+                elif ensemble_variation == 'no_boost_forest':
+                    level0 = list()
+                    level0.append(('sgd', SGDRegressor()))
+                    level0.append(('svr', LinearSVR()))
+                    level0.append(('ard', ARDRegression()))
+                    level0.append(('ridge', RidgeCV()))
+                    level1 = GradientBoostingRegressor()
+                    model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
+                elif ensemble_variation == 'reversed_boosters':
+                    level0 = list()
+                    level0.append(('xgb', GradientBoostingRegressor(n_estimators=5000)))
+                    level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
+                    level1 = LinearRegression(n_jobs=-2)
+                    model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
+                elif ensemble_variation == 'full_ensemble':
+                    level0 = list()
+                    level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
+                    level0.append(('lr', LinearRegression(n_jobs=-2)))
+                    level0.append(('gdc', GradientBoostingRegressor(n_estimators=5000)))
+                    level0.append(('sgd', SGDRegressor()))
+                    level0.append(('svr', LinearSVR()))
+                    level0.append(('ard', ARDRegression()))
+                    level0.append(('ridge', RidgeCV()))
+                    level0.append(('qda', BayesianRidge()))
+                    level0.append(('rdf',  RandomForestRegressor(max_depth=5, n_jobs=-2)))
+                    # define meta learner model
+                    level1 = GradientBoostingRegressor(n_estimators=5000)
+                    # define the stacking ensemble
+                    model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
+
+                # Step 3: Scoring method:
+                model.fit(X_train, Y_train)
+                preds = model.predict(X_test)
+                mae = mean_absolute_error(Y_test, preds)
+                return mae
+
+            study = optuna.create_study(direction="minimize")
+            study.optimize(objective, n_trials=20)
+            best_variant = study.best_trial.params["ensemble_variant"]
+            if best_variant == '2_boosters':
+                level0 = list()
+                level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
+                level1 = GradientBoostingRegressor(n_estimators=5000)
+                model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
+            elif best_variant == 'no_boost_forest':
+                level0 = list()
+                level0.append(('sgd', SGDRegressor()))
+                level0.append(('svr', LinearSVR()))
+                level0.append(('ard', ARDRegression()))
+                level0.append(('ridge', RidgeCV()))
+                level1 = GradientBoostingRegressor()
+                model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
+            elif best_variant == 'reversed_boosters':
+                level0 = list()
+                level0.append(('xgb', GradientBoostingRegressor(n_estimators=5000)))
+                level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
+                level1 = LinearRegression(n_jobs=-2)
+                model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
+            elif best_variant == 'full_ensemble':
+                level0 = list()
+                level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
+                level0.append(('lr', LinearRegression(n_jobs=-2)))
+                level0.append(('gdc', GradientBoostingRegressor(n_estimators=5000)))
+                level0.append(('sgd', SGDRegressor()))
+                level0.append(('svr', LinearSVR()))
+                level0.append(('ard', ARDRegression()))
+                level0.append(('ridge', RidgeCV()))
+                level0.append(('qda', BayesianRidge()))
+                level0.append(('rdf',  RandomForestRegressor(max_depth=5, n_jobs=-2)))
+                # define meta learner model
+                level1 = GradientBoostingRegressor(n_estimators=5000)
+                # define the stacking ensemble
+                model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
             model.fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model

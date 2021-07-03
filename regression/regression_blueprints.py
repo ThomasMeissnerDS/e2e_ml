@@ -156,6 +156,7 @@ class RegressionBluePrint(RegressionModels):
         self.reduce_memory_footprint()
         self.automated_feature_selection(metric='mae')
         self.sort_columns_alphabetically()
+        self.data_scaling()
         if skip_train:
             pass
         else:

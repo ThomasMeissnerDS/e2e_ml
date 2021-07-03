@@ -70,4 +70,4 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         pass
 
 
-blueprint_regression_test_housingprices(blueprint='linear_regression')
+blueprint_regression_test_housingprices(blueprint='sklearn_ensemble')
