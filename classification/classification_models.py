@@ -246,7 +246,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         study = optuna.create_study(direction='maximize')
                     else:
                         study = optuna.create_study(direction='minimize')
-                    study.optimize(objective, n_trials=40)
+                    study.optimize(objective, n_trials=30)
                     self.optuna_studies[f"{algorithm}"] = {}
                     #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -399,15 +399,15 @@ class ClassificationModels(postprocessing.FullPipeline):
                     else:
                         result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
                                         early_stopping_rounds=10, callbacks=[pruning_callback], seed=42, verbose_eval=False)
-                        avg_result = np.mean(np.array(result["multi_logloss-mean"]))
+                        avg_result = np.mean(np.array(result["binary_logloss-mean"]))
                         return avg_result
 
                 algorithm = 'lgbm'
-                if self.class_problem == 'binary':
+                if self.class_problem == 'simple':
                     study = optuna.create_study(direction='maximize')
                 else:
                     study = optuna.create_study(direction='minimize')
-                study.optimize(objective, n_trials=20)
+                study.optimize(objective, n_trials=10)
                 #self.optuna_studies[f"{algorithm}"] = {}
                 #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -475,7 +475,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         return avg_result
 
                 algorithm = 'lgbm'
-                if self.class_problem == 'binary':
+                if self.class_problem == 'simple':
                     study = optuna.create_study(direction='maximize')
                 else:
                     study = optuna.create_study(direction='minimize')

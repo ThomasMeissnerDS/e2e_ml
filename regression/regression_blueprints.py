@@ -31,6 +31,7 @@ class RegressionBluePrint(RegressionModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
+        self.reduce_memory_footprint()
         self.automated_feature_selection(metric='mae')
         self.sort_columns_alphabetically()
         if skip_train:
@@ -71,6 +72,7 @@ class RegressionBluePrint(RegressionModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
+        self.reduce_memory_footprint()
         self.automated_feature_selection(metric='mae')
         self.sort_columns_alphabetically()
         if skip_train:
@@ -109,6 +111,7 @@ class RegressionBluePrint(RegressionModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
+        self.reduce_memory_footprint()
         self.automated_feature_selection(metric='mae')
         self.sort_columns_alphabetically()
         if skip_train:
@@ -150,6 +153,7 @@ class RegressionBluePrint(RegressionModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
+        self.reduce_memory_footprint()
         self.automated_feature_selection(metric='mae')
         self.sort_columns_alphabetically()
         if skip_train:
@@ -189,6 +193,7 @@ class RegressionBluePrint(RegressionModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
+        self.reduce_memory_footprint()
         self.automated_feature_selection(metric='mae')
         self.sort_columns_alphabetically()
         if skip_train:
