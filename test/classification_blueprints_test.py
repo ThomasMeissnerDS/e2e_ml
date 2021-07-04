@@ -72,11 +72,28 @@ def load_titanic_data():
     return test_df, test_target, val_df, val_df_target, test_categorical_cols
 
 
-def blueprint_binary_test_titanic(blueprint='logistic_regression'):
-    test_df, test_target, val_df, val_df_target, test_categorical_cols = load_titanic_data()
-    titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
-                                   target_variable=test_target,
-                                   categorical_columns=test_categorical_cols)
+def synthetic_multiclass_data():
+    data = pd.read_csv("synthetic_multi_classifcation.csv")
+    test_df = data.head(2500).copy()
+    val_df = data.tail(499).copy()
+    val_df_target = val_df["recommendation"].copy()
+    del val_df["recommendation"]
+    test_target = "recommendation"
+    test_categorical_cols = ["status", "country"]
+    return test_df, test_target, val_df, val_df_target, test_categorical_cols
+
+
+def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='titanic'):
+    if dataset == 'titanic':
+        test_df, test_target, val_df, val_df_target, test_categorical_cols = load_titanic_data()
+        titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
+                                       target_variable=test_target,
+                                       categorical_columns=test_categorical_cols)
+    elif dataset == 'synthetic_multiclass':
+        test_df, test_target, val_df, val_df_target, test_categorical_cols = synthetic_multiclass_data()
+        titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
+                                                     target_variable=test_target,
+                                                     categorical_columns=test_categorical_cols)
     if blueprint == 'lgbm':
         titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob()
         print("Start prediction on holdout dataset")
@@ -119,4 +136,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression'):
         return print('The test failed. Please investigate.')
 
 
-blueprint_binary_test_titanic(blueprint='ngboost')
+blueprint_binary_test_titanic(blueprint='lgbm', dataset='synthetic_multiclass')

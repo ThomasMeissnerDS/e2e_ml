@@ -120,7 +120,7 @@ class ClassificationBluePrint(ClassificationModels):
         if skip_train:
             pass
         else:
-            self.xg_boost_train(autotune=True)
+            self.xg_boost_train(autotune=True, tune_mode='accurate')
         self.xgboost_predict(feat_importance=True)
         self.classification_eval('xgboost')
         self.prediction_mode = True
@@ -161,9 +161,9 @@ class ClassificationBluePrint(ClassificationModels):
             pass
         else:
             try:
-                self.lgbm_train(tune_mode='simple', run_on='gpu', gpu_use_dp=True)
+                self.lgbm_train(tune_mode='accurate', run_on='gpu', gpu_use_dp=True)
             except Exception:
-                self.lgbm_train(tune_mode='simple', run_on='cpu', gpu_use_dp=False)
+                self.lgbm_train(tune_mode='accurate', run_on='cpu', gpu_use_dp=False)
         self.lgbm_predict(feat_importance=True)
         self.classification_eval('lgbm')
         self.prediction_mode = True
@@ -283,8 +283,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
         if not self.prediction_mode:
-            self.train_pred_selected_model(algorithm='xgboost')
             self.train_pred_selected_model(algorithm='lgbm')
+            self.train_pred_selected_model(algorithm='xgboost')
             self.train_pred_selected_model(algorithm='ngboost')
             self.train_pred_selected_model(algorithm='sklearn_ensemble')
 

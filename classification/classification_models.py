@@ -368,10 +368,13 @@ class ClassificationModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            classes_weights = class_weight.compute_sample_weight(
+                class_weight='balanced',
+                y=Y_train)
 
             if self.class_problem == 'binary':
                 def objective(trial):
-                    dtrain = lgb.Dataset(X_train, label=Y_train)
+                    dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
                     param = {
                         # TODO: Move to additional folder with pyfile "constants" (use OS absolute path)
                         'objective': 'binary',
@@ -403,11 +406,11 @@ class ClassificationModels(postprocessing.FullPipeline):
                         return avg_result
 
                 algorithm = 'lgbm'
-                if self.class_problem == 'simple':
+                if tune_mode == 'simple':
                     study = optuna.create_study(direction='maximize')
                 else:
                     study = optuna.create_study(direction='minimize')
-                study.optimize(objective, n_trials=10)
+                study.optimize(objective, n_trials=25)
                 #self.optuna_studies[f"{algorithm}"] = {}
                 #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -441,7 +444,7 @@ class ClassificationModels(postprocessing.FullPipeline):
 
             else:
                 def objective(trial):
-                    dtrain = lgb.Dataset(X_train, label=Y_train)
+                    dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
                     param = {
                         'objective': 'multiclass',
                         'metric': 'multi_logloss',
@@ -475,11 +478,11 @@ class ClassificationModels(postprocessing.FullPipeline):
                         return avg_result
 
                 algorithm = 'lgbm'
-                if self.class_problem == 'simple':
+                if tune_mode == 'simple':
                     study = optuna.create_study(direction='maximize')
                 else:
                     study = optuna.create_study(direction='minimize')
-                study.optimize(objective, n_trials=20)
+                study.optimize(objective, n_trials=25)
                 #self.optuna_studies[f"{algorithm}"] = {}
                 #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -490,6 +493,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 param = {
                     'objective': 'multiclass',
                     'metric': 'multi_logloss',
+                    'class_weight': classes_weights,
                     'num_boost_round': lgbm_best_param["num_boost_round"],
                     'num_class': Y_train.nunique(),
                     'lambda_l1': lgbm_best_param["lambda_l1"],
@@ -616,7 +620,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 return matthews
 
             study = optuna.create_study(direction="maximize")
-            study.optimize(objective, n_trials=20)
+            study.optimize(objective, n_trials=10)
             best_variant = study.best_trial.params["ensemble_variant"]
             if best_variant == '2_boosters':
                 level0 = list()
@@ -775,7 +779,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     return mae
             algorithm = 'ngboost'
             study = optuna.create_study(direction='maximize')
-            study.optimize(objective, n_trials=20)
+            study.optimize(objective, n_trials=15)
             #self.optuna_studies[f"{algorithm}"] = {}
             #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
