@@ -104,6 +104,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             except Exception:
                 matthews = 0
             print(f"The Matthew correlation is {matthews}")
+            logging.info(f'The Matthew correlation of {algorithm} is {matthews}')
 
             """# TODO: INVESTIGATE ROC_AUC for multiclass
             if self.class_problem == 'binary':
@@ -114,13 +115,17 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                 pass"""
             f1_score_macro = f1_score(Y_test, y_hat, average='macro')
             print(f"The macro F1 score is {f1_score_macro}")
+            logging.info(f'The macro F1 score of {algorithm} is {f1_score_macro}')
             f1_score_micro = f1_score(Y_test, y_hat, average='micro')
             print(f"The micro F1 score is {f1_score_micro}")
+            logging.info(f'The micro F1 score of {algorithm} is {f1_score_micro}')
             f1_score_weighted = f1_score(Y_test, y_hat, average='weighted')
             print(f"The weighted F1 score is {f1_score_weighted}")
+            logging.info(f'The weighted F1 score of {algorithm} is {f1_score_weighted}')
 
             full_classification_report = classification_report(Y_test, y_hat)
             print(full_classification_report)
+            logging.info(f'The classification report of {algorithm} is {full_classification_report}')
             self.evaluation_scores[f"{algorithm}"] = {
                 'matthews': matthews,
                 # 'roc_auc': roc_auc,

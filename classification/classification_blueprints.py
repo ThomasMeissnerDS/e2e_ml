@@ -5,6 +5,7 @@ import logging
 
 class ClassificationBluePrint(ClassificationModels):
     def train_pred_selected_model(self, algorithm=None, skip_train=False):
+        logging.info(f'Start ML training {algorithm}')
         if algorithm == 'xgboost':
             # train Xgboost
             if skip_train:
@@ -12,7 +13,7 @@ class ClassificationBluePrint(ClassificationModels):
             else:
                 self.xg_boost_train(autotune=True)
             self.xgboost_predict(feat_importance=True)
-            self.classification_eval('xgboost')
+            self.classification_eval(algorithm=algorithm)
         elif algorithm == 'ngboost':
             # train Ngboost
             if skip_train:
@@ -20,7 +21,7 @@ class ClassificationBluePrint(ClassificationModels):
             else:
                 self.ngboost_train()
             self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
-            self.classification_eval('ngboost')
+            self.classification_eval(algorithm=algorithm)
         elif algorithm == 'lgbm':
             # train LGBM
             if skip_train:
@@ -31,7 +32,7 @@ class ClassificationBluePrint(ClassificationModels):
                 except Exception:
                     self.lgbm_train(tune_mode='simple', run_on='cpu', gpu_use_dp=False)
             self.lgbm_predict(feat_importance=True)
-            self.classification_eval('lgbm')
+            self.classification_eval(algorithm=algorithm)
         elif algorithm == 'sklearn_ensemble':
             # train sklearn ensemble
             if skip_train:
@@ -59,7 +60,6 @@ class ClassificationBluePrint(ClassificationModels):
         except AttributeError:
             skip_train = False
         self.train_test_split(how=self.train_split_type)
-        self.reduce_memory_footprint()
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=1000)
@@ -70,6 +70,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
+        if self.low_memory_mode:
+            self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
         if skip_train:
@@ -111,7 +113,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
-        self.reduce_memory_footprint()
+        if self.low_memory_mode:
+            self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
         if skip_train:
@@ -150,7 +153,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
-        self.reduce_memory_footprint()
+        if self.low_memory_mode:
+            self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
         if skip_train:
@@ -192,7 +196,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
-        self.reduce_memory_footprint()
+        if self.low_memory_mode:
+            self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
         self.smote_data()
@@ -233,7 +238,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
-        self.reduce_memory_footprint()
+        if self.low_memory_mode:
+            self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
         if skip_train:
@@ -272,7 +278,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=50)
-        self.reduce_memory_footprint()
+        if self.low_memory_mode:
+            self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
         if not self.prediction_mode:
@@ -285,10 +292,10 @@ class ClassificationBluePrint(ClassificationModels):
             max_matthews = 0
             self.best_model = 'xgboost'
             for k, v in self.evaluation_scores.items():
-                if max_matthews > (v['matthews']):
+                if max_matthews < (v['matthews']):
                     max_matthews = (v['matthews'])
-                    best_model = k
-            self.train_pred_selected_model(algorithm=best_model)
+                    self.best_model = k
+            self.train_pred_selected_model(algorithm=self.best_model)
             self.prediction_mode = True
         else:
             self.train_pred_selected_model(algorithm=self.best_model, skip_train=skip_train)
