@@ -374,7 +374,7 @@ class ClassificationModels(postprocessing.FullPipeline):
 
             if self.class_problem == 'binary':
                 def objective(trial):
-                    dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
+                    dtrain = lgb.Dataset(X_train, label=Y_train)
                     param = {
                         # TODO: Move to additional folder with pyfile "constants" (use OS absolute path)
                         'objective': 'binary',
@@ -778,7 +778,10 @@ class ClassificationModels(postprocessing.FullPipeline):
                         mae = 0
                     return mae
             algorithm = 'ngboost'
-            study = optuna.create_study(direction='maximize')
+            if tune_mode == 'simple':
+                study = optuna.create_study(direction='maximize')
+            else:
+                study = optuna.create_study(direction='minimize')
             study.optimize(objective, n_trials=15)
             #self.optuna_studies[f"{algorithm}"] = {}
             #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')

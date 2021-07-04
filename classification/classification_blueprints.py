@@ -245,7 +245,7 @@ class ClassificationBluePrint(ClassificationModels):
         if skip_train:
             pass
         else:
-            self.ngboost_train()
+            self.ngboost_train(tune_mode='accurate')
         self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
         self.classification_eval('ngboost')
         self.prediction_mode = True
