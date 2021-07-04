@@ -4,14 +4,14 @@ import logging
 
 
 class ClassificationBluePrint(ClassificationModels):
-    def train_pred_selected_model(self, algorithm=None, skip_train=False):
+    def train_pred_selected_model(self, algorithm=None, skip_train=False, tune_mode='simple'):
         logging.info(f'Start ML training {algorithm}')
         if algorithm == 'xgboost':
             # train Xgboost
             if skip_train:
                 pass
             else:
-                self.xg_boost_train(autotune=True)
+                self.xg_boost_train(autotune=True, tune_mode=tune_mode)
             self.xgboost_predict(feat_importance=True)
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'ngboost':
@@ -19,7 +19,7 @@ class ClassificationBluePrint(ClassificationModels):
             if skip_train:
                 pass
             else:
-                self.ngboost_train()
+                self.ngboost_train(tune_mode=tune_mode)
             self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'lgbm':
@@ -28,9 +28,9 @@ class ClassificationBluePrint(ClassificationModels):
                 pass
             else:
                 try:
-                    self.lgbm_train(tune_mode='simple', run_on='gpu', gpu_use_dp=True)
+                    self.lgbm_train(tune_mode=tune_mode, run_on='gpu', gpu_use_dp=True)
                 except Exception:
-                    self.lgbm_train(tune_mode='simple', run_on='cpu', gpu_use_dp=False)
+                    self.lgbm_train(tune_mode=tune_mode, run_on='cpu', gpu_use_dp=False)
             self.lgbm_predict(feat_importance=True)
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'sklearn_ensemble':
@@ -63,6 +63,7 @@ class ClassificationBluePrint(ClassificationModels):
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=1000)
+        self.pos_tagging()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(inplace=False, how='static')
@@ -106,6 +107,7 @@ class ClassificationBluePrint(ClassificationModels):
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=1000)
+        self.pos_tagging()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(inplace=False, how='static')
@@ -146,6 +148,7 @@ class ClassificationBluePrint(ClassificationModels):
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=1000)
+        self.pos_tagging()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(inplace=False, how='static')
@@ -189,6 +192,7 @@ class ClassificationBluePrint(ClassificationModels):
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=1000)
+        self.pos_tagging()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(inplace=False, how='static')
@@ -231,6 +235,7 @@ class ClassificationBluePrint(ClassificationModels):
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=1000)
+        self.pos_tagging()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(inplace=False, how='static')
@@ -271,6 +276,7 @@ class ClassificationBluePrint(ClassificationModels):
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=1000)
+        self.pos_tagging()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(inplace=False, how='static')

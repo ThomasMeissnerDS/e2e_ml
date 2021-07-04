@@ -83,6 +83,17 @@ def synthetic_multiclass_data():
     return test_df, test_target, val_df, val_df_target, test_categorical_cols
 
 
+def nlp_multiclass_data():
+    data = pd.read_csv("Corona_NLP_train.csv", encoding='latin1')
+    test_df = data.head(2500).copy()
+    val_df = data.tail(499).copy()
+    val_df_target = val_df["Sentiment"].copy()
+    del val_df["Sentiment"]
+    test_target = "Sentiment"
+    test_categorical_cols = ["Location", "OriginalTweet"]
+    return test_df, test_target, val_df, val_df_target, test_categorical_cols
+
+
 def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='titanic'):
     if dataset == 'titanic':
         test_df, test_target, val_df, val_df_target, test_categorical_cols = load_titanic_data()
@@ -91,6 +102,11 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
                                        categorical_columns=test_categorical_cols)
     elif dataset == 'synthetic_multiclass':
         test_df, test_target, val_df, val_df_target, test_categorical_cols = synthetic_multiclass_data()
+        titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
+                                                     target_variable=test_target,
+                                                     categorical_columns=test_categorical_cols)
+    elif dataset == 'corona_tweet':
+        test_df, test_target, val_df, val_df_target, test_categorical_cols = nlp_multiclass_data()
         titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
                                                      target_variable=test_target,
                                                      categorical_columns=test_categorical_cols)
@@ -136,4 +152,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         return print('The test failed. Please investigate.')
 
 
-blueprint_binary_test_titanic(blueprint='lgbm', dataset='synthetic_multiclass')
+blueprint_binary_test_titanic(blueprint='lgbm', dataset='corona_tweet')
