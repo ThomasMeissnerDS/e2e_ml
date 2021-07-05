@@ -966,9 +966,9 @@ class PreProcessing:
             df_branch.fillna(0, inplace=True)
             onehot_cols = df_branch.columns
             pca = PCA(n_components=2)
-            pca.fit_transform(df_branch[onehot_cols])
-            df_branch = pd.DataFrame(pca.components_, columns=onehot_cols, index=['PC-1', 'PC-2'])
-            for col in df_branch[onehot_cols].columns:
+            pred_comps = pca.fit_transform(df_branch[onehot_cols])
+            df_branch = pd.DataFrame(pred_comps, columns=['PC-1', 'PC-2'])
+            for col in df_branch.columns:
                 self.dataframe[f"{col}_pca"] = df_branch[col]
             return self.dataframe
         else:
@@ -989,15 +989,16 @@ class PreProcessing:
             X_train_branch.fillna(0, inplace=True)
             X_test_branch.fillna(0, inplace=True)
             pca = PCA(n_components=2)
-            pca.fit_transform(X_train_branch[onehot_cols])
-            X_train_branch = pd.DataFrame(pca.components_, columns=onehot_cols, index=['PC-1', 'PC-2'])
-            pca.transform(X_test_branch[onehot_cols])
-            X_test_branch = pd.DataFrame(pca.components_, columns=onehot_cols, index=['PC-1', 'PC-2'])
+            train_comps = pca.fit_transform(X_train_branch[onehot_cols])
+            X_train_branch = pd.DataFrame(train_comps, columns=['PC-1', 'PC-2'])
+            test_comps = pca.transform(X_test_branch[onehot_cols])
+            X_test_branch = pd.DataFrame(test_comps, columns=['PC-1', 'PC-2'])
             pca_cols = []
             for col in X_train_branch.columns:
                 X_train[f"{col}_pca"] = X_train_branch[col]
                 X_test[f"{col}_pca"] = X_test_branch[col]
                 pca_cols.append(f"{col}_pca")
+            print(X_train_branch.head())
             self.preprocess_decisions[f"onehot_pca"]["pca_cols"] = pca_cols
             self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"] = enc
             del X_train_branch
