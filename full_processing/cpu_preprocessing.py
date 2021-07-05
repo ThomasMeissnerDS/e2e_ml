@@ -979,7 +979,6 @@ class PreProcessing:
             else:
                 cat_columns = X_train.select_dtypes(include=['object']).columns.to_list()
                 self.cat_columns_encoded = cat_columns
-                print(self.cat_columns_encoded)
 
             enc = OneHotEncoder(handle_unknown='ignore')
             X_train_branch = X_train[cat_columns].copy()
