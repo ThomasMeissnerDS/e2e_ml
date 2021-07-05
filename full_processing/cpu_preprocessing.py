@@ -449,11 +449,11 @@ class PreProcessing:
         def remove_high_cardinality(df, threshold=threshold, cols_to_delete=None):
             if not cols_to_delete:
                 deleted_columns = []
-                cat_columns = df.select_dtypes(include=['object']).columns.to_list()
+                cat_columns = df.select_dtypes(include=['object']).columns
                 for col in cat_columns:
                     cardinality = df[col].nunique()
                     if cardinality >= threshold:
-                        df.drop([col], axis=1)
+                        df = df.drop([col], axis=1)
                         deleted_columns.append(col)
                     else:
                         pass
