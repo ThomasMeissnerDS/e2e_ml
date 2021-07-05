@@ -148,9 +148,10 @@ class ClassificationBluePrint(ClassificationModels):
         except AttributeError:
             skip_train = False
         self.train_test_split(how=self.train_split_type)
-        self.datetime_converter(datetime_handling='all')
+        self.datetime_converter(datetime_handling='all', force_conversion=False)
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.cardinality_remover(threshold=1000)
+        self.cardinality_remover(threshold=100)
+        self.onehot_pca()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(inplace=False, how='static')

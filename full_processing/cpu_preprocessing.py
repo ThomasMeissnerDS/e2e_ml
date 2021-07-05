@@ -12,11 +12,13 @@ from sklearn.cluster import DBSCAN, KMeans
 from sklearn.mixture import GaussianMixture
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
+from sklearn.decomposition import PCA
 from boostaroota import BoostARoota
 import gc
 import warnings
 import logging
 import pickle
+
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 
@@ -26,6 +28,7 @@ class PreProcessing:
     Date columns and categorical columns can be passed as lists additionally for respective preprocessing.
     A unique identifier (i.e. an ID column) can be passed as well to preserve this information for later processing.
     """
+
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None,
                  prediction_mode=False, preprocess_decisions=None, trained_model=None, ml_task=None,
@@ -154,7 +157,8 @@ class PreProcessing:
         :return: X_train, X_test as dataframes. Y_train, Y_test as Pandas series.
         """
         logging.info('Start unpacking data dictionary')
-        X_train, X_test, Y_train, Y_test = self.df_dict["X_train"], self.df_dict["X_test"], self.df_dict["Y_train"], self.df_dict["Y_test"]
+        X_train, X_test, Y_train, Y_test = self.df_dict["X_train"], self.df_dict["X_test"], self.df_dict["Y_train"], \
+                                           self.df_dict["Y_test"]
         logging.info('Unpacking of data dictionary finished.')
         return X_train, X_test, Y_train, Y_test
 
@@ -193,7 +197,7 @@ class PreProcessing:
             path = model_path
         else:
             pass
-        full_path = path+'_'+algorithm+'_'+algorithm_variant+'_'+file_type
+        full_path = path + '_' + algorithm + '_' + algorithm_variant + '_' + file_type
 
         if action == 'save':
             filehandler = open(full_path, 'wb')
@@ -215,7 +219,7 @@ class PreProcessing:
         iterate through all the columns of a dataframe and modify the data type
         to reduce memory usage.
         """
-        start_mem = df.memory_usage().sum() / 1024**2
+        start_mem = df.memory_usage().sum() / 1024 ** 2
         print('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
 
         for col in df.columns:
@@ -243,7 +247,7 @@ class PreProcessing:
             else:
                 df[col] = df[col].astype('category')
 
-        end_mem = df.memory_usage().sum() / 1024**2
+        end_mem = df.memory_usage().sum() / 1024 ** 2
         print('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
         print('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
         return df
@@ -334,7 +338,8 @@ class PreProcessing:
             logging.info('Finished data scaling.')
             del scaler
             _ = gc.collect()
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.data_scaled, self.preprocess_decisions
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
+                                                Y_test), self.data_scaled, self.preprocess_decisions
 
     def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.80):
         """
@@ -368,15 +373,15 @@ class PreProcessing:
             logging.info('Started test train split.')
             if self.source_format == 'numpy array':
                 length = self.dataframe.size
-                train_length = int(length*train_size)
-                test_length = length-train_length
+                train_length = int(length * train_size)
+                test_length = length - train_length
                 Y_train, Y_test = self.dataframe[:train_length], self.dataframe[:test_length]
                 logging.info('Finished test train split.')
                 return self.np_array_wrap_test_train_to_dict(Y_train, Y_test)
             elif self.source_format == 'Pandas dataframe':
                 length = len(self.dataframe.index)
-                train_length = int(length*0.80)
-                test_length = length-train_length
+                train_length = int(length * 0.80)
+                test_length = length - train_length
                 if not split_by_col:
                     self.dataframe = self.dataframe.sort_index()
                 elif split_by_col:
@@ -406,11 +411,12 @@ class PreProcessing:
         :param nb_bins: Takes a positive integer.
         :return:
         """
+
         def binning_on_data(dataframe, cols_to_bin=None):
             num_columns = cols_to_bin.select_dtypes(include=[vartype]).columns
             for col in num_columns:
-                dataframe[str(col)+'_binned'] = pd.cut(dataframe[col], bins=nb_bins, labels=False)
-                self.new_sin_cos_col_names.append(str(col)+'_binned')
+                dataframe[str(col) + '_binned'] = pd.cut(dataframe[col], bins=nb_bins, labels=False)
+                self.new_sin_cos_col_names.append(str(col) + '_binned')
             del num_columns
             _ = gc.collect()
             return dataframe
@@ -439,38 +445,37 @@ class PreProcessing:
         :param threshold: integer of any size
         :return:Cleaned dataframe.
         """
-        def remove_high_cardinality(df, threshold=threshold, cols_to_delete=[]):
-            deleted_columns = []
-            if not len(cols_to_delete):
-                pass
-            elif not cols_to_delete:
-                cat_columns = df.select_dtypes(include=['object']).columns
+
+        def remove_high_cardinality(df, threshold=threshold, cols_to_delete=None):
+            if not cols_to_delete:
+                deleted_columns = []
+                cat_columns = df.select_dtypes(include=['object']).columns.to_list()
                 for col in cat_columns:
                     cardinality = df[col].nunique()
                     if cardinality >= threshold:
-                        del df[col]
+                        df.drop([col], axis=1)
                         deleted_columns.append(col)
                     else:
                         pass
             else:
                 cat_columns = cols_to_delete
                 for col in cat_columns:
-                    del df[col]
-                    deleted_columns.append(col)
-            return df, deleted_columns
+                    df.drop([col], axis=1)
+            return df, cols_to_delete
 
         logging.info('Start cardinality removal.')
         if self.prediction_mode:
             threshold = self.preprocess_decisions["cardinality_threshold"]
-            self.dataframe, self.preprocess_decisions["cardinality_deleted_columns"] = \
-                remove_high_cardinality(self.dataframe, cols_to_delete=self.preprocess_decisions["cardinality_deleted_columns"])
+            self.dataframe, self.preprocess_decisions["cardinality_deleted_columns"] = remove_high_cardinality(self.dataframe, cols_to_delete=self.preprocess_decisions[
+                "cardinality_deleted_columns"])
             logging.info('Finished cardinality removal.')
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, self.preprocess_decisions["cardinality_deleted_columns"] = remove_high_cardinality(X_train)
+            X_train, self.preprocess_decisions["cardinality_deleted_columns"] = remove_high_cardinality(X_train,
+                                                                                                        threshold=threshold)
             X_test, self.preprocess_decisions["cardinality_deleted_columns"] = remove_high_cardinality(df=X_test,
-                                                                                                       cols_to_delete=self.preprocess_decisions["cardinality_deleted_columns"])
+                                             cols_to_delete=self.preprocess_decisions["cardinality_deleted_columns"])
             self.preprocess_decisions["cardinality_threshold"] = threshold
             logging.info('Finished cardinality removal.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -483,10 +488,11 @@ class PreProcessing:
         :param mask_as: Group name of grouped rare features.
         :return:
         """
+
         def handle_rarity(all_data, threshold=threshold, mask_as=mask_as):
             cat_columns = all_data.select_dtypes(include=['category']).columns
             for col in cat_columns:
-                frequencies = all_data[col].value_counts(normalize = True)
+                frequencies = all_data[col].value_counts(normalize=True)
                 condition = frequencies < threshold
                 mask_obs = frequencies[condition].index
                 mask_dict = dict.fromkeys(mask_obs, mask_as)
@@ -520,6 +526,7 @@ class PreProcessing:
         :param min_samples: Minimum number of samples required to form a cluster.
         :return: Returns the modified dataframe.
         """
+
         def add_dbscan_clusters(dataframe, eps=eps, n_jobs=n_jobs, min_samples=min_samples):
             dataframe_red = dataframe.loc[:, dataframe.columns.isin(self.num_columns)].copy()
             db = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=n_jobs).fit(dataframe_red)
@@ -601,7 +608,7 @@ class PreProcessing:
             logging.info('Started deleting columns with many NULLs.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             columns_before = X_train.columns.to_list()
-            X_train.dropna(axis=1, thresh=int(threshold*len(X_train)))
+            X_train.dropna(axis=1, thresh=int(threshold * len(X_train)))
             columns_after = X_train.columns.to_list()
             deleted_columns = (set(columns_before).difference(columns_after))
             deleted = []
@@ -628,7 +635,7 @@ class PreProcessing:
             return dataframe
 
         def iterative_imputation(dataframe, params=None):
-            dataframe_cols = dataframe.columns
+            dataframe_cols = dataframe.columns.to_list()
             imp_mean = IterativeImputer(random_state=0)
             if not params:
                 pass
@@ -656,7 +663,8 @@ class PreProcessing:
             if how == 'static':
                 self.dataframe[cols] = static_filling(self.dataframe, cols)
             elif how == 'iterative_imputation':
-                self.dataframe[cols] = iterative_imputation(self.dataframe, params=self.preprocess_decisions[f"fill_nulls_params"])
+                self.dataframe[cols] = iterative_imputation(self.dataframe,
+                                                            params=self.preprocess_decisions[f"fill_nulls_params"])
             logging.info('Finished filling NULLs.')
             return self.dataframe
         else:
@@ -667,8 +675,8 @@ class PreProcessing:
                 cols = selected_cols
 
             if how == 'static':
-                X_train[cols] = static_filling(X_train, cols)
-                X_test[cols] = static_filling(X_test, cols)
+                X_train = static_filling(X_train, cols)
+                X_test = static_filling(X_test, cols)
                 self.preprocess_decisions[f"fill_nulls_how"] = how
                 self.preprocess_decisions[f"fill_nulls_params"] = cols
             elif how == 'iterative_imputation':
@@ -690,7 +698,7 @@ class PreProcessing:
             if self.preprocess_decisions[f"isolation_forest"]["how"] == 'append':
                 outlier_detector = self.preprocess_decisions[f"isolation_forest"]["model"]
                 outlier_predictions = outlier_detector.decision_function(self.dataframe)
-                outlier_predictions_class = outlier_predictions*-1
+                outlier_predictions_class = outlier_predictions * -1
                 self.dataframe["isolation_probs"] = outlier_predictions
                 self.dataframe["isolation_class"] = outlier_predictions_class
                 return self.dataframe
@@ -702,11 +710,11 @@ class PreProcessing:
             if how == 'append':
                 outlier_detector.fit(X_train)
                 outlier_predictions_train = outlier_detector.decision_function(X_train)
-                outlier_predictions_class_train = outlier_predictions_train*-1
+                outlier_predictions_class_train = outlier_predictions_train * -1
                 X_train["isolation_probs"] = outlier_predictions_train
                 X_train["isolation_class"] = outlier_predictions_class_train
                 outlier_predictions_test = outlier_detector.decision_function(X_test)
-                outlier_predictions_class_test = outlier_predictions_test*-1
+                outlier_predictions_class_test = outlier_predictions_test * -1
                 X_test["isolation_probs"] = outlier_predictions_test
                 X_test["isolation_class"] = outlier_predictions_class_test
                 del outlier_predictions_train
@@ -754,7 +762,8 @@ class PreProcessing:
                 q3 = dataframe_red[col].quantile(0.75)
                 iqr = q3 - q1
                 # Apply filter with respect to IQR, including optional whiskers
-                filter = (dataframe_red[col] > q1 - whisker_width*iqr) & (dataframe_red[col] < q3 + whisker_width*iqr)
+                filter = (dataframe_red[col] > q1 - whisker_width * iqr) & (
+                            dataframe_red[col] < q3 + whisker_width * iqr)
                 dataframe_red = dataframe_red.loc[filter]
             X_train = dataframe_red
             Y_train = dataframe_red[self.target_variable]
@@ -783,7 +792,7 @@ class PreProcessing:
             logging.info('Finished outlier handling.')
             return self.iqr_remover(threshold=1.5)
 
-    def datetime_converter(self, datetime_handling='all'):
+    def datetime_converter(self, datetime_handling='all', force_conversion=False):
         """
         Takes in a dataframe and processes date and datetime columns by categorical and/or cyclic transformation.
         Tries to identify datetime columns automatically, if no date columns have been provided during class
@@ -802,8 +811,10 @@ class PreProcessing:
                             self.dataframe[col] = pd.to_datetime(self.dataframe[col], infer_datetime_format=True)
                             date_columns.append(col)
                         except Exception:
-                            self.dataframe[col] = pd.to_datetime(self.dataframe[col], infer_datetime_format=True, errors='coerce')
-                            date_columns.append(col)
+                            if force_conversion:
+                                self.dataframe[col] = pd.to_datetime(self.dataframe[col], infer_datetime_format=True,
+                                                                     errors='coerce')
+                                date_columns.append(col)
                 logging.info('Finished automatic datetime column detection.')
             else:
                 date_columns = self.date_columns
@@ -823,9 +834,10 @@ class PreProcessing:
                             X_test[col] = pd.to_datetime(X_test[col], infer_datetime_format=True)
                             date_columns.append(col)
                         except Exception:
-                            X_train[col] = pd.to_datetime(X_train[col], infer_datetime_format=True, errors='coerce')
-                            X_test[col] = pd.to_datetime(X_test[col], infer_datetime_format=True, errors='coerce')
-                            date_columns.append(col)
+                            if force_conversion:
+                                X_train[col] = pd.to_datetime(X_train[col], infer_datetime_format=True, errors='coerce')
+                                X_test[col] = pd.to_datetime(X_test[col], infer_datetime_format=True, errors='coerce')
+                                date_columns.append(col)
             else:
                 date_columns = self.date_columns
                 for col in date_columns:
@@ -834,7 +846,7 @@ class PreProcessing:
             logging.info('Finished automatic datetime column detection.')
 
         self.date_columns_created = {}
-        self.new_sin_cos_col_names = [] # used to filter out these columns from binning
+        self.new_sin_cos_col_names = []  # used to filter out these columns from binning
 
         def date_converter(dataframe):
             """
@@ -946,6 +958,55 @@ class PreProcessing:
             logging.info('Finished datetime column handling.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.date_columns_created
 
+    def onehot_pca(self):
+        if self.prediction_mode:
+            df_branch = self.dataframe[self.cat_columns_encoded].copy()
+            enc = self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"]
+            df_branch = enc.transform(df_branch[self.cat_columns_encoded])
+            df_branch.fillna(0, inplace=True)
+            onehot_cols = df_branch.columns
+            pca = PCA(n_components=2)
+            pca.fit_transform(df_branch[onehot_cols])
+            df_branch = pd.DataFrame(pca.components_, columns=onehot_cols, index=['PC-1', 'PC-2'])
+            for col in df_branch[onehot_cols].columns:
+                self.dataframe[f"{col}_pca"] = df_branch[col]
+            return self.dataframe
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            self.preprocess_decisions[f"onehot_pca"] = {}
+            if self.cat_columns_encoded:
+                cat_columns = self.cat_columns_encoded
+            else:
+                cat_columns = X_train.select_dtypes(include=['object']).columns.to_list()
+                self.cat_columns_encoded = cat_columns
+                print(self.cat_columns_encoded)
+
+            enc = OneHotEncoder(handle_unknown='ignore')
+            X_train_branch = X_train[cat_columns].copy()
+            X_test_branch = X_test[cat_columns].copy()
+            X_train_branch = enc.fit_transform(X_train_branch[cat_columns], Y_train)
+            X_test_branch = enc.transform(X_test_branch[cat_columns])
+            onehot_cols = X_train_branch.columns
+            X_train_branch.fillna(0, inplace=True)
+            X_test_branch.fillna(0, inplace=True)
+            pca = PCA(n_components=2)
+            pca.fit_transform(X_train_branch[onehot_cols])
+            X_train_branch = pd.DataFrame(pca.components_, columns=onehot_cols, index=['PC-1', 'PC-2'])
+            pca.transform(X_test_branch[onehot_cols])
+            X_test_branch = pd.DataFrame(pca.components_, columns=onehot_cols, index=['PC-1', 'PC-2'])
+            pca_cols = []
+            for col in X_train_branch.columns:
+                X_train[f"{col}_pca"] = X_train_branch[col]
+                X_test[f"{col}_pca"] = X_test_branch[col]
+                pca_cols.append(f"{col}_pca")
+            self.preprocess_decisions[f"onehot_pca"]["pca_cols"] = pca_cols
+            self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"] = enc
+            del X_train_branch
+            del X_test_branch
+            del pca
+            _ = gc.collect()
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
     def category_encoding(self, algorithm='target'):
         """
         Takes in a dataframe and applies the chosen category encoding algorithm to categorical columns.
@@ -961,7 +1022,7 @@ class PreProcessing:
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            cat_columns = X_train.select_dtypes(include=['object']).columns
+            cat_columns = X_train.select_dtypes(include=['object']).columns.to_list()
             self.cat_columns_encoded = cat_columns
             self.preprocess_decisions[f"category_encoders"] = {}
             if algorithm == 'target':
@@ -995,6 +1056,8 @@ class PreProcessing:
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
             logging.info('Finished category encoding.')
+            X_train.drop(cat_columns, axis=1)
+            X_test.drop(cat_columns, axis=1)
             del enc
             _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -1006,17 +1069,18 @@ class PreProcessing:
         :param threshold: Maximum allowed correlation. Expects a float from -1 to +1.
         :return: Returns modified dataframe.
         """
+
         def correlation(dataset, threshold=threshold):
-            col_corr = set() # Set of all the names of deleted columns
+            col_corr = set()  # Set of all the names of deleted columns
             corr_matrix = dataset.corr()
             for i in range(len(corr_matrix.columns)):
                 for j in range(i):
                     if (corr_matrix.iloc[i, j] >= threshold) and (corr_matrix.columns[j] not in col_corr):
-                        colname = corr_matrix.columns[i] # getting the name of column
+                        colname = corr_matrix.columns[i]  # getting the name of column
                         col_corr.add(colname)
                         del_corr.append(colname)
                         if colname in dataset.columns:
-                            del dataset[colname] # deleting the column from the dataset
+                            del dataset[colname]  # deleting the column from the dataset
             del corr_matrix
             _ = gc.collect()
             return dataset
@@ -1081,4 +1145,3 @@ class PreProcessing:
             del br
             _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
-

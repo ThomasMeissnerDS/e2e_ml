@@ -155,4 +155,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         return print('The test failed. Please investigate.')
 
 
-blueprint_binary_test_titanic(blueprint='lgbm', dataset='corona_tweet')
+blueprint_binary_test_titanic(blueprint='lgbm', dataset='titanic')
