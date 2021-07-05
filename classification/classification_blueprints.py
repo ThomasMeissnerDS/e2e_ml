@@ -71,6 +71,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
+        for nb_cluster in range(2, 10):
+            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
         if self.low_memory_mode:
             self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
@@ -156,6 +158,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
+        for nb_cluster in range(2, 10):
+            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
         if self.low_memory_mode:
             self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
@@ -199,6 +203,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
+        for nb_cluster in range(2, 10):
+            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
         if self.low_memory_mode:
             self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
@@ -241,6 +247,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
+        for nb_cluster in range(2, 10):
+            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
         if self.low_memory_mode:
             self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
@@ -281,6 +289,8 @@ class ClassificationBluePrint(ClassificationModels):
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
         self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
+        for nb_cluster in range(2, 10):
+            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
         if self.low_memory_mode:
             self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')

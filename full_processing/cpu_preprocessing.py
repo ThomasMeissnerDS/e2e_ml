@@ -541,7 +541,7 @@ class PreProcessing:
             return dataframe
 
         def add_kmeans_clusters(dataframe, n_components=nb_clusters):
-            kmeans = KMeans(n_clusters=n_components, n_jobs=-2)
+            kmeans = KMeans(n_clusters=n_components)
             kmeans.fit(dataframe)
             kmeans_clusters = kmeans.predict(dataframe)
             dataframe[f"kmeans_clusters{n_components}"] = kmeans_clusters
