@@ -84,7 +84,10 @@ def synthetic_multiclass_data():
 
 
 def nlp_multiclass_data():
-    data = pd.read_csv("Corona_NLP_train.csv", encoding='latin1')
+    data = pd.read_csv("Corona_NLP_train.csv", encoding='latin-1')
+    data.replace({'Sentiment' : { 'Extremely Negative' :0, 'Negative' : 0, 'Neutral' : "N",
+                                  'Extremely Positive' :1, 'Positive' : 1, }}, inplace=True)
+    data = data[data.Sentiment != 'N']
     test_df = data.head(2500).copy()
     val_df = data.tail(499).copy()
     val_df_target = val_df["Sentiment"].copy()

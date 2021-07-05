@@ -11,7 +11,7 @@ from ngboost.distns import k_categorical, Bernoulli
 from ngboost.scores import LogScore, CRPScore
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.ensemble import StackingClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
@@ -146,8 +146,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                             'tree_method': 'gpu_hist', #use GPU for training
                             'num_class': Y_train.nunique(),
                             'max_depth': trial.suggest_int('max_depth', 2, 10),  #maximum depth of the decision trees being trained
-                            'alpha': trial.suggest_loguniform('alpha', 1e-8, 10.0),
-                            'lambda': trial.suggest_loguniform('lambda', 1e-8, 10.0),
+                            'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
+                            'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
                             'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                             'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
                             'min_child_samples': trial.suggest_int('min_child_samples', 5, 1000),
@@ -216,8 +216,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                             'tree_method': 'gpu_hist', #use GPU for training
                             'num_class': Y_train.nunique(),
                             'max_depth': trial.suggest_int('max_depth', 2, 10),  #maximum depth of the decision trees being trained
-                            'alpha': trial.suggest_loguniform('alpha', 1e-8, 10.0),
-                            'lambda': trial.suggest_loguniform('lambda', 1e-8, 10.0),
+                            'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
+                            'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
                             'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                             'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
                             'min_child_samples': trial.suggest_int('min_child_samples', 5, 1000),
@@ -290,8 +290,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                         'scale_pos_weight' : 1, #A typical value to consider: sum(negative instances) / sum(positive instances) (default = 1)
                         #'gamma': 5, #Minimum loss reduction required to make a further partition on a leaf node of the tree. The larger gamma is, the more conservative the algorithm will be.
                         'verbosity': 0, #0 (silent), 1 (warning), 2 (info), 3 (debug)
-                        'alpha' : 10, #L1 regularization term on weights. Increasing this value will make model more conservative. (default = 0)
-                        'lambda': 15, #L2 regularization term on weights. Increasing this value will make model more conservative. (default = 1)
+                        'alpha' : 1, #L1 regularization term on weights. Increasing this value will make model more conservative. (default = 0)
+                        'lambda': 1, #L2 regularization term on weights. Increasing this value will make model more conservative. (default = 1)
                         'subsample': 0.8,
                         'eval_metric' : "mlogloss", #'mlogloss','auc','rmsle'
                         #'colsample_bytree': 0.3,
@@ -380,8 +380,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                         'objective': 'binary',
                         'metric': 'binary_logloss',
                         'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
-                        'lambda_l1': trial.suggest_loguniform('lambda_l1', 1e-8, 10.0),
-                        'lambda_l2': trial.suggest_loguniform('lambda_l2', 1e-8, 10.0),
+                        'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
+                        'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
                         'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                         'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
                         'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
@@ -450,8 +450,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                         'metric': 'multi_logloss',
                         'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
                         'num_class': Y_train.nunique(),
-                        'lambda_l1': trial.suggest_loguniform('lambda_l1', 1e-8, 10.0),
-                        'lambda_l2': trial.suggest_loguniform('lambda_l2', 1e-8, 10.0),
+                        'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
+                        'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
                         'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                         'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
                         'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
@@ -596,7 +596,10 @@ class ClassificationModels(postprocessing.FullPipeline):
                 elif ensemble_variation == 'full_ensemble':
                     level0 = list()
                     level0.append(('lgbm', LGBMClassifier(n_estimators=5000)))
-                    level0.append(('lr', LogisticRegression(class_weight='balanced', max_iter=500)))
+                    level0.append(('lr', LogisticRegressionCV(class_weight='balanced', max_iter=500,
+                                                              penalty='elasticnet',
+                                                              l1_ratios=[0.1, 0.5, 0.9],
+                                                              solver='saga')))
                     level0.append(('gdc', GradientBoostingClassifier(n_estimators=5000)))
                     level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
                     level0.append(('abc', AdaBoostClassifier(n_estimators=100)))
@@ -648,8 +651,10 @@ class ClassificationModels(postprocessing.FullPipeline):
             elif best_variant == 'full_ensemble':
                 level0 = list()
                 level0.append(('lgbm', LGBMClassifier()))
-                level0.append(('lr', LogisticRegression()))
-                level0.append(('kbc', KNeighborsClassifier(2)))
+                level0.append(('lr', LogisticRegressionCV(class_weight='balanced', max_iter=500,
+                                                          penalty='elasticnet',
+                                                          l1_ratios=[0.1, 0.5, 0.9],
+                                                          solver='saga')))
                 level0.append(('gdc', GradientBoostingClassifier()))
                 level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
                 level0.append(('abc', AdaBoostClassifier()))

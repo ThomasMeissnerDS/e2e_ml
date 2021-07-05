@@ -8,15 +8,10 @@ import pandas as pd
 from category_encoders import *
 from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import IsolationForest
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import DBSCAN, KMeans
 from sklearn.mixture import GaussianMixture
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
-import spacy
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk import pos_tag, pos_tag_sents
 from boostaroota import BoostARoota
 import gc
 import warnings
@@ -292,8 +287,7 @@ class PreProcessing:
         logging.info('Started label encoding.')
         if direction == 'encode' and mode == 'fit':
             le = preprocessing.LabelEncoder()
-            le.fit(target)
-            le.transform(target.astype(str))
+            target = le.fit_transform(target)
             self.preprocess_decisions["label_encoder"] = le
             self.labels_encoded = True
         elif direction == 'encode' and mode == 'predict':
@@ -546,6 +540,16 @@ class PreProcessing:
             _ = gc.collect()
             return dataframe
 
+        def add_kmeans_clusters(dataframe, n_components=nb_clusters):
+            kmeans = KMeans(n_clusters=n_components, n_jobs=-2)
+            kmeans.fit(dataframe)
+            kmeans_clusters = kmeans.predict(dataframe)
+            dataframe[f"kmeans_clusters{n_components}"] = kmeans_clusters
+            del kmeans
+            del kmeans_clusters
+            _ = gc.collect()
+            return dataframe
+
         logging.info('Start adding clusters as additional features.')
         if not self.data_scaled:
             self.data_scaling()
@@ -569,6 +573,17 @@ class PreProcessing:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 X_train = add_gaussian_mixture_clusters(X_train)
                 X_test = add_gaussian_mixture_clusters(X_test)
+                logging.info('Finished adding clusters as additional features.')
+                return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+        elif algorithm == 'kmeans':
+            if self.prediction_mode:
+                self.dataframe = add_kmeans_clusters(self.dataframe)
+                logging.info('Finished adding clusters as additional features.')
+                return self.dataframe
+            else:
+                X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+                X_train = add_kmeans_clusters(X_train)
+                X_test = add_kmeans_clusters(X_test)
                 logging.info('Finished adding clusters as additional features.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
@@ -954,6 +969,11 @@ class PreProcessing:
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
+            elif algorithm == 'onehot':
+                enc = OneHotEncoder(handle_unknown='ignore')
+                X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
+                X_test[cat_columns] = enc.transform(X_test[cat_columns])
+                self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
             elif algorithm == 'woee':
                 enc = WOEEncoder(cols=cat_columns)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
@@ -977,76 +997,6 @@ class PreProcessing:
             logging.info('Finished category encoding.')
             del enc
             _ = gc.collect()
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
-
-    def spacy_features(self, df: pd.DataFrame, text_column):
-        """
-        This function generates features using spacy en_core_wb_lg
-        I learned about this from these resources:
-        https://www.kaggle.com/konradb/linear-baseline-with-cv
-        https://www.kaggle.com/anaverageengineer/comlrp-baseline-for-complete-beginners
-        """
-        logging.info('Download spacy language package.')
-        nlp = spacy.load('en_core_web_lg')
-        with nlp.disable_pipes():
-            vectors = np.array([nlp(text).vector for text in df[text_column]])
-        return vectors
-
-    def get_spacy_col_names(self):
-        logging.info('Get spacy column names.')
-        names = list()
-        for i in range(300):
-            names.append(f"spacy_{i}")
-        return names
-
-    def pos_tag_features(self, passage: str):
-        """
-        This function counts the number of times different parts of speech occur in an excerpt. POS tags are listed here:
-        https://www.ling.upenn.edu/courses/Fall_2003/ling001/penn_treebank_pos.html
-        """
-        logging.info('Get POS tags.')
-        pos_tags = ["CC", "CD", "DT", "EX", "FW", "IN", "JJ", "JJR", "JJS", "LS", "MD",
-                    "NN", "NNS", "NNP", "NNPS", "PDT", "POS", "PRP", "RB", "RBR", "RBS", "RP", "TO", "UH",
-                    "VB", "VBD", "VBG", "VBZ", "WDT", "WP", "WRB"]
-
-        tags = pos_tag(word_tokenize(passage))
-        tag_list = list()
-        for tag in pos_tags:
-            tag_list.append(len([i[0] for i in tags if i[1] == tag]))
-        return tag_list
-
-    def pos_tagging(self):
-        def dataframe_nlp(df, text_cols):
-            for text_col in text_cols:
-                df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
-                if df[f'nof_words_{text_col}'].max() >= 3:
-                    spacy_df = pd.DataFrame(self.spacy_features(df, text_col), columns=self.get_spacy_col_names())
-                    df = pd.merge(df, spacy_df, left_index=True, right_index=True)
-                    pos_df = pd.DataFrame(df[text_col].apply(lambda p: self.pos_tag_features(p)).tolist(),
-                                          columns=["CC", "CD", "DT", "EX", "FW", "IN", "JJ", "JJR", "JJS", "LS", "MD",
-                                                   "NN", "NNS", "NNP", "NNPS", "PDT", "POS", "PRP", "RB", "RBR", "RBS", "RP", "TO", "UH",
-                                                   "VB", "VBD", "VBG", "VBZ", "WDT", "WP", "WRB"])
-                    df = pd.merge(X_train, pos_df, left_index=True, right_index=True)
-                    print(f'nof_words_{text_col}')
-                else:
-                    pass
-                del df[f'nof_words_{text_col}']
-            return df
-
-        logging.info('Start spacy POS tagging loop.')
-        algorithm = 'spacy_pos'
-        if self.prediction_mode:
-            text_columns = self.preprocess_decisions[f"text_processing_columns"][f"{algorithm}"]
-            self.dataframe = dataframe_nlp(self.dataframe, text_columns)
-            logging.info('Finished spacy POS tagging loop.')
-        else:
-            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            text_columns = X_train.select_dtypes(include=['object']).columns
-            X_train = dataframe_nlp(X_train, text_columns)
-            X_test = dataframe_nlp(X_test, text_columns)
-            self.preprocess_decisions[f"text_processing_columns"] = {}
-            self.preprocess_decisions[f"text_processing_columns"][f"{algorithm}"] = text_columns
-            logging.info('Finished spacy POS tagging loop.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def remove_collinearity(self, threshold=0.8):
