@@ -170,10 +170,7 @@ class ClassificationBluePrint(ClassificationModels):
         if skip_train:
             pass
         else:
-            try:
-                self.lgbm_train(tune_mode='accurate', run_on='gpu', gpu_use_dp=True)
-            except Exception:
-                self.lgbm_train(tune_mode='accurate', run_on='cpu', gpu_use_dp=False)
+            self.lgbm_train(tune_mode='accurate')
         self.lgbm_predict(feat_importance=True)
         self.classification_eval('lgbm')
         self.prediction_mode = True
