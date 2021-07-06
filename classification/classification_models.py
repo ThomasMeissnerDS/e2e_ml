@@ -125,6 +125,10 @@ class ClassificationModels(postprocessing.FullPipeline):
         :param use_case: Chose 'binary' or 'regression'
         :return:
         """
+        if self.preferred_training_mode == 'gpu':
+            train_on = 'gpu_hist'
+        else:
+            train_on = 'exact'
         if self.prediction_mode:
             pass
         else:
@@ -143,7 +147,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                             'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                             'eval_metric': 'mlogloss',
                             'verbose': 0,
-                            'tree_method': 'gpu_hist', #use GPU for training
+                            'tree_method': train_on, #use GPU for training
                             'num_class': Y_train.nunique(),
                             'max_depth': trial.suggest_int('max_depth', 2, 10),  #maximum depth of the decision trees being trained
                             'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
@@ -188,7 +192,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                         'eval_metric': 'mlogloss',
                         'verbose': 0,
-                        'tree_method': 'gpu_hist', #use GPU for training
+                        'tree_method': train_on, #use GPU for training
                         'num_class': Y_train.nunique(),
                         'max_depth': lgbm_best_param["max_depth"],  #maximum depth of the decision trees being trained
                         'alpha': lgbm_best_param["alpha"],
@@ -213,7 +217,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                             'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                             'eval_metric': 'mlogloss',
                             'verbose': 0,
-                            'tree_method': 'gpu_hist', #use GPU for training
+                            'tree_method': train_on, #use GPU for training
                             'num_class': Y_train.nunique(),
                             'max_depth': trial.suggest_int('max_depth', 2, 10),  #maximum depth of the decision trees being trained
                             'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
@@ -258,7 +262,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                         'eval_metric': 'mlogloss',
                         'verbose': 0,
-                        'tree_method': 'gpu_hist', #use GPU for training
+                        'tree_method': train_on, #use GPU for training
                         'num_class': Y_train.nunique(),
                         'max_depth': lgbm_best_param["max_depth"],  #maximum depth of the decision trees being trained
                         'alpha': lgbm_best_param["alpha"],
@@ -296,7 +300,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         'eval_metric' : "mlogloss", #'mlogloss','auc','rmsle'
                         #'colsample_bytree': 0.3,
                         'max_depth': 2, #maximum depth of the decision trees being trained
-                        'tree_method': 'gpu_hist', #use GPU for training
+                        'tree_method': train_on, #use GPU for training
                         'objective':'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                         'steps' : 50000,
                         'num_class': self.num_classes} #the number of classes in the dataset
@@ -363,7 +367,13 @@ class ClassificationModels(postprocessing.FullPipeline):
                 self.xg_boost_regression = model.predict(D_test)
                 return self.xg_boost_regression
 
-    def lgbm_train(self, tune_mode='accurate', run_on='gpu', gpu_use_dp=True):
+    def lgbm_train(self, tune_mode='accurate', gpu_use_dp=True):
+        if self.preferred_training_mode == 'gpu':
+            train_on = 'gpu'
+            gpu_use_dp = True
+        else:
+            train_on = 'cpu'
+            gpu_use_dp = False
         if self.prediction_mode:
             pass
         else:
@@ -388,7 +398,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
                         'learning_rate': trial.suggest_loguniform('learning_rate', 1e-8, 0.1),
                         'verbose': -1,
-                        'device': run_on,
+                        'device': train_on,
                         'gpu_use_dp': gpu_use_dp
                     }
 
@@ -431,7 +441,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     'min_child_samples': lgbm_best_param["min_child_samples"],
                     'learning_rate': lgbm_best_param["learning_rate"],
                     'verbose': -1,
-                    'device': run_on,
+                    'device': train_on,
                     'gpu_use_dp': gpu_use_dp
                 }
                 dtrain = lgb.Dataset(X_train, label=Y_train)
@@ -458,7 +468,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
                         'learning_rate': trial.suggest_loguniform('learning_rate', 1e-8, 0.1),
                         'verbose': -1,
-                        'device': run_on,
+                        'device': train_on,
                         'gpu_use_dp': gpu_use_dp
                     }
 
@@ -504,7 +514,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     'min_child_samples': lgbm_best_param["min_child_samples"],
                     'learning_rate': lgbm_best_param["learning_rate"],
                     'verbose': -1,
-                    'device': run_on,
+                    'device': train_on,
                     'gpu_use_dp': gpu_use_dp
                 }
                 dtrain = lgb.Dataset(X_train, label=Y_train)

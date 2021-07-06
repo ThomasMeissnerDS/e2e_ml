@@ -31,7 +31,7 @@ class PreProcessing:
 
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None,
-                 prediction_mode=False, preprocess_decisions=None, trained_model=None, ml_task=None,
+                 prediction_mode=False, preferred_training_mode='cpu', preprocess_decisions=None, trained_model=None, ml_task=None,
                  logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
 
         self.dataframe = datasource
@@ -73,6 +73,11 @@ class PreProcessing:
                     pass
         else:
             self.class_problem = ml_task
+
+        if preferred_training_mode == 'cpu' or preferred_training_mode == 'gpu':
+            self.preferred_training_mode = preferred_training_mode
+        else:
+            self.preferred_training_mode = 'cpu'
         self.train_split_type = train_split_type
         self.date_columns = date_columns
         self.date_columns_created = None
@@ -439,7 +444,7 @@ class PreProcessing:
             logging.info('Finished numerical binning.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def cardinality_remover(self, threshold=1000):
+    def cardinality_remover(self, threshold=100):
         """
         Loops through all columns and delete columns with cardinality higher than defined threshold.
         :param threshold: integer of any size
@@ -458,10 +463,10 @@ class PreProcessing:
                     else:
                         pass
             else:
-                cat_columns = cols_to_delete
-                for col in cat_columns:
-                    df.drop([col], axis=1)
-            return df, cols_to_delete
+                deleted_columns = cols_to_delete
+                for col in deleted_columns:
+                    df = df.drop([col], axis=1)
+            return df, deleted_columns
 
         logging.info('Start cardinality removal.')
         if self.prediction_mode:

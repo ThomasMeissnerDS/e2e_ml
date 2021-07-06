@@ -81,6 +81,10 @@ class RegressionModels(postprocessing.FullPipeline):
         :param use_case: Chose 'binary' or 'regression'
         :return:
         """
+        if self.preferred_training_mode == 'gpu':
+            train_on = 'gpu_hist'
+        else:
+            train_on = 'exact'
         if self.prediction_mode:
             pass
         else:
@@ -94,7 +98,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
                         'eval_metric': 'mae',
                         'verbose': 0,
-                        'tree_method': 'gpu_hist', #use GPU for training
+                        'tree_method': train_on, #use GPU for training
                         'max_depth': trial.suggest_int('max_depth', 2, 10),  #maximum depth of the decision trees being trained
                         'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
                         'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
@@ -134,7 +138,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
                     'eval_metric': 'mae',
                     'verbose': 0,
-                    'tree_method': 'gpu_hist', #use GPU for training
+                    'tree_method': train_on, #use GPU for training
                     'max_depth': lgbm_best_param["max_depth"],  #maximum depth of the decision trees being trained
                     'alpha': lgbm_best_param["alpha"],
                     'lambda': lgbm_best_param["lambda"],
@@ -211,7 +215,13 @@ class RegressionModels(postprocessing.FullPipeline):
             else:
                 pass
 
-    def lgbm_train(self, tune_mode='accurate', run_on='gpu', gpu_use_dp=True):
+    def lgbm_train(self, tune_mode='accurate', gpu_use_dp=True):
+        if self.preferred_training_mode == 'gpu':
+            train_on = 'gpu'
+            gpu_use_dp = True
+        else:
+            train_on = 'cpu'
+            gpu_use_dp = False
         if self.prediction_mode:
             pass
         else:
@@ -232,7 +242,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
                     'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 0.1),
                     'verbose': -1,
-                    'device': run_on,
+                    'device': train_on,
                     'gpu_use_dp': gpu_use_dp
                 }
                 pruning_callback = optuna.integration.LightGBMPruningCallback(trial, "mean_absolute_error")
@@ -267,7 +277,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 'min_child_samples': lgbm_best_param["min_child_samples"],
                 'learning_rate': lgbm_best_param["learning_rate"],
                 'verbose': -1,
-                'device': run_on,
+                'device': train_on,
                 'gpu_use_dp': gpu_use_dp
             }
             dtrain = lgb.Dataset(X_train, label=Y_train)
