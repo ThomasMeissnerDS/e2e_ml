@@ -85,8 +85,8 @@ def synthetic_multiclass_data():
 
 def nlp_multiclass_data():
     data = pd.read_csv("Corona_NLP_train.csv", encoding='latin-1')
-    data.replace({'Sentiment' : { 'Extremely Negative' :0, 'Negative' : 0, 'Neutral' : "N",
-                                  'Extremely Positive' :1, 'Positive' : 1, }}, inplace=True)
+    data.replace({'Sentiment' : { 'Extremely Negative': 0, 'Negative': 0, 'Neutral': "N",
+                                  'Extremely Positive': 1, 'Positive': 1, }}, inplace=True)
     data = data[data.Sentiment != 'N']
     test_df = data.head(2500).copy()
     val_df = data.tail(499).copy()
@@ -155,4 +155,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         return print('The test failed. Please investigate.')
 
 
-blueprint_binary_test_titanic(blueprint='lgbm', dataset='titanic')
+blueprint_binary_test_titanic(blueprint='lgbm', dataset='corona_tweet')

@@ -1,9 +1,10 @@
 from classification.classification_models import ClassificationModels
+from full_processing.cpu_processing_nlp import NlpPreprocessing
 import numpy as np
 import logging
 
 
-class ClassificationBluePrint(ClassificationModels):
+class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
     def train_pred_selected_model(self, algorithm=None, skip_train=False, tune_mode='simple'):
         logging.info(f'Start ML training {algorithm}')
         if algorithm == 'xgboost':
@@ -152,8 +153,9 @@ class ClassificationBluePrint(ClassificationModels):
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all', force_conversion=False)
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.cardinality_remover(threshold=100)
+        #self.cardinality_remover(threshold=100)
         self.onehot_pca()
+        self.pos_tagging_pca()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(inplace=False, how='static')

@@ -9,6 +9,8 @@ import pandas as pd
 import numpy as np
 import logging
 import gc
+nltk.download('punkt')
+nltk.download('averaged_perceptron_tagger')
 
 # TODO: Continue on NLP
 """
@@ -54,29 +56,36 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             tag_list.append(len([i[0] for i in tags if i[1] == tag]))
         return tag_list
 
-    def pos_tagging(self):
+    def pos_tagging_pca(self):
         def dataframe_nlp(df, text_cols, mode='fit', loaded_pca=None):
             spacy_cols = []
+            pos_columns = set([])
             for text_col in text_cols:
                 try:
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
                     if df[f'nof_words_{text_col}'].max() >= 3:
+                        df[text_col].fillna('None', inplace=True)
                         spacy_cols.append(text_col)
                         spacy_df = pd.DataFrame(self.spacy_features(df, text_col), columns=self.get_spacy_col_names())
-                        df = pd.merge(df, spacy_df, left_index=True, right_index=True)
+                        df = pd.merge(df, spacy_df, left_index=True, right_index=True, how='left')
                         pos_df = pd.DataFrame(df[text_col].apply(lambda p: self.pos_tag_features(p)).tolist(),
                                               columns=["CC", "CD", "DT", "EX", "FW", "IN", "JJ", "JJR", "JJS", "LS",
                                                        "MD",
                                                        "NN", "NNS", "NNP", "NNPS", "PDT", "POS", "PRP", "RB", "RBR",
                                                        "RBS", "RP", "TO", "UH",
                                                        "VB", "VBD", "VBG", "VBZ", "WDT", "WP", "WRB"])
-                        df = pd.merge(df, pos_df, left_index=True, right_index=True)
+                        for new_cols in pos_df.columns:
+                            pos_columns.add(new_cols)
+                        df = pd.merge(df, pos_df, left_index=True, right_index=True, how='left')
                     else:
                         pass
+                    df.drop(f'nof_words_{text_col}', axis=1, inplace=True)
                 except AttributeError:
                     pass
             if len(spacy_cols) > 0:
-                df_temp = df[spacy_cols].copy()
+                unique_pos_cols = set(pos_columns)
+                df_temp = df[unique_pos_cols].copy()
+                df_temp.fillna(0, inplace=True)
                 pca = PCA(n_components=2)
                 if mode == 'fit':
                     comps = pca.fit_transform(df_temp)
@@ -92,6 +101,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     _ = gc.collect()
                 except Exception:
                     pass
+            else:
+                pca = None
             return df, pca
 
         logging.info('Start spacy POS tagging loop.')

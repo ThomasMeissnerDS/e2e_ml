@@ -965,16 +965,19 @@ class PreProcessing:
 
     def onehot_pca(self):
         if self.prediction_mode:
-            df_branch = self.dataframe[self.cat_columns_encoded].copy()
-            enc = self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"]
-            df_branch = enc.transform(df_branch[self.cat_columns_encoded])
-            df_branch.fillna(0, inplace=True)
-            onehot_cols = df_branch.columns
-            pca = PCA(n_components=2)
-            pred_comps = pca.fit_transform(df_branch[onehot_cols])
-            df_branch = pd.DataFrame(pred_comps, columns=['PC-1', 'PC-2'])
-            for col in df_branch.columns:
-                self.dataframe[f"{col}_pca"] = df_branch[col]
+            if len(self.cat_columns_encoded) > 0:
+                df_branch = self.dataframe[self.cat_columns_encoded].copy()
+                enc = self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"]
+                df_branch = enc.transform(df_branch[self.cat_columns_encoded])
+                df_branch.fillna(0, inplace=True)
+                onehot_cols = df_branch.columns
+                pca = PCA(n_components=2)
+                pred_comps = pca.fit_transform(df_branch[onehot_cols])
+                df_branch = pd.DataFrame(pred_comps, columns=['PC-1', 'PC-2'])
+                for col in df_branch.columns:
+                    self.dataframe[f"{col}_pca"] = df_branch[col]
+            else:
+                pass
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -985,31 +988,33 @@ class PreProcessing:
                 cat_columns = X_train.select_dtypes(include=['object']).columns.to_list()
                 self.cat_columns_encoded = cat_columns
 
-            enc = OneHotEncoder(handle_unknown='ignore')
-            X_train_branch = X_train[cat_columns].copy()
-            X_test_branch = X_test[cat_columns].copy()
-            X_train_branch = enc.fit_transform(X_train_branch[cat_columns], Y_train)
-            X_test_branch = enc.transform(X_test_branch[cat_columns])
-            onehot_cols = X_train_branch.columns
-            X_train_branch.fillna(0, inplace=True)
-            X_test_branch.fillna(0, inplace=True)
-            pca = PCA(n_components=2)
-            train_comps = pca.fit_transform(X_train_branch[onehot_cols])
-            X_train_branch = pd.DataFrame(train_comps, columns=['PC-1', 'PC-2'])
-            test_comps = pca.transform(X_test_branch[onehot_cols])
-            X_test_branch = pd.DataFrame(test_comps, columns=['PC-1', 'PC-2'])
-            pca_cols = []
-            for col in X_train_branch.columns:
-                X_train[f"{col}_pca"] = X_train_branch[col]
-                X_test[f"{col}_pca"] = X_test_branch[col]
-                pca_cols.append(f"{col}_pca")
-            print(X_train_branch.head())
-            self.preprocess_decisions[f"onehot_pca"]["pca_cols"] = pca_cols
-            self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"] = enc
-            del X_train_branch
-            del X_test_branch
-            del pca
-            _ = gc.collect()
+            if len(self.cat_columns_encoded) > 0:
+                enc = OneHotEncoder(handle_unknown='ignore')
+                X_train_branch = X_train[cat_columns].copy()
+                X_test_branch = X_test[cat_columns].copy()
+                X_train_branch = enc.fit_transform(X_train_branch[cat_columns], Y_train)
+                X_test_branch = enc.transform(X_test_branch[cat_columns])
+                onehot_cols = X_train_branch.columns
+                X_train_branch.fillna(0, inplace=True)
+                X_test_branch.fillna(0, inplace=True)
+                pca = PCA(n_components=2)
+                train_comps = pca.fit_transform(X_train_branch[onehot_cols])
+                X_train_branch = pd.DataFrame(train_comps, columns=['PC-1', 'PC-2'])
+                test_comps = pca.transform(X_test_branch[onehot_cols])
+                X_test_branch = pd.DataFrame(test_comps, columns=['PC-1', 'PC-2'])
+                pca_cols = []
+                for col in X_train_branch.columns:
+                    X_train[f"{col}_pca"] = X_train_branch[col]
+                    X_test[f"{col}_pca"] = X_test_branch[col]
+                    pca_cols.append(f"{col}_pca")
+                self.preprocess_decisions[f"onehot_pca"]["pca_cols"] = pca_cols
+                self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"] = enc
+                del X_train_branch
+                del X_test_branch
+                del pca
+                _ = gc.collect()
+            else:
+                pass
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def category_encoding(self, algorithm='target'):
@@ -1140,6 +1145,8 @@ class PreProcessing:
         else:
             logging.info('Start automated feature selection.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            for col in X_train.columns:
+                print(col)
             br = BoostARoota(metric=metric)
             br.fit(X_train, Y_train)
             selected = br.keep_vars_
