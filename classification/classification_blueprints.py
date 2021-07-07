@@ -29,9 +29,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
                 pass
             else:
                 try:
-                    self.lgbm_train(tune_mode=tune_mode, run_on='gpu', gpu_use_dp=True)
+                    self.lgbm_train(tune_mode=tune_mode)
                 except Exception:
-                    self.lgbm_train(tune_mode=tune_mode, run_on='cpu', gpu_use_dp=False)
+                    self.lgbm_train(tune_mode=tune_mode)
             self.lgbm_predict(feat_importance=True)
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'sklearn_ensemble':
@@ -63,9 +63,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
+        self.pos_tagging_pca()
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
-        self.pos_tagging()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(inplace=False, how='static')
@@ -110,6 +110,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
+        self.pos_tagging_pca()
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='target')
@@ -153,9 +154,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all', force_conversion=False)
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        #self.cardinality_remover(threshold=100)
-        self.onehot_pca()
         self.pos_tagging_pca()
+        self.cardinality_remover(threshold=100)
+        self.onehot_pca()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(inplace=False, how='static')
@@ -197,6 +198,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
+        self.pos_tagging_pca()
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='target')
@@ -242,6 +244,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
+        self.pos_tagging_pca()
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='target')
