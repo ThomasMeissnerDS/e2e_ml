@@ -44,11 +44,13 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             algorithm = 'sklearn_ensemble'
             self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
 
-    def ml_bp00_train_test_binary_full_processing_log_reg_prob(self, df=None):
+    def ml_bp00_train_test_binary_full_processing_log_reg_prob(self, df=None, preprocessing_type='full'):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
         :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
         logging.info('Start blueprint.')
@@ -62,8 +64,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             skip_train = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        if preprocessing_type == 'nlp':
+            self.pos_tagging_pca()
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.pos_tagging_pca()
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='target')
@@ -91,11 +94,13 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp01_multiclass_full_processing_xgb_prob(self, df=None):
+    def ml_bp01_multiclass_full_processing_xgb_prob(self, df=None, preprocessing_type='full'):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
         :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
         logging.info('Start blueprint.')
@@ -109,8 +114,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             skip_train = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        if preprocessing_type == 'nlp':
+            self.pos_tagging_pca()
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.pos_tagging_pca()
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='target')
@@ -135,11 +141,13 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp02_multiclass_full_processing_lgbm_prob(self, df=None):
+    def ml_bp02_multiclass_full_processing_lgbm_prob(self, df=None, preprocessing_type='full'):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
         :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
         logging.info('Start blueprint.')
@@ -153,8 +161,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             skip_train = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all', force_conversion=False)
+        if preprocessing_type == 'nlp':
+            self.pos_tagging_pca()
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.pos_tagging_pca()
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='target')
@@ -179,11 +188,13 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble(self, df=None):
+    def ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble(self, df=None, preprocessing_type='full'):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
         :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
         logging.info('Start blueprint.')
@@ -197,8 +208,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             skip_train = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        if preprocessing_type == 'nlp':
+            self.pos_tagging_pca()
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.pos_tagging_pca()
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='target')
@@ -225,11 +237,13 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp04_multiclass_full_processing_ngboost(self, df=None):
+    def ml_bp04_multiclass_full_processing_ngboost(self, df=None, preprocessing_type='full'):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
         :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
         logging.info('Start blueprint.')
@@ -243,8 +257,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             skip_train = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        if preprocessing_type == 'nlp':
+            self.pos_tagging_pca()
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.pos_tagging_pca()
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='target')
@@ -269,11 +284,13 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_special_multiclass_auto_model_exploration(self, df=None):
+    def ml_special_multiclass_auto_model_exploration(self, df=None, preprocessing_type='full'):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
         :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
         logging.info('Start blueprint.')
@@ -287,6 +304,8 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             skip_train = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        if preprocessing_type == 'nlp':
+            self.pos_tagging_pca()
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
