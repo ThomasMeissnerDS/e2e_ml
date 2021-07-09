@@ -39,9 +39,9 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
     elif blueprint == 'xgboost':
-        titanic_auto_ml.ml_bp11_regression_full_processing_xgboost()
+        titanic_auto_ml.ml_bp11_regression_full_processing_xgboost(preprocessing_type='nlp')
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp11_regression_full_processing_xgboost(val_df)
+        titanic_auto_ml.ml_bp11_regression_full_processing_xgboost(val_df, preprocessing_type='nlp')
         val_y_hat = titanic_auto_ml.predicted_values['xgboost']
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
@@ -70,4 +70,4 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         pass
 
 
-blueprint_regression_test_housingprices(blueprint='sklearn_ensemble')
+blueprint_regression_test_housingprices(blueprint='xgboost')

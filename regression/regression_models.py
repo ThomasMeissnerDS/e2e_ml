@@ -105,7 +105,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                         'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
                         'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
-                        'eta': trial.suggest_loguniform('eta', 1e3, 0.3),
+                        'eta': trial.suggest_loguniform('eta', 1e-3, 0.3),
                         'steps': trial.suggest_int('steps', 2, 70000),
                         'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 5)
                     }
