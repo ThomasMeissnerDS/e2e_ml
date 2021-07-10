@@ -32,7 +32,7 @@ class PreProcessing:
     """
 
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
-                 unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None,
+                 unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None, nlp_columns=None,
                  prediction_mode=False, preferred_training_mode='cpu', preprocess_decisions=None, trained_model=None, ml_task=None,
                  logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
 
@@ -84,6 +84,7 @@ class PreProcessing:
         self.date_columns = date_columns
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
+        self.nlp_columns = nlp_columns
         self.cat_columns_encoded = None
         self.unique_identifier = unique_identifier
         self.target_variable = target_variable
@@ -1214,6 +1215,8 @@ class PreProcessing:
             X_train = X_train[selected]
             X_test = X_test[selected]
             self.selected_feats = selected
+            for i in selected:
+                print(f" Selected features are... {i}.")
             logging.info('Finished automated feature selection.')
             del br
             _ = gc.collect()

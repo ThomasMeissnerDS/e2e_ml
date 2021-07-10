@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import logging
 import gc
+
 nltk.download('punkt')
 nltk.download('averaged_perceptron_tagger')
 
@@ -56,79 +57,87 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             tag_list.append(len([i[0] for i in tags if i[1] == tag]))
         return tag_list
 
-    def pos_tagging_pca(self):
-        def dataframe_nlp(df, text_cols, mode='fit', loaded_pca=None):
-            spacy_cols = []
+    def dataframe_nlp(self, df, text_cols, mode='fit'):
+        if mode == 'transform':
+            pass
+        else:
             pos_columns = set([])
+        target_columns = ["CC", "CD", "DT", "EX", "FW", "IN", "JJ", "JJR", "JJS", "LS",
+                          "MD",
+                          "NN", "NNS", "NNP", "NNPS", "PDT", "POS", "PRP", "RB", "RBR",
+                          "RBS", "RP", "TO", "UH",
+                          "VB", "VBD", "VBG", "VBZ", "WDT", "WP", "WRB"]
+        if mode == 'transform':
+            for text_col in text_cols:
+                df[text_col].fillna('None', inplace=True)
+                spacy_df = pd.DataFrame(self.spacy_features(df, text_col), columns=self.get_spacy_col_names())
+                temp_df = pd.merge(df, spacy_df, left_index=True, right_index=True, how='left')
+                pos_df = pd.DataFrame(temp_df[text_col].apply(lambda p: self.pos_tag_features(p)).tolist(),
+                                      columns=target_columns)
+                pos_df.fillna(0, inplace=True)
+                pca = self.preprocess_decisions[f"spacy_pos"][f"pos_pca_{text_col}"]
+                comps = pca.transform(pos_df)
+                pos_pca_cols = [f'POS PC-1 {text_col}', f'POS PC-2 {text_col}']
+                pos_df = pd.DataFrame(comps, columns=pos_pca_cols)
+                pos_df_pca = pos_df[pos_pca_cols]
+                df = pd.merge(df, pos_df_pca, left_index=True, right_index=True, how='left')
+        elif mode == 'fit':
+            nlp_columns = []
             for text_col in text_cols:
                 try:
+                    # do we have at least 3 words?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
                     if df[f'nof_words_{text_col}'].max() >= 3:
                         df[text_col].fillna('None', inplace=True)
-                        spacy_cols.append(text_col)
                         spacy_df = pd.DataFrame(self.spacy_features(df, text_col), columns=self.get_spacy_col_names())
-                        df = pd.merge(df, spacy_df, left_index=True, right_index=True, how='left')
-                        pos_df = pd.DataFrame(df[text_col].apply(lambda p: self.pos_tag_features(p)).tolist(),
-                                              columns=["CC", "CD", "DT", "EX", "FW", "IN", "JJ", "JJR", "JJS", "LS",
-                                                       "MD",
-                                                       "NN", "NNS", "NNP", "NNPS", "PDT", "POS", "PRP", "RB", "RBR",
-                                                       "RBS", "RP", "TO", "UH",
-                                                       "VB", "VBD", "VBG", "VBZ", "WDT", "WP", "WRB"])
-                        for new_cols in pos_df.columns:
-                            pos_columns.add(new_cols)
-                        df = pd.merge(df, pos_df, left_index=True, right_index=True, how='left')
+                        temp_df = pd.merge(df, spacy_df, left_index=True, right_index=True, how='left')
+                        pos_df = pd.DataFrame(temp_df[text_col].apply(lambda p: self.pos_tag_features(p)).tolist(),
+                                              columns=target_columns)
+                        pos_df.fillna(0, inplace=True)
+                        for col in pos_df.columns:
+                            pos_columns.add(col)
+                        pca = PCA(n_components=2)
+                        comps = pca.fit_transform(pos_df)
+                        self.preprocess_decisions[f"spacy_pos"][f"pos_pca_{text_col}"] = pca
+                        pos_pca_cols = [f'POS PC-1 {text_col}', f'POS PC-2 {text_col}']
+                        pos_df = pd.DataFrame(comps, columns=pos_pca_cols)
+                        pos_df_pca = pos_df[pos_pca_cols]
+                        df = pd.merge(df, pos_df_pca, left_index=True, right_index=True, how='left')
+                        nlp_columns.append(text_col)
                     else:
                         pass
                     df.drop(f'nof_words_{text_col}', axis=1, inplace=True)
                 except AttributeError:
                     pass
-            if len(spacy_cols) > 0:
-                unique_pos_cols = list(set(pos_columns))
-                df_temp = df[unique_pos_cols].copy()
-                df_temp.fillna(0, inplace=True)
-                pca = PCA(n_components=2)
-                if mode == 'fit':
-                    comps = pca.fit_transform(df_temp)
-                else:
-                    pca = loaded_pca
-                    comps = pca.transform(df_temp)
-                pos_df = pd.DataFrame(comps, columns=['POS PC-1', 'POS PC-2'])
-                for col in pos_df:
-                    df[col] = pos_df[col]
-                for col in pos_df.columns:
-                    df.drop(col, axis=1, inplace=True)
-                try:
-                    del df_temp
-                    del comps
-                    _ = gc.collect()
-                except Exception:
-                    pass
-            else:
-                pca = None
-            return df, pca
+            # get unique pos tag columns
+            unique_pos_cols = list(set(pos_columns))
+            self.preprocess_decisions[f"spacy_pos"]["pos_tagger_cols"] = unique_pos_cols
+            # get unique original column names
+            unique_nlp_cols = list(set(nlp_columns))
+            self.nlp_columns = unique_nlp_cols
+            print(df.info())
+        return df
 
+    def pos_tagging_pca(self):
         logging.info('Start spacy POS tagging loop.')
         algorithm = 'spacy_pos'
         if self.prediction_mode:
-            text_columns = self.preprocess_decisions[f"text_processing_columns"][f"{algorithm}"]
-            self.dataframe, self.preprocess_decisions[f"text_processing_columns"]["pos_tagger_pca"] = dataframe_nlp(
-                self.dataframe, text_columns, mode='transform',
-                loaded_pca=self.preprocess_decisions[f"text_processing_columns"]["pos_tagger_pca"])
+            text_columns = self.nlp_columns
+            self.dataframe = self.dataframe_nlp(
+                self.dataframe, text_columns, mode='transform')
             logging.info('Finished spacy POS tagging loop.')
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            self.preprocess_decisions[f"text_processing_columns"] = {}
-            text_columns = X_train.select_dtypes(include=['object']).columns
-            X_train, self.preprocess_decisions[f"text_processing_columns"]["pos_tagger_pca"] = dataframe_nlp(X_train,
-                                                                                                             text_columns,
-                                                                                                             mode='fit')
-            X_test, self.preprocess_decisions[f"text_processing_columns"]["pos_tagger_pca"] = dataframe_nlp(X_test,
-                                                                                                            text_columns,
-                                                                                                            mode='transform',
-                                                                                                            loaded_pca=
-                                                                                                            self.preprocess_decisions[
-                                                                                                                f"text_processing_columns"][
-                                                                                                                "pos_tagger_pca"])
-            self.preprocess_decisions[f"text_processing_columns"][f"{algorithm}"] = text_columns
+            self.preprocess_decisions[f"spacy_pos"] = {}
+            if not self.nlp_columns:
+                text_columns = X_train.select_dtypes(include=['object']).columns
+            else:
+                text_columns = self.nlp_columns
+            X_train = self.dataframe_nlp(X_train,
+                                         text_columns, mode='fit'
+                                         )
+            X_test = self.dataframe_nlp(X_test,
+                                        self.nlp_columns, mode='transform'
+                                        )
             logging.info('Finished spacy POS tagging loop.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
