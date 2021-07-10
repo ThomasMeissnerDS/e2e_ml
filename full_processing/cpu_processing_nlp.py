@@ -83,7 +83,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 except AttributeError:
                     pass
             if len(spacy_cols) > 0:
-                unique_pos_cols = set(pos_columns)
+                unique_pos_cols = list(set(pos_columns))
                 df_temp = df[unique_pos_cols].copy()
                 df_temp.fillna(0, inplace=True)
                 pca = PCA(n_components=2)
@@ -95,6 +95,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 pos_df = pd.DataFrame(comps, columns=['POS PC-1', 'POS PC-2'])
                 for col in pos_df:
                     df[col] = pos_df[col]
+                for col in pos_df.columns:
+                    df.drop(col, axis=1, inplace=True)
                 try:
                     del df_temp
                     del comps

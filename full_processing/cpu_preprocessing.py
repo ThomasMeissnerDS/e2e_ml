@@ -18,6 +18,8 @@ import gc
 import warnings
 import logging
 import pickle
+import os
+import psutil
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
@@ -121,6 +123,7 @@ class PreProcessing:
             self.num_columns = num_col_list
         else:
             self.num_columns = num_columns
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
 
     def __repr__(self):
         return f"Central data class holding all information like dataframes, " \
@@ -144,11 +147,13 @@ class PreProcessing:
             pass
         else:
             logging.info('Start wrapping dataframe dictionary')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             self.df_dict = {'X_train': X_train,
                             'X_test': X_test,
                             'Y_train': Y_train,
                             'Y_test': Y_test}
             logging.info('Finished wrapping dataframe dictionary')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             del X_train,
             del X_test,
             del Y_train,
@@ -165,6 +170,7 @@ class PreProcessing:
         X_train, X_test, Y_train, Y_test = self.df_dict["X_train"], self.df_dict["X_test"], self.df_dict["Y_train"], \
                                            self.df_dict["Y_test"]
         logging.info('Unpacking of data dictionary finished.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         return X_train, X_test, Y_train, Y_test
 
     def np_array_wrap_test_train_to_dict(self, Y_train, Y_test):
@@ -179,9 +185,11 @@ class PreProcessing:
             pass
         else:
             logging.info('Start wrapping Numpy dict.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             self.df_dict = {'Y_train': Y_train,
                             'Y_test': Y_test}
             logging.info('Finished wrapping Numpy dict.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.df_dict
 
     def np_array_unpack_test_train_dict(self):
@@ -192,6 +200,7 @@ class PreProcessing:
         logging.info('Start unpacking Numpy dict.')
         Y_train, Y_test = self.df_dict["Y_train"], self.df_dict["Y_test"]
         logging.info('Finished unpacking Numpy dict.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         return Y_train, Y_test
 
     def save_load_model_file(self, model_object=None, model_path=None, algorithm=None, algorithm_variant='none',
@@ -294,6 +303,7 @@ class PreProcessing:
 
     def label_encoder_decoder(self, target, mode='fit', direction='encode'):
         logging.info('Started label encoding.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if direction == 'encode' and mode == 'fit':
             le = preprocessing.LabelEncoder()
             target = le.fit_transform(target)
@@ -308,6 +318,7 @@ class PreProcessing:
         logging.info('Finished label encoding.')
         del le
         _ = gc.collect()
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         return target
 
     def data_scaling(self, scaling='minmax'):
@@ -318,6 +329,7 @@ class PreProcessing:
         """
         if self.prediction_mode:
             logging.info('Started data scaling.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             dataframe_cols = self.dataframe.columns
             if scaling == 'minmax':
                 scaler = self.preprocess_decisions["scaling"]
@@ -326,9 +338,11 @@ class PreProcessing:
             self.dataframe = pd.DataFrame(self.dataframe, columns=dataframe_cols)
             self.data_scaled = True
             logging.info('Finished data scaling.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe, self.data_scaled
         else:
             logging.info('Started data scaling.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train_cols = X_train.columns
             if scaling == 'minmax':
@@ -341,6 +355,7 @@ class PreProcessing:
             X_test = pd.DataFrame(X_test, columns=X_train_cols)
             self.data_scaled = True
             logging.info('Finished data scaling.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             del scaler
             _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
@@ -360,6 +375,7 @@ class PreProcessing:
             pass
         elif how == 'cross':
             logging.info('Started test train split.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
                                                                                 self.dataframe[self.target_variable],
                                                                                 train_size=train_size)
@@ -373,15 +389,18 @@ class PreProcessing:
             del X_test[self.target_variable]
             _ = gc.collect()
             logging.info('Finished test train split.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         elif how == 'time':
             logging.info('Started test train split.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             if self.source_format == 'numpy array':
                 length = self.dataframe.size
                 train_length = int(length * train_size)
                 test_length = length - train_length
                 Y_train, Y_test = self.dataframe[:train_length], self.dataframe[:test_length]
                 logging.info('Finished test train split.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.np_array_wrap_test_train_to_dict(Y_train, Y_test)
             elif self.source_format == 'Pandas dataframe':
                 length = len(self.dataframe.index)
@@ -404,6 +423,7 @@ class PreProcessing:
                 del X_train[self.target_variable]
                 del X_test[self.target_variable]
                 logging.info('Finished test train split.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         else:
             logging.warning('No split method provided.')
@@ -427,11 +447,13 @@ class PreProcessing:
             return dataframe
 
         logging.info('Start numerical binning.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
             for vartype in self.num_dtypes:
                 filtered_columns = self.dataframe.loc[:, ~self.dataframe.columns.isin(self.new_sin_cos_col_names)]
             self.dataframe = binning_on_data(self.dataframe, cols_to_bin=filtered_columns)
             logging.info('Finished numerical binning.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
 
         else:
@@ -442,6 +464,7 @@ class PreProcessing:
             X_train = binning_on_data(X_train, cols_to_bin=filtered_columns)
             X_test = binning_on_data(X_test, cols_to_bin=filtered_columns)
             logging.info('Finished numerical binning.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def cardinality_remover(self, threshold=100):
@@ -469,11 +492,13 @@ class PreProcessing:
             return df, deleted_columns
 
         logging.info('Start cardinality removal.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
             threshold = self.preprocess_decisions["cardinality_threshold"]
             self.dataframe, self.preprocess_decisions["cardinality_deleted_columns"] = remove_high_cardinality(self.dataframe, cols_to_delete=self.preprocess_decisions[
                 "cardinality_deleted_columns"])
             logging.info('Finished cardinality removal.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -483,6 +508,7 @@ class PreProcessing:
                                              cols_to_delete=self.preprocess_decisions["cardinality_deleted_columns"])
             self.preprocess_decisions["cardinality_threshold"] = threshold
             logging.info('Finished cardinality removal.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def rare_feature_processor(self, threshold=0.03, mask_as='miscellaneous'):
@@ -507,10 +533,12 @@ class PreProcessing:
             return all_data
 
         logging.info('Start rare feature processing.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
             threshold = self.preprocess_decisions["rare_feature_threshold"]
             self.dataframe = handle_rarity(self.dataframe, threshold)
             logging.info('Finished rare feature processing.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -518,6 +546,7 @@ class PreProcessing:
             X_test = handle_rarity(X_test)
             self.preprocess_decisions["rare_feature_threshold"] = threshold
             logging.info('Finished rare feature processing.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def clustering_as_a_feature(self, algorithm='dbscan', nb_clusters=2, eps=0.3, n_jobs=-1, min_samples=50):
@@ -563,40 +592,47 @@ class PreProcessing:
             return dataframe
 
         logging.info('Start adding clusters as additional features.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if not self.data_scaled:
             self.data_scaling()
         if algorithm == 'dbscan':
             if self.prediction_mode:
                 self.dataframe = add_dbscan_clusters(self.dataframe)
                 logging.info('Finished adding clusters as additional features.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.dataframe
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 X_train = add_dbscan_clusters(X_train)
                 X_test = add_dbscan_clusters(X_test)
                 logging.info('Finished adding clusters as additional features.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         elif algorithm == 'gaussian':
             if self.prediction_mode:
                 self.dataframe = add_gaussian_mixture_clusters(self.dataframe)
                 logging.info('Finished adding clusters as additional features.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.dataframe
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 X_train = add_gaussian_mixture_clusters(X_train)
                 X_test = add_gaussian_mixture_clusters(X_test)
                 logging.info('Finished adding clusters as additional features.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         elif algorithm == 'kmeans':
             if self.prediction_mode:
                 self.dataframe = add_kmeans_clusters(self.dataframe)
                 logging.info('Finished adding clusters as additional features.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.dataframe
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 X_train = add_kmeans_clusters(X_train)
                 X_test = add_kmeans_clusters(X_test)
                 logging.info('Finished adding clusters as additional features.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def delete_high_null_cols(self, threshold=0.5):
@@ -609,8 +645,10 @@ class PreProcessing:
             for high_null_col in self.preprocess_decisions["deleted_high_null_cols"]:
                 del self.dataframe[high_null_col]
             logging.info('Finished deleting columns with many NULLs.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         else:
             logging.info('Started deleting columns with many NULLs.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             columns_before = X_train.columns.to_list()
             X_train.dropna(axis=1, thresh=int(threshold * len(X_train)))
@@ -621,14 +659,14 @@ class PreProcessing:
                 deleted.append(key)
             self.preprocess_decisions["deleted_high_null_cols"] = deleted
             logging.info(f'Finished deleting columns with many NULLs: {deleted}.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     # TODO: Check if parameters can be used via **kwargs argument
-    def fill_nulls(self, how='imputation', selected_cols=None, fill_with=0, inplace=False, **parameters):
+    def fill_nulls(self, how='imputation', selected_cols=None, fill_with=0, **parameters):
         """
         Takes in a dataframe and fills all NULLs with chosen value.
         :param fill_with: Define value to replace NULLs with.
-        :param inplace: Chose True or False.
         :param how: Chose 'static' to define static fill values, 'iterative_imputation' for the sklearns iterative
         imputer.
         :param selected_cols: Provide list of columns to define where to replace NULLs
@@ -636,7 +674,7 @@ class PreProcessing:
         """
 
         def static_filling(dataframe, columns=None):
-            dataframe[columns] = dataframe[columns].fillna(fill_with, inplace=inplace)
+            dataframe[columns] = dataframe[columns].fillna(fill_with, inplace=False)
             return dataframe
 
         def iterative_imputation(dataframe, params=None):
@@ -654,6 +692,7 @@ class PreProcessing:
             return dataframe
 
         logging.info('Started filling NULLs.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
             if not selected_cols:
                 cols = self.dataframe.columns.to_list()
@@ -666,11 +705,12 @@ class PreProcessing:
                 pass
 
             if how == 'static':
-                self.dataframe[cols] = static_filling(self.dataframe, cols)
+                self.dataframe = static_filling(self.dataframe, cols)
             elif how == 'iterative_imputation':
                 self.dataframe[cols] = iterative_imputation(self.dataframe,
                                                             params=self.preprocess_decisions[f"fill_nulls_params"])
             logging.info('Finished filling NULLs.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -690,6 +730,7 @@ class PreProcessing:
                 self.preprocess_decisions[f"fill_nulls_how"] = how
                 self.preprocess_decisions[f"fill_nulls_params"] = cols
             logging.info('Finished filling NULLs.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def isolation_forest_identifier(self, how='append', threshold=0):
@@ -755,7 +796,7 @@ class PreProcessing:
             (`:obj:pd.DataFrame`): Filtered dataframe
         """
         if self.prediction_mode:
-            pass
+            return self.dataframe
         else:
             whisker_width = threshold
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -775,7 +816,7 @@ class PreProcessing:
             del dataframe_red[self.target_variable]
             del dataframe_red
             _ = gc.collect()
-        return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def outlier_care(self, method='isolation', how='append', threshold=None):
         """
@@ -787,14 +828,18 @@ class PreProcessing:
         :return: Returns instantiated dataframe object.
         """
         logging.info('Started outlier handling.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if method == 'isolation' and how == 'append':
             logging.info('Finished outlier handling.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.isolation_forest_identifier(how=how, threshold=threshold)
         elif method == 'isolation' and how == 'delete':
             logging.info('Finished outlier handling.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.isolation_forest_identifier(how=how, threshold=threshold)
         elif method == 'iqr':
             logging.info('Finished outlier handling.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.iqr_remover(threshold=1.5)
 
     def datetime_converter(self, datetime_handling='all', force_conversion=False):
@@ -808,6 +853,7 @@ class PreProcessing:
         if self.prediction_mode:
             if not self.date_columns:
                 logging.info('Started automatic datetime column detection.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 date_columns = []
                 # convert date columns from object to datetime type
                 for col in self.dataframe.columns:
@@ -821,6 +867,7 @@ class PreProcessing:
                                                                      errors='coerce')
                                 date_columns.append(col)
                 logging.info('Finished automatic datetime column detection.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             else:
                 date_columns = self.date_columns
                 for col in date_columns:
@@ -830,6 +877,7 @@ class PreProcessing:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             if not self.date_columns:
                 logging.info('Started automatic datetime column detection.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 date_columns = []
                 # convert date columns from object to datetime type
                 for col in X_train.columns:
@@ -849,6 +897,7 @@ class PreProcessing:
                     X_train[col] = pd.to_datetime(X_train[col], infer_datetime_format=True, errors='coerce')
                     X_test[col] = pd.to_datetime(X_test[col], infer_datetime_format=True, errors='coerce')
             logging.info('Finished automatic datetime column detection.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
 
         self.date_columns_created = {}
         self.new_sin_cos_col_names = []  # used to filter out these columns from binning
@@ -951,6 +1000,7 @@ class PreProcessing:
                     # safe_copy = all_data[dates].copy()
                     self.dataframe.drop(dates, axis=1, inplace=True)
             logging.info('Finished datetime column handling.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
         else:
             # drop initial date columns
@@ -961,6 +1011,7 @@ class PreProcessing:
                     X_test.drop(dates, axis=1, inplace=True)
             self.preprocess_decisions["datetime_handling"] = datetime_handling
             logging.info('Finished datetime column handling.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.date_columns_created
 
     def onehot_pca(self):
@@ -1024,11 +1075,13 @@ class PreProcessing:
         :return: Returns modified dataframe.
         """
         logging.info('Started category encoding.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
             cat_columns = self.cat_columns_encoded
             enc = self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"]
             self.dataframe[cat_columns] = enc.transform(self.dataframe[cat_columns])
             logging.info('Finished category encoding.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -1066,6 +1119,7 @@ class PreProcessing:
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
             logging.info('Finished category encoding.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train.drop(cat_columns, axis=1)
             X_test.drop(cat_columns, axis=1)
             del enc
@@ -1096,6 +1150,7 @@ class PreProcessing:
             return dataset
 
         logging.info('Started removing collinearity.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
             threshold = self.preprocess_decisions[f"remove_collinearity_threshold"]
             self.dataframe = self.dataframe.drop(self.excluded, axis=1)
@@ -1108,6 +1163,7 @@ class PreProcessing:
             self.excluded = del_corr
             self.preprocess_decisions[f"remove_collinearity_threshold"] = threshold
             logging.info('Finished removing collinearity.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.excluded
 
     def smote_data(self):
@@ -1120,12 +1176,14 @@ class PreProcessing:
             pass
         else:
             logging.info('Started SMOTE.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             oversample = SMOTE(n_jobs=-1)
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train_cols = X_train.columns
             X_train, Y_train = oversample.fit_resample(X_train, Y_train)
             X_train = pd.DataFrame(X_train, columns=X_train_cols)
             logging.info('Finished SMOTE.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             del oversample
             _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -1139,11 +1197,14 @@ class PreProcessing:
         """
         if self.prediction_mode:
             logging.info('Start filtering for preselected columns.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             self.dataframe = self.dataframe[self.selected_feats]
             logging.info('Finished filtering preselected columns.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
         else:
             logging.info('Start automated feature selection.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             for col in X_train.columns:
                 print(col)
@@ -1156,4 +1217,5 @@ class PreProcessing:
             logging.info('Finished automated feature selection.')
             del br
             _ = gc.collect()
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats

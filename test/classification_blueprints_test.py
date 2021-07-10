@@ -102,7 +102,8 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         test_df, test_target, val_df, val_df_target, test_categorical_cols = load_titanic_data()
         titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
                                        target_variable=test_target,
-                                       categorical_columns=test_categorical_cols)
+                                       categorical_columns=test_categorical_cols,
+                                                     preferred_training_mode='gpu')
     elif dataset == 'synthetic_multiclass':
         test_df, test_target, val_df, val_df_target, test_categorical_cols = synthetic_multiclass_data()
         titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
@@ -112,16 +113,17 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         test_df, test_target, val_df, val_df_target, test_categorical_cols = nlp_multiclass_data()
         titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
                                                      target_variable=test_target,
-                                                     categorical_columns=test_categorical_cols)
+                                                     categorical_columns=test_categorical_cols,
+                                                     preferred_training_mode='gpu')
     if blueprint == 'lgbm':
         titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob()
         print("Start prediction on holdout dataset")
         titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(val_df)
         val_y_hat = titanic_auto_ml.predicted_classes['lgbm']
     elif blueprint == 'xgboost':
-        titanic_auto_ml.ml_bp01_multiclass_full_processing_xgb_prob()
+        titanic_auto_ml.ml_bp01_multiclass_full_processing_xgb_prob(preprocessing_type='nlp')
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp01_multiclass_full_processing_xgb_prob(val_df)
+        titanic_auto_ml.ml_bp01_multiclass_full_processing_xgb_prob(val_df, preprocessing_type='nlp')
         val_y_hat = titanic_auto_ml.predicted_classes['xgboost']
     elif blueprint == 'sklearn_ensemble':
         titanic_auto_ml.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble()
@@ -155,4 +157,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         return print('The test failed. Please investigate.')
 
 
-blueprint_binary_test_titanic(blueprint='lgbm', dataset='titanic')
+blueprint_binary_test_titanic(blueprint='xgboost', dataset='titanic')
