@@ -362,6 +362,40 @@ class PreProcessing:
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
                                                 Y_test), self.data_scaled, self.preprocess_decisions
 
+    def skewness_removal(self):
+        if self.prediction_mode:
+            logging.info('Started skewness removal.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            for col in self.preprocess_decisions["skewed_columns"]:
+                log_array = np.log(self.dataframe[col])
+                log_array[np.isfinite(log_array) == False] = 0
+                self.dataframe[col] = log_array
+            logging.info('Finished skewness removal.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            return self.dataframe
+        else:
+            logging.info('Started skewness removal.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            skewness = X_train.skew(axis=0, skipna=True)
+            left_skewed = skewness[skewness < -0.5].index.to_list()
+            print(left_skewed)
+            right_skewed = skewness[skewness > 0.5].index.to_list()
+            skewed = left_skewed+right_skewed
+            for col in X_train[skewed].columns:
+                log_array = np.log(X_train[col])
+                log_array[np.isfinite(log_array) == False] = 0
+                X_train[col] = log_array
+                log_array = np.log(X_test[col])
+                log_array[np.isfinite(log_array) == False] = 0
+                X_test[col] = log_array
+            logging.info('Finished skewness removal.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            print(skewed)
+            self.preprocess_decisions["skewed_columns"] = skewed
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
+                                                Y_test)
+
     def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.80):
         """
         This method splits the dataframe either as a simple or as a time split.
