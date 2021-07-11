@@ -72,7 +72,7 @@ class RegressionModels(postprocessing.FullPipeline):
         self.predicted_values[f"{algorithm}"] = {}
         self.predicted_values[f"{algorithm}"] = predicted_probs
 
-    def xg_boost_train(self, param=None, steps=None, autotune=False, tune_mode='accurate'):
+    def xg_boost_train(self, param=None, steps=None, autotune=True, tune_mode='accurate'):
         """
         Trains an XGboost model by the given parameters.
         :param param: Takes a dictionary with custom parameter settings.
@@ -119,18 +119,20 @@ class RegressionModels(postprocessing.FullPipeline):
                         return mae
                     else:
                         result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
-                                        as_pandas=True, seed=42, callbacks=[pruning_callback])
+                                        as_pandas=True, seed=42, callbacks=[pruning_callback], nfold=5)
                         return result['test-mae-mean'].mean()
 
                 algorithm = 'xgboost'
                 if tune_mode == 'simple':
-                    study = optuna.create_study(direction='maximize')
+                    study = optuna.create_study(direction='minimize')
                 else:
                     study = optuna.create_study(direction='minimize')
                 study.optimize(objective, n_trials=30)
                 self.optuna_studies[f"{algorithm}"] = {}
                 #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+                optuna.visualization.plot_optimization_history(study)
+                optuna.visualization.plot_param_importances(study)
                 self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
                 self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
                 lgbm_best_param = study.best_trial.params
@@ -169,11 +171,11 @@ class RegressionModels(postprocessing.FullPipeline):
                         'alpha' : 10, #L1 regularization term on weights. Increasing this value will make model more conservative. (default = 0)
                         'lambda': 15, #L2 regularization term on weights. Increasing this value will make model more conservative. (default = 1)
                         'subsample': 0.8,
-                        'eval_metric' : "mlogloss", #'mlogloss','auc','rmsle'
+                        'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
+                        'eval_metric': 'mae',
                         #'colsample_bytree': 0.3,
                         'max_depth': 2, #maximum depth of the decision trees being trained
                         'tree_method': 'gpu_hist', #use GPU for training
-                        'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                         'steps': 50000
                         } #the number of classes in the dataset
                 else:
@@ -252,18 +254,20 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = mean_absolute_error(Y_test, preds)
                     return mae
                 else:
-                    result = lgb.cv(param, train_set=dtrain, nfold=5,num_boost_round=param['num_boost_round'],
+                    result = lgb.cv(param, train_set=dtrain, nfold=5, num_boost_round=param['num_boost_round'],
                                     early_stopping_rounds=10, callbacks=[pruning_callback], seed=42, verbose_eval=False)
                     avg_result = np.mean(np.array(result["mean_absolute_error-mean"]))
                     return avg_result
             algorithm = 'lgbm'
             study = optuna.create_study(direction='minimize')
             study.optimize(objective, n_trials=20)
-            #self.optuna_studies[f"{algorithm}"] = {}
+            self.optuna_studies[f"{algorithm}"] = {}
             #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            #self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
-            #self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+            optuna.visualization.plot_optimization_history(study)
+            optuna.visualization.plot_param_importances(study)
+            self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
             lgbm_best_param = study.best_trial.params
             param = {
                 'objective': 'regression',
@@ -471,7 +475,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     model = NGBRegressor(n_estimators=param["n_estimators"],
                                          minibatch_frac=param["minibatch_frac"],
                                          Dist=param["Dist"],
-                                         learning_rate=param["learning_rate"]).fit(X_train, Y_train, X_val=X_test, Y_val=Y_test, early_stopping_rounds=10)
+                                         learning_rate=param["learning_rate"]).fit(X_train, Y_train, X_val=X_test,
+                                                                                   Y_val=Y_test,
+                                                                                   early_stopping_rounds=10)
                     preds = model.predict(X_test)
                     mae = mean_absolute_error(Y_test, preds)
                     return mae
@@ -488,11 +494,13 @@ class RegressionModels(postprocessing.FullPipeline):
             algorithm = 'ngboost'
             study = optuna.create_study(direction='minimize')
             study.optimize(objective, n_trials=20)
-            #self.optuna_studies[f"{algorithm}"] = {}
+            self.optuna_studies[f"{algorithm}"] = {}
             #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            #self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
-            #self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+            optuna.visualization.plot_optimization_history(study)
+            optuna.visualization.plot_param_importances(study)
+            self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
             lgbm_best_param = study.best_trial.params
             param = {
                 'Dist': lgbm_best_param["Dist"],

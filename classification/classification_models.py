@@ -25,6 +25,7 @@ from sklearn.inspection import permutation_importance
 import shap
 import matplotlib.pyplot as plt
 import warnings
+import logging
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 
@@ -127,8 +128,10 @@ class ClassificationModels(postprocessing.FullPipeline):
         """
         if self.preferred_training_mode == 'gpu':
             train_on = 'gpu_hist'
+            logging.info(f'Start Xgboost model training on {self.preferred_training_mode}.')
         else:
             train_on = 'exact'
+            logging.info(f'Start Xgboost model training on {self.preferred_training_mode}.')
         if self.prediction_mode:
             pass
         else:
@@ -178,12 +181,16 @@ class ClassificationModels(postprocessing.FullPipeline):
                     algorithm = 'xgboost'
                     if tune_mode == 'simple':
                         study = optuna.create_study(direction='maximize')
+                        logging.info(f'Start Xgboost simple validation.')
                     else:
                         study = optuna.create_study(direction='minimize')
+                        logging.info(f'Start Xgboost advanced validation.')
                     study.optimize(objective, n_trials=40)
                     self.optuna_studies[f"{algorithm}"] = {}
                     #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+                    optuna.visualization.plot_optimization_history(study)
+                    optuna.visualization.plot_param_importances(study)
                     self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
                     self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
 
@@ -205,6 +212,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         'num_parallel_tree': lgbm_best_param["num_parallel_tree"]
                     }
                     eval_set = [(D_train, 'train'), (D_test, 'test')]
+                    logging.info(f'Start Xgboost final model training with optimized hyperparamers.')
                     model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
                                       evals=eval_set)
                     self.trained_models[f"{algorithm}"] = {}
@@ -247,13 +255,17 @@ class ClassificationModels(postprocessing.FullPipeline):
 
                     algorithm = 'xgboost'
                     if tune_mode == 'simple':
+                        logging.info(f'Start Xgboost simple validation.')
                         study = optuna.create_study(direction='maximize')
                     else:
+                        logging.info(f'Start Xgboost advanced validation.')
                         study = optuna.create_study(direction='minimize')
                     study.optimize(objective, n_trials=30)
                     self.optuna_studies[f"{algorithm}"] = {}
                     #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+                    optuna.visualization.plot_optimization_history(study)
+                    optuna.visualization.plot_param_importances(study)
                     self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
                     self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
 
@@ -275,6 +287,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         'num_parallel_tree': lgbm_best_param["num_parallel_tree"]
                     }
                     eval_set = [(D_train, 'train'), (D_test, 'test')]
+                    logging.info(f'Start Xgboost final model training with optimized hyperparamers.')
                     model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
                                       evals=eval_set)
                     self.trained_models[f"{algorithm}"] = {}
@@ -312,6 +325,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 else:
                     steps = steps
                 eval_set = [(D_train, 'train'), (D_test, 'test')]
+                logging.info(f'Start Xgboost simple model training with predefined hyperparamers.')
                 model = xgb.train(param, D_train, num_boost_round=50000, early_stopping_rounds=10,
                                   evals=eval_set)
                 self.trained_models[f"{algorithm}"] = {}
@@ -421,11 +435,13 @@ class ClassificationModels(postprocessing.FullPipeline):
                 else:
                     study = optuna.create_study(direction='minimize')
                 study.optimize(objective, n_trials=15)
-                #self.optuna_studies[f"{algorithm}"] = {}
+                self.optuna_studies[f"{algorithm}"] = {}
                 #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-                #self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
-                #self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+                optuna.visualization.plot_optimization_history(study)
+                optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
 
 
                 lgbm_best_param = study.best_trial.params
@@ -493,11 +509,13 @@ class ClassificationModels(postprocessing.FullPipeline):
                 else:
                     study = optuna.create_study(direction='minimize')
                 study.optimize(objective, n_trials=15)
-                #self.optuna_studies[f"{algorithm}"] = {}
+                self.optuna_studies[f"{algorithm}"] = {}
                 #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-                #self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
-                #self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+                optuna.visualization.plot_optimization_history(study)
+                optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
 
                 lgbm_best_param = study.best_trial.params
                 param = {
@@ -798,11 +816,13 @@ class ClassificationModels(postprocessing.FullPipeline):
             else:
                 study = optuna.create_study(direction='minimize')
             study.optimize(objective, n_trials=15)
-            #self.optuna_studies[f"{algorithm}"] = {}
+            self.optuna_studies[f"{algorithm}"] = {}
             #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            #self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
-            #self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+            optuna.visualization.plot_optimization_history(study)
+            optuna.visualization.plot_param_importances(study)
+            self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
             lgbm_best_param = study.best_trial.params
             param = {
                 'Dist': nb_classes,
