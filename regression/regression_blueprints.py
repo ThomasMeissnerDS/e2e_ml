@@ -286,7 +286,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
             pass
         else:
             self.ngboost_train()
-        self.ngboost_predict(feat_importance=True, importance_alg='permutation')
+        self.ngboost_predict(feat_importance=False, importance_alg='permutation')
         self.regression_eval('ngboost')
         self.prediction_mode = True
         logging.info('Finished blueprint.')

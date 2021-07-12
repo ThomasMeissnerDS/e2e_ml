@@ -13,6 +13,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 from lightgbm import LGBMRegressor
 from ngboost import NGBRegressor
+from sklearn.tree import DecisionTreeRegressor
 from ngboost.distns import Exponential, Normal, LogNormal
 from sklearn import linear_model
 from sklearn.linear_model import SGDRegressor, BayesianRidge, ARDRegression
@@ -465,8 +466,38 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
             def objective(trial):
+                base_learner_choice = trial.suggest_categorical("base_learner", ["DecTree_depth2",
+                                                                                 "DecTree_depth5",
+                                                                                 "DecTree_depthNone",
+                                                                                 "GradientBoost_depth2",
+                                                                                 "GradientBoost_depth5"])
+
+                if base_learner_choice == "DecTree_depth2":
+                    base_learner_choice = DecisionTreeRegressor(max_depth=2)
+                elif base_learner_choice == "DecTree_depth5":
+                    base_learner_choice = DecisionTreeRegressor(max_depth=5)
+                elif base_learner_choice == "DecTree_depthNone":
+                    base_learner_choice = DecisionTreeRegressor(max_depth=None)
+                elif base_learner_choice == "GradientBoost_depth2":
+                    base_learner_choice = GradientBoostingRegressor(max_depth=2,
+                                                                    n_estimators=1000,
+                                                                    n_iter_no_change=10,
+                                                                    random_state=42)
+                elif base_learner_choice == "GradientBoost_depth5":
+                    base_learner_choice = GradientBoostingRegressor(max_depth=5,
+                                                                    n_estimators=10000,
+                                                                    n_iter_no_change=10,
+                                                                    random_state=42)
+
+                dist_choice = trial.suggest_categorical('Dist', ["Normal", "LogNormal", "Exponential"])
+                if dist_choice == "Normal":
+                    dist_choice = Normal
+                elif dist_choice == "LogNormal":
+                    dist_choice = LogNormal
+                elif dist_choice == "Exponential":
+                    dist_choice = Exponential
+
                 param = {
-                    'Dist': trial.suggest_categorical('Dist', [Normal, LogNormal, Exponential]),
                     'n_estimators': trial.suggest_int('n_estimators', 2, 50000),
                     'minibatch_frac': trial.suggest_uniform('minibatch_frac', 0.4, 1.0),
                     'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 0.1)
@@ -474,7 +505,8 @@ class RegressionModels(postprocessing.FullPipeline):
                 if tune_mode == 'simple':
                     model = NGBRegressor(n_estimators=param["n_estimators"],
                                          minibatch_frac=param["minibatch_frac"],
-                                         Dist=param["Dist"],
+                                         Dist=dist_choice,
+                                         Base=base_learner_choice,
                                          learning_rate=param["learning_rate"]).fit(X_train, Y_train, X_val=X_test,
                                                                                    Y_val=Y_test,
                                                                                    early_stopping_rounds=10)
@@ -484,7 +516,8 @@ class RegressionModels(postprocessing.FullPipeline):
                 else:
                     model = NGBRegressor(n_estimators=param["n_estimators"],
                                          minibatch_frac=param["minibatch_frac"],
-                                         Dist=param["Dist"],
+                                         Dist=dist_choice,
+                                         Base=base_learner_choice,
                                          learning_rate=param["learning_rate"],
                                          random_state=42)
                     scores = cross_val_score(model, X_train, Y_train, cv=5, scoring='neg_mean_squared_error',
@@ -492,7 +525,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = np.mean(scores)
                     return mae
             algorithm = 'ngboost'
-            study = optuna.create_study(direction='minimize')
+            study = optuna.create_study(direction='maximize')
             study.optimize(objective, n_trials=20)
             self.optuna_studies[f"{algorithm}"] = {}
             #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
@@ -502,6 +535,31 @@ class RegressionModels(postprocessing.FullPipeline):
             self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
             self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
             lgbm_best_param = study.best_trial.params
+
+            if lgbm_best_param["base_learner"] == "DecTree_depth2":
+                base_learner_choice = DecisionTreeRegressor(max_depth=2)
+            elif lgbm_best_param["base_learner"] == "DecTree_depth5":
+                base_learner_choice = DecisionTreeRegressor(max_depth=5)
+            elif lgbm_best_param["base_learner"] == "DecTree_depthNone":
+                base_learner_choice = DecisionTreeRegressor(max_depth=None)
+            elif lgbm_best_param["base_learner"] == "GradientBoost_depth2":
+                base_learner_choice = GradientBoostingRegressor(max_depth=2,
+                                                                n_estimators=1000,
+                                                                n_iter_no_change=10,
+                                                                random_state=42)
+            elif lgbm_best_param["base_learner"] == "GradientBoost_depth5":
+                base_learner_choice = GradientBoostingRegressor(max_depth=5,
+                                                                n_estimators=10000,
+                                                                n_iter_no_change=10,
+                                                                random_state=42)
+
+            if lgbm_best_param["Dist"] == "Normal":
+                dist_choice = Normal
+            elif lgbm_best_param["Dist"] == "LogNormal":
+                dist_choice = LogNormal
+            elif lgbm_best_param["Dist"] == "Exponential":
+                dist_choice = Exponential
+
             param = {
                 'Dist': lgbm_best_param["Dist"],
                 'n_estimators': lgbm_best_param["n_estimators"],
@@ -511,7 +569,8 @@ class RegressionModels(postprocessing.FullPipeline):
             }
             model = NGBRegressor(n_estimators=param["n_estimators"],
                                  minibatch_frac=param["minibatch_frac"],
-                                 Dist=param["Dist"],
+                                 Dist=dist_choice,
+                                 Base=base_learner_choice,
                                  learning_rate=param["learning_rate"]).fit(X_train, Y_train, X_val=X_test, Y_val=Y_test,
                                                                            early_stopping_rounds=10)
             self.trained_models[f"{algorithm}"] = {}
@@ -537,9 +596,9 @@ class RegressionModels(postprocessing.FullPipeline):
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer="kernel")
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer="kernel")
             elif feat_importance and importance_alg == 'permutation':
                 result = permutation_importance(
                     model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)

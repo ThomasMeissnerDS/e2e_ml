@@ -13,8 +13,9 @@ from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.ensemble import StackingClassifier
 from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.tree import DecisionTreeRegressor
 from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import f1_score
@@ -773,6 +774,28 @@ class ClassificationModels(postprocessing.FullPipeline):
                 Y_test = np.int(Y_test)
 
             def objective(trial):
+                base_learner_choice = trial.suggest_categorical("base_learner", ["DecTree_depth2",
+                                                                                    "DecTree_depth5",
+                                                                                    "DecTree_depthNone",
+                                                                                    "GradientBoost_depth2",
+                                                                                    "GradientBoost_depth5"])
+                if base_learner_choice == "DecTree_depth2":
+                    base_learner_choice = DecisionTreeRegressor(max_depth=2)
+                elif base_learner_choice == "DecTree_depth5":
+                    base_learner_choice = DecisionTreeRegressor(max_depth=5)
+                elif base_learner_choice == "DecTree_depthNone":
+                    base_learner_choice = DecisionTreeRegressor(max_depth=None)
+                elif base_learner_choice == "GradientBoost_depth2":
+                    base_learner_choice = GradientBoostingRegressor(max_depth=2,
+                                                              n_estimators=1000,
+                                                              n_iter_no_change=10,
+                                                              random_state=42)
+                elif base_learner_choice == "GradientBoost_depth5":
+                    base_learner_choice = GradientBoostingRegressor(max_depth=5,
+                                                              n_estimators=10000,
+                                                              n_iter_no_change=10,
+                                                              random_state=42)
+
                 param = {
                     'n_estimators': trial.suggest_int('n_estimators', 2, 50000),
                     'minibatch_frac': trial.suggest_uniform('minibatch_frac', 0.4, 1.0),
@@ -782,6 +805,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     model = NGBClassifier(n_estimators=param["n_estimators"],
                                          minibatch_frac=param["minibatch_frac"],
                                          Dist=nb_classes,
+                                         Base=base_learner_choice,
                                          learning_rate=param["learning_rate"]).fit(X_train,
                                                                                    Y_train,
                                                                                    X_val=X_test,
@@ -798,6 +822,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     model = NGBClassifier(n_estimators=param["n_estimators"],
                                          minibatch_frac=param["minibatch_frac"],
                                          Dist=nb_classes,
+                                          Base=base_learner_choice,
                                          learning_rate=param["learning_rate"],
                                          random_state=42)
                     try:
@@ -814,7 +839,7 @@ class ClassificationModels(postprocessing.FullPipeline):
             if tune_mode == 'simple':
                 study = optuna.create_study(direction='maximize')
             else:
-                study = optuna.create_study(direction='minimize')
+                study = optuna.create_study(direction='maximize')
             study.optimize(objective, n_trials=15)
             self.optuna_studies[f"{algorithm}"] = {}
             #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
@@ -824,6 +849,23 @@ class ClassificationModels(postprocessing.FullPipeline):
             self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
             self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
             lgbm_best_param = study.best_trial.params
+
+            if lgbm_best_param["base_learner"] == "DecTree_depth2":
+                base_learner_choice = DecisionTreeRegressor(max_depth=2)
+            elif lgbm_best_param["base_learner"] == "DecTree_depth5":
+                base_learner_choice = DecisionTreeRegressor(max_depth=5)
+            elif lgbm_best_param["base_learner"] == "DecTree_depthNone":
+                base_learner_choice = DecisionTreeRegressor(max_depth=None)
+            elif lgbm_best_param["base_learner"] == "GradientBoost_depth2":
+                base_learner_choice = GradientBoostingRegressor(max_depth=2,
+                                                                n_estimators=1000,
+                                                                n_iter_no_change=10,
+                                                                random_state=42)
+            elif lgbm_best_param["base_learner"] == "GradientBoost_depth5":
+                base_learner_choice = GradientBoostingRegressor(max_depth=5,
+                                                                n_estimators=10000,
+                                                                n_iter_no_change=10,
+                                                                random_state=42)
             param = {
                 'Dist': nb_classes,
                 'n_estimators': lgbm_best_param["n_estimators"],
@@ -833,6 +875,7 @@ class ClassificationModels(postprocessing.FullPipeline):
             model = NGBClassifier(n_estimators=param["n_estimators"],
                                  minibatch_frac=param["minibatch_frac"],
                                  Dist=nb_classes,
+                                  Base=base_learner_choice,
                                  learning_rate=param["learning_rate"],
                                  random_state=42).fit(X_train,
                                                       Y_train,
@@ -869,9 +912,9 @@ class ClassificationModels(postprocessing.FullPipeline):
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer="kernel")
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns,  explainer="kernel")
             elif feat_importance and importance_alg == 'permutation':
                 result = permutation_importance(
                     model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
