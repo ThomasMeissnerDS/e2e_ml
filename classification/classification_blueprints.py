@@ -336,8 +336,12 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             self.lgbm_train(tune_mode='accurate')
             self.xg_boost_train(autotune=True, tune_mode='accurate')
         self.ngboost_predict(feat_importance=False, importance_alg='SHAP')
+        self.classification_eval('ngboost')
         self.lgbm_predict(feat_importance=False)
+        self.classification_eval('lgbm')
         self.xgboost_predict(feat_importance=True)
+        self.classification_eval('xgboost')
+        algorithm = 'blended_preds'
         if self.prediction_mode:
             self.dataframe["lgbm_preds"] = self.predicted_probs[f"lgbm"]
             self.dataframe["ngboost_preds"] = self.predicted_probs[f"ngboost"]

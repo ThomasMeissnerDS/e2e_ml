@@ -119,6 +119,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         return df
 
     def pos_tagging_pca(self):
+        self.get_current_timestamp(task='Start Spacy, POS tagging + PCA')
         logging.info('Start spacy POS tagging loop.')
         algorithm = 'spacy_pos'
         if self.prediction_mode:
