@@ -289,7 +289,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp05_binary_full_processing_boosting_blender(self, df=None, preprocessing_type='full'):
+    def ml_special_binary_full_processing_boosting_blender(self, df=None, preprocessing_type='full'):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -334,14 +334,13 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             self.ngboost_train(tune_mode='accurate')
             self.lgbm_train(tune_mode='accurate')
             self.xg_boost_train(autotune=True, tune_mode='accurate')
-        self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
-        self.lgbm_predict(feat_importance=True)
+        self.ngboost_predict(feat_importance=False, importance_alg='SHAP')
+        self.lgbm_predict(feat_importance=False)
         self.xgboost_predict(feat_importance=True)
         if self.prediction_mode:
             self.dataframe["lgbm_preds"] = self.predicted_probs[f"lgbm"]
             self.dataframe["ngboost_preds"] = self.predicted_probs[f"ngboost"]
-            partial_probs = np.asarray([line[1] for line in self.predicted_probs[f"xgboost"]])
-            self.dataframe["xgboost_preds"] = partial_probs
+            self.dataframe["xgboost_preds"] = np.asarray([line[1] for line in self.predicted_probs[f"xgboost"]])
             self.dataframe["blended_preds"] = (self.dataframe["lgbm_preds"] + self.dataframe["ngboost_preds"] + self.dataframe["xgboost_preds"])/3
             self.predicted_probs[f"blended_preds"] = self.dataframe["blended_preds"]
             predicted_classes = self.predicted_probs[f"blended_preds"] > self.preprocess_decisions[f"probability_threshold"]
@@ -350,10 +349,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_test["lgbm_preds"] = self.predicted_probs[f"lgbm"]
             X_test["ngboost_preds"] = self.predicted_probs[f"ngboost"]
-            partial_probs = np.asarray([line[1] for line in self.predicted_probs[f"xgboost"]])
-            X_test["xgboost_preds"] = partial_probs
+            X_test["xgboost_preds"] = np.asarray([line[1] for line in self.predicted_probs[f"xgboost"]])
             X_test["blended_preds"] = (X_test["lgbm_preds"] + X_test["ngboost_preds"] + X_test["xgboost_preds"])/3
-            self.predicted_probs[f"blended_preds"] = self.dataframe["blended_preds"]
+            self.predicted_probs[f"blended_preds"] = X_test["blended_preds"]
             self.threshold_refiner(self.predicted_probs[f"blended_preds"], Y_test)
             predicted_classes = self.predicted_probs[f"blended_preds"] > self.preprocess_decisions[f"probability_threshold"]
             self.predicted_classes[f"blended_preds"] = predicted_classes

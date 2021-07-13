@@ -291,6 +291,71 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
+    def ml_special_regression_full_processing_boosting_blender(self, df=None, preprocessing_type='full'):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :return: Updates class attributes by its predictions.
+        """
+        logging.info('Start blueprint.')
+        try:
+            if df.empty:
+                skip_train = False
+            else:
+                self.dataframe = df
+                skip_train = True
+        except AttributeError:
+            skip_train = False
+        self.train_test_split(how=self.train_split_type)
+        self.datetime_converter(datetime_handling='all')
+        if preprocessing_type == 'nlp':
+            self.pos_tagging_pca()
+        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
+        self.cardinality_remover(threshold=100)
+        self.onehot_pca()
+        self.category_encoding(algorithm='target')
+        self.delete_high_null_cols(threshold=0.5)
+        self.fill_nulls(how='static')
+        self.data_binning(nb_bins=10)
+        #self.skewness_removal()
+        self.outlier_care(method='isolation', how='append')
+        self.remove_collinearity(threshold=0.8)
+        self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
+        for nb_cluster in range(2, 10):
+            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
+        if self.low_memory_mode:
+            self.reduce_memory_footprint()
+        self.automated_feature_selection(metric='logloss')
+        self.sort_columns_alphabetically()
+        if skip_train:
+            pass
+        else:
+            self.ngboost_train(tune_mode='accurate')
+            self.lgbm_train(tune_mode='accurate')
+            self.xg_boost_train(autotune=True, tune_mode='accurate')
+        self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
+        self.lgbm_predict(feat_importance=True)
+        self.xgboost_predict(feat_importance=True)
+        if self.prediction_mode:
+            self.dataframe["lgbm_preds"] = self.predicted_values[f"lgbm"]
+            self.dataframe["ngboost_preds"] = self.predicted_values[f"ngboost"]
+            self.dataframe["xgboost_preds"] = self.predicted_values[f"xgboost"]
+            self.dataframe["blended_preds"] = (self.dataframe["lgbm_preds"] + self.dataframe["ngboost_preds"] + self.dataframe["xgboost_preds"])/3
+            self.predicted_values[f"blended_preds"] = self.dataframe["blended_preds"]
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_test["lgbm_preds"] = self.predicted_values[f"lgbm"]
+            X_test["ngboost_preds"] = self.predicted_values[f"ngboost"]
+            X_test["xgboost_preds"] = self.predicted_values[f"xgboost"]
+            X_test["blended_preds"] = (X_test["lgbm_preds"] + X_test["ngboost_preds"] + X_test["xgboost_preds"])/3
+            self.predicted_values[f"blended_preds"] = X_test["blended_preds"]
+        self.classification_eval('blended_preds')
+        self.prediction_mode = True
+        logging.info('Finished blueprint.')
+
     def ml_special_regression_auto_model_exploration(self, df=None, preprocessing_type='full'):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,

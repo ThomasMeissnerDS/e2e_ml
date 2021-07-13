@@ -32,6 +32,7 @@ warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 class RegressionModels(postprocessing.FullPipeline):
     def linear_regression_train(self):
+        self.get_current_timestamp()
         algorithm = 'linear_regression'
         if self.prediction_mode:
             pass
@@ -43,6 +44,7 @@ class RegressionModels(postprocessing.FullPipeline):
             return self.trained_models
 
     def linear_regression_predict(self, feat_importance=True, importance_alg='permutation'):
+        self.get_current_timestamp()
         algorithm = 'linear_regression'
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
@@ -82,6 +84,7 @@ class RegressionModels(postprocessing.FullPipeline):
         :param use_case: Chose 'binary' or 'regression'
         :return:
         """
+        self.get_current_timestamp()
         if self.preferred_training_mode == 'gpu':
             train_on = 'gpu_hist'
         else:
@@ -194,6 +197,7 @@ class RegressionModels(postprocessing.FullPipeline):
         Predicts on test & also new data given the prediction_mode is activated in the class.
         :return: Updates class attributes by its predictions.
         """
+        self.get_current_timestamp()
         algorithm = 'xgboost'
         if self.prediction_mode:
             D_test = xgb.DMatrix(self.dataframe)
@@ -219,6 +223,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
 
     def lgbm_train(self, tune_mode='accurate', gpu_use_dp=True):
+        self.get_current_timestamp()
         if self.preferred_training_mode == 'gpu':
             train_on = 'gpu'
             gpu_use_dp = True
@@ -294,6 +299,7 @@ class RegressionModels(postprocessing.FullPipeline):
             return self.trained_models
 
     def lgbm_predict(self, feat_importance=True):
+        self.get_current_timestamp()
         algorithm = 'lgbm'
         model = self.trained_models[f"{algorithm}"]
         if self.prediction_mode:
@@ -321,6 +327,7 @@ class RegressionModels(postprocessing.FullPipeline):
         Trains an sklearn stacking classifier ensemble.
         :return: Updates class attributes by its predictions.
         """
+        self.get_current_timestamp()
         algorithm = 'sklearn_ensemble'
         if self.prediction_mode:
             pass
@@ -421,6 +428,7 @@ class RegressionModels(postprocessing.FullPipeline):
         Predicts on test & also new data given the prediction_mode is activated in the class.
         :return: Updates class attributes by its predictions.
         """
+        self.get_current_timestamp()
         algorithm = 'sklearn_ensemble'
         model = self.trained_models[f"{algorithm}"]
         if self.prediction_mode:
