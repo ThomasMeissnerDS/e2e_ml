@@ -908,17 +908,21 @@ class ClassificationModels(postprocessing.FullPipeline):
         model = self.trained_models[f"{algorithm}"]
         if self.prediction_mode:
             X_test = self.dataframe
-            predicted_probs = model.predict_proba(X_test)
-            predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
-
+            partial_probs = model.predict_proba(X_test)
+            if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+            else:
+                predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            predicted_probs = model.predict(X_test)
-            if Y_train.nunique() > 2:
-                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
-            else:
+            partial_probs = model.predict_proba(X_test)
+            predicted_probs = np.asarray([line[1] for line in partial_probs])
+            if self.class_problem == 'binary':
                 self.threshold_refiner(predicted_probs, Y_test)
                 predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+            else:
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
 
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
