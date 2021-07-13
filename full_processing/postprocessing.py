@@ -4,6 +4,7 @@ from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, m
 from sklearn.metrics import confusion_matrix, classification_report
 import shap
 import matplotlib.pyplot as plt
+import numpy as np
 import warnings
 import logging
 
@@ -106,13 +107,32 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             print(f"The Matthew correlation is {matthews}")
             logging.info(f'The Matthew correlation of {algorithm} is {matthews}')
 
-            """# TODO: INVESTIGATE ROC_AUC for multiclass
             if self.class_problem == 'binary':
-                partial_probs = np.asarray([line[1] for line in probs])
-                roc_auc = roc_auc_score(Y_test, partial_probs, multi_class='ovr')
+                def get_preds(threshold, probabilities):
+                    return [1 if prob > threshold else 0 for prob in probabilities]
+                roc_values = []
+                for thresh in np.linspace(0, 1, 100):
+                    preds = get_preds(thresh, y_hat_probs)
+                    tn, fp, fn, tp = confusion_matrix(Y_test, preds).ravel()
+                    tpr = tp/(tp+fn)
+                    fpr = fp/(fp+tn)
+                    roc_values.append([tpr, fpr])
+                tpr_values, fpr_values = zip(*roc_values)
+                fig, ax = plt.subplots(figsize=(10,7))
+                ax.plot(fpr_values, tpr_values)
+                ax.plot(np.linspace(0, 1, 100),
+                        np.linspace(0, 1, 100),
+                        label='baseline',
+                        linestyle='--')
+                plt.title('Receiver Operating Characteristic Curve', fontsize=18)
+                plt.ylabel('TPR', fontsize=16)
+                plt.xlabel('FPR', fontsize=16)
+                plt.legend(fontsize=12)
+                plt.show()
+                roc_auc = roc_auc_score(Y_test, y_hat_probs)
                 print(f"The ROC_AUC score is {roc_auc}")
             else:
-                pass"""
+                pass
             f1_score_macro = f1_score(Y_test, y_hat, average='macro')
             print(f"The macro F1 score is {f1_score_macro}")
             logging.info(f'The macro F1 score of {algorithm} is {f1_score_macro}')
@@ -128,7 +148,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             logging.info(f'The classification report of {algorithm} is {full_classification_report}')
             self.evaluation_scores[f"{algorithm}"] = {
                 'matthews': matthews,
-                # 'roc_auc': roc_auc,
+                'roc_auc': roc_auc,
                 'f1_score_macro': f1_score_macro,
                 'f1_score_micro': f1_score_micro,
                 'f1_score_weighted': f1_score_weighted,

@@ -135,10 +135,14 @@ class PreProcessing:
     def __str__(self):
         return f"Current target: {self.target_variable}"
 
-    def get_current_timestamp(self):
+    def get_current_timestamp(self, task=None):
         t = time.localtime()
-        current_time = time.strftime("%H:%M:%S", t)
-        print(current_time)
+        if task:
+            current_time = time.strftime("%H:%M:%S", t)
+            print(f"Started {task} at {current_time}.")
+        else:
+            current_time = time.strftime("%H:%M:%S", t)
+            print(f"{current_time}")
         return current_time
 
     def wrap_test_train_to_dict(self, X_train, X_test, Y_train, Y_test):
@@ -150,7 +154,6 @@ class PreProcessing:
         :param Y_test: Pandas Series
         :return: Class dictionary
         """
-        self.get_current_timestamp()
         if self.prediction_mode:
             logging.info('Skipped wrapping dataframe dict due to prediction mode.')
             pass
@@ -175,7 +178,6 @@ class PreProcessing:
         This function takes in the class dictionary holding test and train split and unpacks it.
         :return: X_train, X_test as dataframes. Y_train, Y_test as Pandas series.
         """
-        self.get_current_timestamp()
         logging.info('Start unpacking data dictionary')
         X_train, X_test, Y_train, Y_test = self.df_dict["X_train"], self.df_dict["X_test"], self.df_dict["Y_train"], \
                                            self.df_dict["Y_test"]
@@ -190,7 +192,6 @@ class PreProcessing:
         :param Y_test: Numpy array
         :return: Class dictionary
         """
-        self.get_current_timestamp()
         if self.prediction_mode:
             logging.info('Wrapping Numpy dict skipped due to prediction mode.')
             pass
@@ -208,7 +209,6 @@ class PreProcessing:
         This function takes in the class dictionary holding test and train split and unpacks it.
         :return: X_train, X_test as dataframes. Y_train, Y_test as numpy array.
         """
-        self.get_current_timestamp()
         logging.info('Start unpacking Numpy dict.')
         Y_train, Y_test = self.df_dict["Y_train"], self.df_dict["Y_test"]
         logging.info('Finished unpacking Numpy dict.')
@@ -217,7 +217,6 @@ class PreProcessing:
 
     def save_load_model_file(self, model_object=None, model_path=None, algorithm=None, algorithm_variant='none',
                              file_type='.dat', action='save', clean=True):
-        self.get_current_timestamp()
         if self.save_models_path:
             path = self.save_models_path
         elif model_path:
@@ -227,6 +226,7 @@ class PreProcessing:
         full_path = path + '_' + algorithm + '_' + algorithm_variant + '_' + file_type
 
         if action == 'save':
+            self.get_current_timestamp(task='Save blueprint instance.')
             filehandler = open(full_path, 'wb')
             pickle.dump(model_object, filehandler)
             filehandler.close()
@@ -234,6 +234,7 @@ class PreProcessing:
                 del model_object
                 _ = gc.collect()
         elif action == 'load':
+            self.get_current_timestamp(task='Load blueprint instance.')
             filehandler = open(full_path, 'rb')
             model_object = pickle.load(filehandler)
             filehandler.close()
@@ -246,7 +247,6 @@ class PreProcessing:
         iterate through all the columns of a dataframe and modify the data type
         to reduce memory usage.
         """
-        self.get_current_timestamp()
         start_mem = df.memory_usage().sum() / 1024 ** 2
         print('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
 
@@ -285,7 +285,7 @@ class PreProcessing:
         Takes a dataframe and downcasts columns if possible.
         :return: Returns downcasted dataframe.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Reduce memory footprint of dataframe')
         logging.info('Started reducing memory footprint.')
         if self.prediction_mode:
             self.dataframe = self.reduce_mem_usage(self.dataframe)
@@ -304,7 +304,7 @@ class PreProcessing:
         where the input data might have been changed in order.
         :return: Updates class instance. Returns dictionary.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Sort columns alphabetically')
         if self.prediction_mode:
             logging.info('Started sorting columns alphabetically.')
             self.dataframe = self.dataframe.sort_index(axis=1)
@@ -318,7 +318,7 @@ class PreProcessing:
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def label_encoder_decoder(self, target, mode='fit', direction='encode'):
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Execute label encoding')
         logging.info('Started label encoding.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if direction == 'encode' and mode == 'fit':
@@ -344,7 +344,7 @@ class PreProcessing:
         :param scaling: Chose 'minmax'.
         :return:
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Scale data')
         if self.prediction_mode:
             logging.info('Started data scaling.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
@@ -380,7 +380,7 @@ class PreProcessing:
                                                 Y_test), self.data_scaled, self.preprocess_decisions
 
     def skewness_removal(self):
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Remove skewness')
         if self.prediction_mode:
             logging.info('Started skewness removal.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
@@ -423,7 +423,7 @@ class PreProcessing:
         :param train_size: Chose how much percentage the train dataframe will have. For cross validation only.
         :return: X_train, X_test, Y_train, Y_test
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Execute test train split')
         if self.prediction_mode:
             logging.info('Skipped test train split due to prediction mode.')
             pass
@@ -490,7 +490,7 @@ class PreProcessing:
         :param nb_bins: Takes a positive integer.
         :return:
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Execute numerical binning')
 
         def binning_on_data(dataframe, cols_to_bin=None):
             num_columns = cols_to_bin.select_dtypes(include=[vartype]).columns
@@ -528,7 +528,7 @@ class PreProcessing:
         :param threshold: integer of any size
         :return:Cleaned dataframe.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Remove cardinality')
 
         def remove_high_cardinality(df, threshold=threshold, cols_to_delete=None):
             if not cols_to_delete:
@@ -575,7 +575,7 @@ class PreProcessing:
         :param mask_as: Group name of grouped rare features.
         :return:
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp('Handle rare features')
 
         def handle_rarity(all_data, threshold=threshold, mask_as=mask_as):
             cat_columns = all_data.select_dtypes(include=['category']).columns
@@ -617,7 +617,7 @@ class PreProcessing:
         :param min_samples: Minimum number of samples required to form a cluster.
         :return: Returns the modified dataframe.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp('Execute clustering as a feature')
 
         def add_dbscan_clusters(dataframe, eps=eps, n_jobs=n_jobs, min_samples=min_samples):
             dataframe_red = dataframe.loc[:, dataframe.columns.isin(self.num_columns)].copy()
@@ -699,7 +699,7 @@ class PreProcessing:
         :param threshold: Maximum percentage of NULLs in a column allowed.
         :return: Updates test and train class attributes.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(' Delete columns with high share of NULLs')
         if self.prediction_mode:
             for high_null_col in self.preprocess_decisions["deleted_high_null_cols"]:
                 del self.dataframe[high_null_col]
@@ -731,7 +731,7 @@ class PreProcessing:
         :param selected_cols: Provide list of columns to define where to replace NULLs
         :return: Returns modified dataframe
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp('Fill nulls')
 
         def static_filling(dataframe, columns=None):
             dataframe[columns] = dataframe[columns].fillna(fill_with, inplace=False)
@@ -800,7 +800,6 @@ class PreProcessing:
         :param threshold: Threshold responsible for outlier deletion. Samples under this threshold will be deleted.
         :return: Returns modified dataframe.
         """
-        self.get_current_timestamp()
         if self.prediction_mode:
             if self.preprocess_decisions[f"isolation_forest"]["how"] == 'append':
                 outlier_detector = self.preprocess_decisions[f"isolation_forest"]["model"]
@@ -856,7 +855,6 @@ class PreProcessing:
         Returns:
             (`:obj:pd.DataFrame`): Filtered dataframe
         """
-        self.get_current_timestamp()
         if self.prediction_mode:
             return self.dataframe
         else:
@@ -889,7 +887,7 @@ class PreProcessing:
         :param threshold: Define by how many range an outlier has to be off to be interpreted as outlier.
         :return: Returns instantiated dataframe object.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp('Handle outliers')
         logging.info('Started outlier handling.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if method == 'isolation' and how == 'append':
@@ -913,7 +911,6 @@ class PreProcessing:
         :param datetime_handling: Chose '
         :return:
         """
-        self.get_current_timestamp()
         if self.prediction_mode:
             if not self.date_columns:
                 logging.info('Started automatic datetime column detection.')
@@ -1030,6 +1027,7 @@ class PreProcessing:
                         dataframe.drop(c, axis=1, inplace=True)
             return dataframe
 
+        self.get_current_timestamp(task='Apply datetime transformation')
         logging.info('Started datetime column handling.')
         if self.prediction_mode:
             datetime_handling = self.preprocess_decisions["datetime_handling"]
@@ -1079,7 +1077,7 @@ class PreProcessing:
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.date_columns_created
 
     def onehot_pca(self):
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Onehot + PCA categorical features')
         if self.prediction_mode:
             if len(self.cat_columns_encoded) > 0:
                 df_branch = self.dataframe[self.cat_columns_encoded].copy()
@@ -1139,7 +1137,7 @@ class PreProcessing:
         :param algorithm:
         :return: Returns modified dataframe.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp('Execute categorical encoding')
         logging.info('Started category encoding.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
@@ -1199,7 +1197,7 @@ class PreProcessing:
         :param threshold: Maximum allowed correlation. Expects a float from -1 to +1.
         :return: Returns modified dataframe.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp('Remove collinearity')
 
         def correlation(dataset, threshold=threshold):
             col_corr = set()  # Set of all the names of deleted columns
@@ -1238,7 +1236,7 @@ class PreProcessing:
         Applies vanilla form of Synthetical Minority Over-Sampling Technique.
         :return: Returns modifie dataframe.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp('Smote data')
         if self.prediction_mode:
             logging.info('Skipped SMOTE due to prediction mode.')
             pass
@@ -1263,7 +1261,7 @@ class PreProcessing:
         :param metric: Metric to evaluate strength of features.
         :return: Returns reduced dataframe.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp('Select best features')
         if self.prediction_mode:
             logging.info('Start filtering for preselected columns.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')

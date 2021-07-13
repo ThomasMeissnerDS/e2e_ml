@@ -61,7 +61,7 @@ class ClassificationModels(postprocessing.FullPipeline):
         return self.preprocess_decisions[f"probability_threshold"]
 
     def logistic_regression_train(self):
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Train logistic regression model')
         algorithm = 'logistic_regression'
         if self.prediction_mode:
             pass
@@ -73,7 +73,7 @@ class ClassificationModels(postprocessing.FullPipeline):
             return self.trained_models
 
     def logistic_regression_predict(self, feat_importance=True, importance_alg='permutation'):
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Predict with Logistic Regression')
         algorithm = 'logistic_regression'
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
@@ -130,7 +130,7 @@ class ClassificationModels(postprocessing.FullPipeline):
         :param use_case: Chose 'binary' or 'regression'
         :return:
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Train Xgboost')
         if self.preferred_training_mode == 'gpu':
             train_on = 'gpu_hist'
             logging.info(f'Start Xgboost model training on {self.preferred_training_mode}.')
@@ -342,7 +342,7 @@ class ClassificationModels(postprocessing.FullPipeline):
         Predicts on test & also new data given the prediction_mode is activated in the class.
         :return: Updates class attributes by its predictions.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Predict with Xgboost')
         algorithm = 'xgboost'
         if self.prediction_mode:
             D_test = xgb.DMatrix(self.dataframe)
@@ -390,7 +390,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 return self.xg_boost_regression
 
     def lgbm_train(self, tune_mode='accurate', gpu_use_dp=True):
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Train LGBM')
         if self.preferred_training_mode == 'gpu':
             train_on = 'gpu'
             gpu_use_dp = True
@@ -553,7 +553,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 return self.trained_models
 
     def lgbm_predict(self, feat_importance=True):
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Predict with LGBM')
         algorithm = 'lgbm'
         model = self.trained_models[f"{algorithm}"]
         if self.prediction_mode:
@@ -595,7 +595,7 @@ class ClassificationModels(postprocessing.FullPipeline):
         Trains an sklearn stacking classifier ensemble.
         :return: Updates class attributes by its predictions.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Train sklearn ensemble')
         algorithm = 'sklearn_ensemble'
         if self.prediction_mode:
             pass
@@ -714,30 +714,31 @@ class ClassificationModels(postprocessing.FullPipeline):
         :param importance_alg: Chose 'permutation' or 'SHAP' (SHAP is very slow due to CPU usage)
         :return: Updates class attributes by its predictions.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Predict with sklearn ensemble')
         algorithm = 'sklearn_ensemble'
         model = self.trained_models[f"{algorithm}"]
         if self.prediction_mode:
             X_test = self.dataframe
-            predicted_probs = model.predict_proba(X_test)
+            partial_probs = model.predict_proba(X_test)
             if self.class_problem == 'binary':
-                partial_probs = np.asarray([line[1] for line in predicted_probs])
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
-                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
             self.predicted_classes[f"{algorithm}"] = predicted_classes
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            predicted_probs = model.predict_proba(X_test)
+            partial_probs = model.predict_proba(X_test)
             if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
                 self.threshold_refiner(predicted_probs, Y_test)
-                partial_probs = np.asarray([line[1] for line in predicted_probs])
                 predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
-                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+                predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
 
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
@@ -768,7 +769,7 @@ class ClassificationModels(postprocessing.FullPipeline):
         Trains an Ngboost regressor.
         :return: Updates class attributes by its predictions.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Train Ngboost')
         algorithm = 'ngboost'
         if self.prediction_mode:
             pass
@@ -905,7 +906,7 @@ class ClassificationModels(postprocessing.FullPipeline):
         :param importance_alg: Chose 'permutation' or 'SHAP' (SHAP is very slow due to CPU usage)
         :return: Updates class attributes by its predictions.
         """
-        self.get_current_timestamp()
+        self.get_current_timestamp(task='Predict with Ngboost')
         algorithm = 'ngboost'
         model = self.trained_models[f"{algorithm}"]
         if self.prediction_mode:
