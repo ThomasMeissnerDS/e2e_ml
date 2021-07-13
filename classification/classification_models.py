@@ -347,12 +347,13 @@ class ClassificationModels(postprocessing.FullPipeline):
         if self.prediction_mode:
             D_test = xgb.DMatrix(self.dataframe)
             model = self.trained_models[f"{algorithm}"]
-            predicted_probs = model.predict(D_test)
+            partial_probs = model.predict(D_test)
             if self.class_problem == 'binary':
-                partial_probs = np.asarray([line[1] for line in predicted_probs])
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
-                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
@@ -366,13 +367,14 @@ class ClassificationModels(postprocessing.FullPipeline):
                 D_test_sample = xgb.DMatrix(X_test, label=Y_test)
             model = self.trained_models[f"{algorithm}"]
             if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-                predicted_probs = model.predict(D_test)
+                partial_probs = model.predict(D_test)
                 if self.class_problem == 'binary':
+                    predicted_probs = np.asarray([line[1] for line in partial_probs])
                     self.threshold_refiner(predicted_probs, Y_test)
-                    partial_probs = np.asarray([line[1] for line in predicted_probs])
                     predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
                 else:
-                    predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+                    predicted_probs = partial_probs
+                    predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
 
                 if feat_importance:
                     self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
