@@ -11,7 +11,7 @@ feature creation, modelling and evaluation with just a few lines of code.
 From Pypi:
 
 ```sh
-pip install e2e
+pip install e2eml
 ```
 We highly recommend to create a new virtual environment first. Then install e2e-ml into it. In the environment also download
 the pretrained spacy model with:
@@ -28,7 +28,7 @@ python -m spacy download en
 
 e2e has been designed to create state-of-the-art machine learning pipelines with a few lines of code. Basic example of usage:
 ```sh
-import e2e
+import e2eml
 import pandas as pd
 # import data
 df = pd.read_csv("Your.csv")
