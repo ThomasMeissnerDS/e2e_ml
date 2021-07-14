@@ -115,6 +115,7 @@ This comes at the cost of runtime. Depending on your data we recommend strong ha
 ## Meta
 
 Creator: Thomas Meißner – [LinkedIn](https://www.linkedin.com/in/thomas-mei%C3%9Fner-m-a-3808b346)
+Consultant: Gabriel Stephen Alexander – [Github](https://github.com/bitsofsteve)
 
 
 [e2e-ml Github repository](https://github.com/ThomasMeissnerDS/e2e_ml)
