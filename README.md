@@ -1,7 +1,7 @@
 # e2e ML
 > An end to end solution for automl. .
 
-Pass in your data, add some information about it and get a full pipelines in return. Data preprocessing, 
+Pass in your data, add some information about it and get a full pipelines in return. Data preprocessing,
 feature creation, modelling and evaluation with just a few lines of code.
 
 ![](header.png)
@@ -11,7 +11,7 @@ feature creation, modelling and evaluation with just a few lines of code.
 From Pypi:
 
 ```sh
-pip install e2e-ml
+pip install e2e
 ```
 We highly recommend to create a new virtual environment first. Then install e2e-ml into it. In the environment also download
 the pretrained spacy model with:
@@ -26,9 +26,9 @@ python -m spacy download en
 
 ## Usage example
 
-e2e-ml has been designed to create state-of-the-art machine learning pipelines with a few lines of code. Basic example of usage:
+e2e has been designed to create state-of-the-art machine learning pipelines with a few lines of code. Basic example of usage:
 ```sh
-import e2e-ml
+import e2e
 import pandas as pd
 # import data
 df = pd.read_csv("Your.csv")
@@ -42,6 +42,7 @@ holdout_target = holdout_df[target].copy()
 del holdout_df[target]
 
 # instantiate the needed blueprints class
+from classification import classification_blueprints
 test_class = classification_blueprints.ClassificationBluePrint(datasource=train_df, 
                         target_variable=target,
                         train_split_type='cross',
@@ -70,7 +71,7 @@ Multiclass blueprints can handle binary and multiclass tasks:
 - ml_special_binary_full_processing_boosting_blender()
 - ml_special_multiclass_auto_model_exploration()
 
-There are regression blueprints as well:
+There are regression blueprints as well (in regression module):
 - ml_bp10_train_test_regression_full_processing_linear_reg()
 - ml_bp11_regression_full_processing_xgboost()
 - ml_bp12_regressions_full_processing_lgbm()
@@ -96,7 +97,7 @@ loaded_test_class.ml_bp01_multiclass_full_processing_xgb_prob(holdout_df, prepro
 print(churn_class.predicted_classes['xgboost'])
 ```
 # Disclaimer
-e2e-ml is not designed to quickly iterate over several algorithms and suggest you the best. It is made to deliver
+e2e is not designed to quickly iterate over several algorithms and suggest you the best. It is made to deliver
 state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contain:
 - preprocessing (outlier, rare feature, datetime, categorical and NLP handling)
 - feature creation (binning, clustering, categorical and NLP features)
@@ -104,13 +105,13 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 - model training with crossfold validation
 - automated hyperparameter tuning
 - model evaluation
-This comes at the cost of runtime. Depending on your data we recommend strong hardware.
+  This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
 
 
 * 0.9.1
-    * First release with classification and regression blueprints.
+  * First release with classification and regression blueprints.
 
 ## Meta
 

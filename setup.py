@@ -30,7 +30,7 @@ requirements = ["ipython>=6",
                 ]
 
 setup(
-    name="e2e_ml",
+    name="e2e",
     version="0.9.1",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
