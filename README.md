@@ -116,6 +116,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 ## Meta
 
 Creator: Thomas Meißner – [LinkedIn](https://www.linkedin.com/in/thomas-mei%C3%9Fner-m-a-3808b346)
+
 Consultant: Gabriel Stephen Alexander – [Github](https://github.com/bitsofsteve)
 
 
