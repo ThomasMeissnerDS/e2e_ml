@@ -162,4 +162,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         return print('The test failed. Please investigate.')
 
 
-blueprint_binary_test_titanic(blueprint='ngboost', dataset='titanic')
+blueprint_binary_test_titanic(blueprint='avg_booster', dataset='titanic')
