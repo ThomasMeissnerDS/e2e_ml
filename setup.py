@@ -27,7 +27,7 @@ requirements = ["ipython>=6",
                 "spacy==3.0.6",
                 "wheel==0.36.2",
                 "xgboost==1.3.3",
-                'en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.0.0/en_core_web_sm-3.0.0.tar.gz']
+                ]
 
 setup(
     name="e2e_ml",

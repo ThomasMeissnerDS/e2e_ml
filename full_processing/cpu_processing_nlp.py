@@ -28,7 +28,14 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         https://www.kaggle.com/anaverageengineer/comlrp-baseline-for-complete-beginners
         """
         logging.info('Download spacy language package.')
-        nlp = spacy.load('en_core_web_sm')
+        try:
+            nlp = spacy.load('en_core_web_sm')
+        except OSError:
+            print('Downloading language model for the spaCy POS tagger\n'
+                  "(don't worry, this will only happen once)")
+            from spacy.cli import download
+            download('en')
+            nlp = spacy.load('en')
         # nlp = spacy.load('en_core_web_lg')
         with nlp.disable_pipes():
             vectors = np.array([nlp(text).vector for text in df[text_column]])
