@@ -8,51 +8,114 @@ feature creation, modelling and evaluation with just a few lines of code.
 
 ## Installation
 
-OS X & Linux:
+From Pypi:
 
 ```sh
-npm install my-crazy-module --save
+pip install e2e-ml
 ```
-
-Windows:
-
+We highly recommend to create a new virtual environment first. Then install e2e-ml into it. In the environment also download
+the pretrained spacy model with:
 ```sh
-edit autoexec.bat
+python3 -m spacy download en
 ```
+or
+```sh
+python -m spacy download en
+```
+(depending on your operating system.)
 
 ## Usage example
 
-A few motivating and useful examples of how your product can be used. Spice this up with code blocks and potentially more screenshots.
-
-_For more examples and usage, please refer to the [Wiki][wiki]._
-
-## Development setup
-
-Describe how to install all development dependencies and how to run an automated test-suite of some kind. Potentially do this for multiple platforms.
-
+e2e-ml has been designed to create state-of-the-art machine learning pipelines with a few lines of code. Basic example of usage:
 ```sh
-make install
-npm test
+import e2e-ml
+import pandas as pd
+# import data
+df = pd.read_csv("Your.csv")
+
+# split into a test/train & holdout set (holdout for prediction illustration here, but not required at all)
+train_df = df.head(1000).copy()
+holdout_df = df.tail(200).copy() # make sure
+# saving the holdout dataset's target for later and delete it from holdout dataset
+target = "target_column"
+holdout_target = holdout_df[target].copy()
+del holdout_df[target]
+
+# instantiate the needed blueprints class
+test_class = classification_blueprints.ClassificationBluePrint(datasource=train_df, 
+                        target_variable=target,
+                        train_split_type='cross',
+                        preferred_training_mode='cpu' # CPU is required for standard installation*
+                        #categorical_columns=cat_columns # you can define categorical columns, otherwise e2e does this automatically
+                        #date_columns=date_columns # you can also define date columns (expected is YYYY-MM-DD format)
+                                                               )
+                                                                 
+"""
+*
+If you install Xgboost & LGBM into the same environment as GPU accelerated versions, you can set preferred_training_mode='gpu'.
+This will massively improve training times and speed up SHAP feature importance for LGBm and Xgboost related tasks.
+For Xgboost this should work out of the box, if installed into a RAPIDS environment.
+"""
+# run actual blueprint
+test_class.ml_bp01_multiclass_full_processing_xgb_prob(preprocessing_type='nlp')
+"""
+When choosing blueprints several options are available:
+
+Multiclass blueprints can handle binary and multiclass tasks:
+- ml_bp00_train_test_binary_full_processing_log_reg_prob()
+- ml_bp01_multiclass_full_processing_xgb_prob()
+- ml_bp02_multiclass_full_processing_lgbm_prob()
+- ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble()
+- ml_bp04_multiclass_full_processing_ngboost()
+- ml_special_binary_full_processing_boosting_blender()
+- ml_special_multiclass_auto_model_exploration()
+
+There are regression blueprints as well:
+- ml_bp10_train_test_regression_full_processing_linear_reg()
+- ml_bp11_regression_full_processing_xgboost()
+- ml_bp12_regressions_full_processing_lgbm()
+- ml_bp13_regression_full_processing_sklearn_stacking_ensemble()
+- ml_bp14_regressions_full_processing_ngboost()
+- ml_special_regression_full_processing_boosting_blender()
+- ml_special_regression_auto_model_exploration()
+
+The preproccesing_type has 2 modes as of now:
+- full (default), which runs all steps except NLP specific ones
+- nlp: Adds some NLP related feature enginering steps.
+"""
+# After running the blueprint the pipeline is done. I can be saved with:
+test_class.save_load_model_file(action='save')
+
+# The blueprint can be loaded with
+loaded_test_class = save_load_model_file(action='load')
+
+# predict on new data (in this case our holdout) with loaded blueprint
+loaded_test_class.ml_bp01_multiclass_full_processing_xgb_prob(holdout_df, preprocessing_type='nlp')
+
+# predictions can be accessed via a class attribute
+print(churn_class.predicted_classes['xgboost'])
 ```
+# Disclaimer
+e2e-ml is not designed to quickly iterate over several algorithms and suggest you the best. It is made to deliver
+state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contain:
+- preprocessing (outlier, rare feature, datetime, categorical and NLP handling)
+- feature creation (binning, clustering, categorical and NLP features)
+- automated feature selection
+- model training with crossfold validation
+- automated hyperparameter tuning
+- model evaluation
+This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
 
 
-* 0.0.1
-    * Work in progress
+* 0.9.1
+    * First release with classification and regression blueprints.
 
 ## Meta
 
-Thomas Meißner – [@YourTwitter](https://www.linkedin.com/in/thomas-mei%C3%9Fner-m-a-3808b346)
+Creator: Thomas Meißner – [LinkedIn](https://www.linkedin.com/in/thomas-mei%C3%9Fner-m-a-3808b346)
 
-Distributed under the XYZ license. See ``LICENSE`` for more information.
 
-[https://github.com/yourname/github-link](https://github.com/dbader/)
+[e2e-ml Github repository](https://github.com/ThomasMeissnerDS/e2e_ml)
 
-## Contributing
-
-1. Fork it (<https://github.com/yourname/yourproject/fork>)
-2. Create your feature branch (`git checkout -b feature/fooBar`)
-3. Commit your changes (`git commit -am 'Add some fooBar'`)
-4. Push to the branch (`git push origin feature/fooBar`)
-5. Create a new Pull Request
