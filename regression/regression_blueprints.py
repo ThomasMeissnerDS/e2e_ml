@@ -5,6 +5,45 @@ import logging
 
 
 class RegressionBluePrint(RegressionModels, NlpPreprocessing):
+    def full_regression_preprocessing(self, df=None, preprocessing_type='full'):
+        """
+        Runs a preprocessing blueprint only. This is useful for building custom pipelines.
+        :param df: Accepts a dataframe to run ml preprocessing on it.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :return: Updates class attributes.
+        """
+        logging.info('Start blueprint.')
+        try:
+            if df.empty:
+                skip_train = False
+            else:
+                self.dataframe = df
+                skip_train = True
+        except AttributeError:
+            skip_train = False
+        self.train_test_split(how=self.train_split_type)
+        self.datetime_converter(datetime_handling='all')
+        if preprocessing_type == 'nlp':
+            self.pos_tagging_pca()
+        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
+        self.cardinality_remover(threshold=100)
+        self.onehot_pca()
+        self.category_encoding(algorithm='target')
+        self.delete_high_null_cols(threshold=0.5)
+        self.fill_nulls(how='static')
+        self.data_binning(nb_bins=10)
+        #self.skewness_removal()
+        self.outlier_care(method='isolation', how='append')
+        self.remove_collinearity(threshold=0.8)
+        self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
+        for nb_cluster in range(2, 10):
+            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
+        if self.low_memory_mode:
+            self.reduce_memory_footprint()
+        self.automated_feature_selection(metric='logloss')
+        self.sort_columns_alphabetically()
+
     def train_pred_selected_model(self, algorithm=None, skip_train=False, tune_mode='simple'):
         logging.info(f'Start ML training {algorithm}')
         if algorithm == 'xgboost':
