@@ -73,13 +73,13 @@ def load_titanic_data():
 
 
 def synthetic_multiclass_data():
-    data = pd.read_csv("synthetic_multi_classifcation.csv")
-    test_df = data.head(2500).copy()
-    val_df = data.tail(499).copy()
-    val_df_target = val_df["recommendation"].copy()
-    del val_df["recommendation"]
-    test_target = "recommendation"
-    test_categorical_cols = ["status", "country"]
+    data = pd.read_csv("faults.csv")
+    test_df = data.head(1500).copy()
+    val_df = data.tail(441).copy()
+    val_df_target = val_df["target"].copy()
+    del val_df["target"]
+    test_target = "target"
+    test_categorical_cols = None
     return test_df, test_target, val_df, val_df_target, test_categorical_cols
 
 
@@ -162,4 +162,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         return print('The test failed. Please investigate.')
 
 
-blueprint_binary_test_titanic(blueprint='avg_booster', dataset='titanic')
+blueprint_binary_test_titanic(blueprint='ngboost', dataset='titanic')

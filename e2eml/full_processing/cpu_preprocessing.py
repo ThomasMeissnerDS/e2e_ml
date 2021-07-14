@@ -318,23 +318,65 @@ class PreProcessing:
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def label_encoder_decoder(self, target, mode='fit', direction='encode'):
+        """
+        Solution found at:
+        https://stackoverflow.com/questions/21057621/sklearn-labelencoder-with-never-seen-before-values/48169252#48169252
+
+        The implementation has been adjusted towards e2eml's needs.
+        :param target:
+        :param mode:
+        :param direction:
+        :return:
+        """
         self.get_current_timestamp(task='Execute label encoding')
         logging.info('Started label encoding.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-        if direction == 'encode' and mode == 'fit':
-            le = preprocessing.LabelEncoder()
-            target = le.fit_transform(target)
-            self.preprocess_decisions["label_encoder"] = le
-            self.labels_encoded = True
-        elif direction == 'encode' and mode == 'predict':
-            le = self.preprocess_decisions["label_encoder"]
-            le.transform(target)
+        from collections import defaultdict
+        from sklearn.base import BaseEstimator, TransformerMixin
+        from pandas.api.types import CategoricalDtype
+        import pandas as pd
+        import numpy as np
+
+        class PandasLabelEncoder(BaseEstimator, TransformerMixin):
+            def __init__(self):
+                self.label_dict = defaultdict(list)
+
+            def fit(self, X):
+                X = X.astype('category')
+                try:
+                    X = X.to_frame()
+                except Exception:
+                    pass
+                cols = X.columns
+                values = list(map(lambda col: X[col].cat.categories, cols))
+                self.label_dict = dict(zip(cols, values))
+                # return as category for xgboost or lightgbm
+                return self
+
+            def transform(self, X):
+                try:
+                    X = X.to_frame()
+                except Exception:
+                    pass
+                # check missing columns
+                missing_col = set(X.columns)-set(self.label_dict.keys())
+                if missing_col:
+                    raise ValueError('the column named {} is not in the label dictionary. Check your fitting data.'.format(missing_col))
+                return X.apply(lambda x: x.astype('category').cat.set_categories(self.label_dict[x.name]).cat.codes.astype('category').cat.set_categories(np.arange(len(self.label_dict[x.name]))))
+
+            def inverse_transform(self, X):
+                return X.apply(lambda x: pd.Categorical.from_codes(codes=x.values,
+                                                                   categories=self.label_dict[x.name]))
+        if self.prediction_mode:
+            enc = self.preprocess_decisions["label_encoder"]
+            target = enc.transform(target)
         else:
-            le = self.preprocess_decisions["label_encoder"]
-            le.inverse_transform(target)
-        logging.info('Finished label encoding.')
-        del le
-        _ = gc.collect()
+            enc = PandasLabelEncoder()
+            enc.fit(target)
+            target = enc.transform(target)
+            self.preprocess_decisions["label_encoder"] = enc
+        self.labels_encoded = True
+        target = target[self.target_variable].astype(float)
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         return target
 
@@ -426,7 +468,6 @@ class PreProcessing:
         self.get_current_timestamp(task='Execute test train split')
         if self.prediction_mode:
             logging.info('Skipped test train split due to prediction mode.')
-            pass
         elif how == 'cross':
             logging.info('Started test train split.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
@@ -438,7 +479,9 @@ class PreProcessing:
                 Y_test = Y_test.astype(float)
             except Exception:
                 Y_train = self.label_encoder_decoder(Y_train, mode='fit', direction='encode')
-                Y_test = self.label_encoder_decoder(Y_train, mode='predict', direction='encode')
+                #Y_train = Y_train[self.target_variable]
+                Y_test = self.label_encoder_decoder(Y_test, mode='predict', direction='encode')
+                #Y_test = Y_test[self.target_variable]
             del X_train[self.target_variable]
             del X_test[self.target_variable]
             _ = gc.collect()

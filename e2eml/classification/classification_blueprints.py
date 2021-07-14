@@ -322,7 +322,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             pass
         else:
             self.ngboost_train(tune_mode='accurate')
-        self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
+        self.ngboost_predict(feat_importance=True, importance_alg='permutation')
         algorithm = 'ngboost'
         self.classification_eval(algorithm)
         self.prediction_mode = True

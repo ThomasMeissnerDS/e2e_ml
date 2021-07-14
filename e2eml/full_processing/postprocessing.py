@@ -71,6 +71,8 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
         else:
             logging.info('Started classification evaluation.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            print(Y_train)
+            print(Y_test)
             """
             We need a fallback logic as we might receive different types of data.
             If pred_class will not work with numpy arrays and needs the .any() function.
@@ -132,7 +134,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                 roc_auc = roc_auc_score(Y_test, y_hat_probs)
                 print(f"The ROC_AUC score is {roc_auc}")
             else:
-                pass
+                roc_auc = None
             f1_score_macro = f1_score(Y_test, y_hat, average='macro')
             print(f"The macro F1 score is {f1_score_macro}")
             logging.info(f'The macro F1 score of {algorithm} is {f1_score_macro}')

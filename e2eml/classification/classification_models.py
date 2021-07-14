@@ -101,7 +101,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
             elif feat_importance and importance_alg == 'permutation':
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
+                    model, X_test, Y_test.astype(int), n_repeats=10, random_state=42, n_jobs=-1)
                 permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
@@ -473,13 +473,14 @@ class ClassificationModels(postprocessing.FullPipeline):
                 return self.trained_models
 
             else:
+                nb_classes = self.num_classes
                 def objective(trial):
                     dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
                     param = {
                         'objective': 'multiclass',
                         'metric': 'multi_logloss',
                         'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
-                        'num_class': Y_train.nunique(),
+                        'num_class': nb_classes,
                         'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                         'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
                         'num_leaves': trial.suggest_int('num_leaves', 2, 256),
@@ -500,11 +501,13 @@ class ClassificationModels(postprocessing.FullPipeline):
                         matthew = matthews_corrcoef(Y_test, pred_labels)
                         return matthew
                     else:
-                        result = lgb.cv(param, train_set=dtrain, nfold=5, num_boost_round=param['num_boost_round'],
+                        try:
+                            result = lgb.cv(param, train_set=dtrain, nfold=5, num_boost_round=param['num_boost_round'],
                                         early_stopping_rounds=10, callbacks=[pruning_callback], seed=42, verbose_eval=False)
                         #fobj=lgb_matth_score)
-                        print(result)
-                        avg_result = np.mean(np.array(result["multi_logloss-mean"])) # Planned: matthew-mean
+                            avg_result = np.mean(np.array(result["multi_logloss-mean"])) # Planned: matthew-mean
+                        except Exception:
+                            avg_result = 100
                         return avg_result
 
                 algorithm = 'lgbm'
@@ -527,7 +530,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     'metric': 'multi_logloss',
                     'class_weight': classes_weights,
                     'num_boost_round': lgbm_best_param["num_boost_round"],
-                    'num_class': Y_train.nunique(),
+                    'num_class': nb_classes,
                     'lambda_l1': lgbm_best_param["lambda_l1"],
                     'lambda_l2': lgbm_best_param["lambda_l2"],
                     'num_leaves': lgbm_best_param["num_leaves"],
@@ -743,7 +746,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
             elif feat_importance and importance_alg == 'permutation':
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
+                    model, X_test, Y_test.astype(int), n_repeats=10, random_state=42, n_jobs=-1)
                 permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
@@ -930,7 +933,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns,  explainer="kernel")
             elif feat_importance and importance_alg == 'permutation':
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
+                    model, X_test, Y_test.astype(int), n_repeats=10, random_state=42, n_jobs=-1)
                 permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
