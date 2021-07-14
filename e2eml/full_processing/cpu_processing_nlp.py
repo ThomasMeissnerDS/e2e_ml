@@ -1,14 +1,12 @@
-from full_processing import cpu_preprocessing
+from e2eml.full_processing import cpu_preprocessing
 from sklearn.decomposition import PCA
 import spacy
 import nltk
-from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-from nltk import pos_tag, pos_tag_sents
+from nltk import pos_tag
 import pandas as pd
 import numpy as np
 import logging
-import gc
 
 nltk.download('punkt')
 nltk.download('averaged_perceptron_tagger')
@@ -35,7 +33,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                   "(don't worry, this will only happen once)")
             from spacy.cli import download
             download('en')
-            nlp = spacy.load('en')
+            nlp = spacy.load('en_core_web_sm')
         # nlp = spacy.load('en_core_web_lg')
         with nlp.disable_pipes():
             vectors = np.array([nlp(text).vector for text in df[text_column]])

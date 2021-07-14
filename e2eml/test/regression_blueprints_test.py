@@ -1,4 +1,4 @@
-import regression.regression_blueprints as rb
+from e2eml.regression import regression_blueprints as rb
 import pandas as pd
 from sklearn.metrics import mean_absolute_error
 # track memory consumption in terminal: dmesg

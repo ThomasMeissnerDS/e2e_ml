@@ -1,4 +1,4 @@
-from full_processing import cpu_preprocessing
+from e2eml.full_processing import cpu_preprocessing
 from sklearn.metrics import matthews_corrcoef, roc_auc_score, f1_score
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, median_absolute_error
 from sklearn.metrics import confusion_matrix, classification_report

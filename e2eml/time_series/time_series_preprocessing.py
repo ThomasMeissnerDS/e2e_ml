@@ -1,9 +1,8 @@
-from full_processing import postprocessing
+from e2eml.full_processing import postprocessing
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.stattools import kpss
 import matplotlib.pyplot as plt
 import pandas as pd
-import logging
 
 plt.style.use('fivethirtyeight')
 

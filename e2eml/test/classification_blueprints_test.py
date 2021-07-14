@@ -1,7 +1,7 @@
-import classification.classification_blueprints as cb
+from e2eml.classification import classification_blueprints as cb
 import pandas as pd
 from sklearn.metrics import matthews_corrcoef
-from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.metrics import classification_report
 import re
 
 

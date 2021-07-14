@@ -1,6 +1,5 @@
-from classification.classification_models import ClassificationModels
-from full_processing.cpu_processing_nlp import NlpPreprocessing
-import numpy as np
+from e2eml.classification.classification_models import ClassificationModels
+from e2eml.full_processing.cpu_processing_nlp import NlpPreprocessing
 import logging
 
 

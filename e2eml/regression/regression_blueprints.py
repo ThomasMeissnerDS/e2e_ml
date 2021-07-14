@@ -1,6 +1,5 @@
-from regression.regression_models import RegressionModels
-from full_processing.cpu_processing_nlp import NlpPreprocessing
-import numpy as np
+from e2eml.regression.regression_models import RegressionModels
+from e2eml.full_processing.cpu_processing_nlp import NlpPreprocessing
 import logging
 
 

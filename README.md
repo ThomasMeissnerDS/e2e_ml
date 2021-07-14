@@ -29,6 +29,7 @@ python -m spacy download en
 e2e has been designed to create state-of-the-art machine learning pipelines with a few lines of code. Basic example of usage:
 ```sh
 import e2eml
+from e2eml.classification import classification_blueprints
 import pandas as pd
 # import data
 df = pd.read_csv("Your.csv")
@@ -110,7 +111,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 ## Release History
 
 
-* 0.9.1
+* 0.9.4
   * First release with classification and regression blueprints.
 
 ## Meta
