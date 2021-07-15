@@ -27,9 +27,27 @@ warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 class PreProcessing:
     """
-    The preprocessing base class expects a Pandas dataframe and the target variable at least.
-    Date columns and categorical columns can be passed as lists additionally for respective preprocessing.
-    A unique identifier (i.e. an ID column) can be passed as well to preserve this information for later processing.
+    This class stores all pipeline relevant information. The attribute "df_dict" always holds train and test as well as
+    to predict data. The attribute "preprocess_decisions" stores encoders and other information generated during the
+    model training. The attributes "predicted_classes" and "predicted_probs" store dictionaries (model names are dictionary keys)
+    with predicted classes and probabilities (classification tasks) while "predicted_values" stores regression based
+    predictions. The attribute "evaluation_scores" keeps track of model evaluation metrics (in dictionary format).
+    :param datasource: Expects a Pandas dataframe (containing the target feature as a column)
+    :param target_variable: Name of the target feature's column within the datasource dataframe.
+    :param date_columns: Date columns can be passed as lists additionally for respective preprocessing. If not provided
+    e2eml will try to detect datetime columns automatically. Date format is expected as YYYY-MM-DD anyway.
+    :param categorical_columns: Categorical columns can be passed as lists additionally for respective preprocessing.
+    If not provided e2eml will try to detect categorical columns automatically.
+    :param nlp_columns: NLP columns can be passed specifically. This only makes sense, if the chosen blueprint runs under 'nlp' processing.
+    If NLP columns are not declared, categorical columns will be interpreted as such.
+    :param unique_identifier: A unique identifier (i.e. an ID column) can be passed as well to preserve this information
+     for later processing.
+    :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
+    :param preferred_training_mode: Must be CPU, if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
+    :param low_memory_mode: Adds a preprocessing feature to reduce dataframe memory footprint. Will lead to a loss in
+    model performance. Will be extended by further memory savings features in future releases.
+    However we highly recommend GPU usage to heavily decrease model training times.
     """
 
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
@@ -136,6 +154,11 @@ class PreProcessing:
         return f"Current target: {self.target_variable}"
 
     def get_current_timestamp(self, task=None):
+        """
+        Prints and return the current timestamp (not timezone aware)
+        :param task: Expects a string. Can be used to inject the printed message with context.
+        :return: Returns timestamp as string.
+        """
         t = time.localtime()
         if task:
             current_time = time.strftime("%H:%M:%S", t)
@@ -217,6 +240,18 @@ class PreProcessing:
 
     def save_load_model_file(self, model_object=None, model_path=None, algorithm=None, algorithm_variant='none',
                              file_type='.dat', action='save', clean=True):
+        """
+        Function to save and load class instances. This function shall be used to save whole blueprints and to
+        reload them.
+        :param model_object: The blueprint class instance to be saved.
+        :param model_path: Expects a string. The path to save the model to or load from.
+        :param algorithm: Expects a string. Used to name the final stored file.
+        :param algorithm_variant: Expects a string. Used to name the final stored file.
+        :param file_type: File type to be saved as. Default ".dat"
+        :param action: Chose 'save' or 'load'.
+        :param clean: Expects a boolean. If True, deletes the provided class instance instantly after saving.
+        :return: When action is 'load', returns the loaded blueprint class instance.
+        """
         if self.save_models_path:
             path = self.save_models_path
         elif model_path:
@@ -244,8 +279,10 @@ class PreProcessing:
 
     def reduce_mem_usage(self, df):
         """
-        iterate through all the columns of a dataframe and modify the data type
+        Iterate through all the columns of a dataframe and modify the data type
         to reduce memory usage.
+        :param df: Expects a Pandas dataframe.
+        :return: Returns downcasted dataframe.
         """
         start_mem = df.memory_usage().sum() / 1024 ** 2
         print('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
@@ -317,16 +354,14 @@ class PreProcessing:
             logging.info('Finished sorting columns alphabetically.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def label_encoder_decoder(self, target, mode='fit', direction='encode'):
+    def label_encoder_decoder(self, target):
         """
-        Solution found at:
+        Takes a Pandas series and encodes string-based labels to numeric values. Flags previously unseen
+        values with -1. This implementation has been found at:
         https://stackoverflow.com/questions/21057621/sklearn-labelencoder-with-never-seen-before-values/48169252#48169252
-
         The implementation has been adjusted towards e2eml's needs.
-        :param target:
-        :param mode:
-        :param direction:
-        :return:
+        :param target: Expects Pandas Series.
+        :return: Return Pandas Series.
         """
         self.get_current_timestamp(task='Execute label encoding')
         logging.info('Started label encoding.')
@@ -384,7 +419,7 @@ class PreProcessing:
         """
         Scales the data using the chosen scaling algorithm.
         :param scaling: Chose 'minmax'.
-        :return:
+        :return: Returns scaled dataframes
         """
         self.get_current_timestamp(task='Scale data')
         if self.prediction_mode:
@@ -422,6 +457,11 @@ class PreProcessing:
                                                 Y_test), self.data_scaled, self.preprocess_decisions
 
     def skewness_removal(self):
+        """
+        Loops through the in-class stored dataframe columns and checks the skewness. If skewness exceeds a certain threshold,
+        executes log transformation.
+        :return: Updates class attributes.
+        """
         self.get_current_timestamp(task='Remove skewness')
         if self.prediction_mode:
             logging.info('Started skewness removal.')
@@ -478,9 +518,9 @@ class PreProcessing:
                 Y_train = Y_train.astype(float)
                 Y_test = Y_test.astype(float)
             except Exception:
-                Y_train = self.label_encoder_decoder(Y_train, mode='fit', direction='encode')
+                Y_train = self.label_encoder_decoder(Y_train)
                 #Y_train = Y_train[self.target_variable]
-                Y_test = self.label_encoder_decoder(Y_test, mode='predict', direction='encode')
+                Y_test = self.label_encoder_decoder(Y_test)
                 #Y_test = Y_test[self.target_variable]
             del X_train[self.target_variable]
             del X_test[self.target_variable]
@@ -531,7 +571,7 @@ class PreProcessing:
         Takes numerical columns and splits them into desired number of bins. Bins will be attached as
         new columns to the dataframe.
         :param nb_bins: Takes a positive integer.
-        :return:
+        :return: Updates class instance.
         """
         self.get_current_timestamp(task='Execute numerical binning')
 
@@ -616,7 +656,7 @@ class PreProcessing:
         given threshold. These features will be grouped together as defined by mask_as parameter.
         :param threshold: Minimum share of categories to be not grouped as misc. Takes a float between 0 and 1.
         :param mask_as: Group name of grouped rare features.
-        :return:
+        :return: Updates class attributes
         """
         self.get_current_timestamp('Handle rare features')
 
@@ -886,17 +926,13 @@ class PreProcessing:
             _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def iqr_remover(self, df, column, threshold=1.5):
-        """Remove outliers from a dataframe by column, including optional
-           whiskers, removing rows for which the column value are
-           less than Q1-1.5IQR or greater than Q3+1.5IQR.
-        Args:
-            df (`:obj:pd.DataFrame`): A pandas dataframe to subset
-            column (str): Name of the column to calculate the subset from.
-            whisker_width (float): Optional, loosen the IQR filter by a
-                                   factor of `whisker_width` * IQR.
-        Returns:
-            (`:obj:pd.DataFrame`): Filtered dataframe
+    def iqr_remover(self, threshold=1.5):
+        """
+        Remove outliers from a dataframe by column, including optional whiskers, removing rows for which the column value
+         are less than Q1-1.5IQR or greater than Q3+1.5IQR.
+        :param threshold: whisker_width (float): Optional, loosen the IQR filter by a factor of `whisker_width` * IQR.
+        Default is 1.5.
+        :return: Updates class attributed.
         """
         if self.prediction_mode:
             return self.dataframe
@@ -1120,6 +1156,10 @@ class PreProcessing:
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.date_columns_created
 
     def onehot_pca(self):
+        """
+        Takes categorical columns, executes onehot encoding on them and reduces dimensionality with PCA.
+        :return: Updates class attributes.
+        """
         self.get_current_timestamp(task='Onehot + PCA categorical features')
         if self.prediction_mode:
             if len(self.cat_columns_encoded) > 0:
@@ -1177,7 +1217,7 @@ class PreProcessing:
     def category_encoding(self, algorithm='target'):
         """
         Takes in a dataframe and applies the chosen category encoding algorithm to categorical columns.
-        :param algorithm:
+        :param algorithm: Chose type of encoding as 'target' (default), 'onehot', 'woee', 'ordinal', 'leaveoneout' and 'GLMM'.
         :return: Returns modified dataframe.
         """
         self.get_current_timestamp('Execute categorical encoding')
@@ -1277,7 +1317,7 @@ class PreProcessing:
     def smote_data(self):
         """
         Applies vanilla form of Synthetical Minority Over-Sampling Technique.
-        :return: Returns modifie dataframe.
+        :return: Returns modified dataframe.
         """
         self.get_current_timestamp('Smote data')
         if self.prediction_mode:
