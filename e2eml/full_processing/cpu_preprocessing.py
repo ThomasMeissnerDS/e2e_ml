@@ -5,6 +5,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import TimeSeriesSplit
 import numpy as np
 import pandas as pd
+from pandas.api.types import CategoricalDtype
 from category_encoders import *
 from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import IsolationForest
@@ -13,6 +14,8 @@ from sklearn.mixture import GaussianMixture
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.decomposition import PCA
+from collections import defaultdict
+from sklearn.base import BaseEstimator, TransformerMixin
 from boostaroota import BoostARoota
 import gc
 import warnings
@@ -366,11 +369,6 @@ class PreProcessing:
         self.get_current_timestamp(task='Execute label encoding')
         logging.info('Started label encoding.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-        from collections import defaultdict
-        from sklearn.base import BaseEstimator, TransformerMixin
-        from pandas.api.types import CategoricalDtype
-        import pandas as pd
-        import numpy as np
 
         class PandasLabelEncoder(BaseEstimator, TransformerMixin):
             def __init__(self):
