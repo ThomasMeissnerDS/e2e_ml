@@ -126,7 +126,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                         np.linspace(0, 1, 100),
                         label='baseline',
                         linestyle='--')
-                plt.title('Receiver Operating Characteristic Curve', fontsize=18)
+                plt.title(f'Receiver Operating Characteristic Curve for {algorithm}', fontsize=18)
                 plt.ylabel('TPR', fontsize=16)
                 plt.xlabel('FPR', fontsize=16)
                 plt.legend(fontsize=12)

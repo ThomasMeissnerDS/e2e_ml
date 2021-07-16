@@ -21,6 +21,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.inspection import permutation_importance
 import matplotlib.pyplot as plt
 import warnings
+
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 
@@ -50,6 +51,7 @@ class RegressionModels(postprocessing.FullPipeline):
     model performance. Will be extended by further memory savings features in future releases.
     However we highly recommend GPU usage to heavily decrease model training times.
     """
+
     def linear_regression_train(self):
         """
         Trains a simple Linear regression classifier.
@@ -87,7 +89,8 @@ class RegressionModels(postprocessing.FullPipeline):
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
                 except Exception:
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
             elif feat_importance and importance_alg == 'permutation':
@@ -132,8 +135,9 @@ class RegressionModels(postprocessing.FullPipeline):
                         'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
                         'eval_metric': 'mae',
                         'verbose': 0,
-                        'tree_method': train_on, #use GPU for training
-                        'max_depth': trial.suggest_int('max_depth', 2, 10),  #maximum depth of the decision trees being trained
+                        'tree_method': train_on,  # use GPU for training
+                        'max_depth': trial.suggest_int('max_depth', 2, 10),
+                        # maximum depth of the decision trees being trained
                         'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
                         'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
                         'num_leaves': trial.suggest_int('num_leaves', 2, 256),
@@ -152,7 +156,8 @@ class RegressionModels(postprocessing.FullPipeline):
                         mae = mean_absolute_error(Y_test, preds)
                         return mae
                     else:
-                        result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
+                        result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'],
+                                        early_stopping_rounds=10,
                                         as_pandas=True, seed=42, callbacks=[pruning_callback], nfold=5)
                         return result['test-mae-mean'].mean()
 
@@ -163,19 +168,21 @@ class RegressionModels(postprocessing.FullPipeline):
                     study = optuna.create_study(direction='minimize')
                 study.optimize(objective, n_trials=30)
                 self.optuna_studies[f"{algorithm}"] = {}
-                #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
-                #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+                # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+                # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
                 optuna.visualization.plot_optimization_history(study)
                 optuna.visualization.plot_param_importances(study)
-                self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
-                self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(
+                    study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(
+                    study)
                 lgbm_best_param = study.best_trial.params
                 param = {
                     'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
                     'eval_metric': 'mae',
                     'verbose': 0,
-                    'tree_method': train_on, #use GPU for training
-                    'max_depth': lgbm_best_param["max_depth"],  #maximum depth of the decision trees being trained
+                    'tree_method': train_on,  # use GPU for training
+                    'max_depth': lgbm_best_param["max_depth"],  # maximum depth of the decision trees being trained
                     'alpha': lgbm_best_param["alpha"],
                     'lambda': lgbm_best_param["lambda"],
                     'num_leaves': lgbm_best_param["num_leaves"],
@@ -199,19 +206,21 @@ class RegressionModels(postprocessing.FullPipeline):
                 algorithm = 'xgboost'
                 if not param:
                     param = {
-                        'eta': 0.001, #learning rate,
-                        #'gamma': 5, #Minimum loss reduction required to make a further partition on a leaf node of the tree. The larger gamma is, the more conservative the algorithm will be.
-                        'verbosity': 0, #0 (silent), 1 (warning), 2 (info), 3 (debug)
-                        'alpha' : 10, #L1 regularization term on weights. Increasing this value will make model more conservative. (default = 0)
-                        'lambda': 15, #L2 regularization term on weights. Increasing this value will make model more conservative. (default = 1)
+                        'eta': 0.001,  # learning rate,
+                        # 'gamma': 5, #Minimum loss reduction required to make a further partition on a leaf node of the tree. The larger gamma is, the more conservative the algorithm will be.
+                        'verbosity': 0,  # 0 (silent), 1 (warning), 2 (info), 3 (debug)
+                        'alpha': 10,
+                        # L1 regularization term on weights. Increasing this value will make model more conservative. (default = 0)
+                        'lambda': 15,
+                        # L2 regularization term on weights. Increasing this value will make model more conservative. (default = 1)
                         'subsample': 0.8,
                         'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
                         'eval_metric': 'mae',
-                        #'colsample_bytree': 0.3,
-                        'max_depth': 2, #maximum depth of the decision trees being trained
-                        'tree_method': 'gpu_hist', #use GPU for training
+                        # 'colsample_bytree': 0.3,
+                        'max_depth': 2,  # maximum depth of the decision trees being trained
+                        'tree_method': 'gpu_hist',  # use GPU for training
                         'steps': 50000
-                        } #the number of classes in the dataset
+                    }  # the number of classes in the dataset
                 else:
                     param = param
 
@@ -253,14 +262,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
 
     def lgbm_train(self, tune_mode='accurate', gpu_use_dp=True):
-        """
-        Trains an LGBM model by the given parameters.
-        :param tune_mode: 'Simple' for simple 80-20 split validation. 'Accurate': Each hyperparameter set will be validated
-        with 10-fold cross validation. Longer runtimes, but higher performance. (Default: 'Accurate')
-        :param gpu_use_dp: If True and when GPU accelerated, LGBM will use bigger floats for higher accuracy, but at the
-        cost of longer runtimes (Default: True)
-        """
-        self.get_current_timestamp(task='Train with LGBM')
+        self.get_current_timestamp()
         if self.preferred_training_mode == 'gpu':
             train_on = 'gpu'
             gpu_use_dp = True
@@ -290,26 +292,30 @@ class RegressionModels(postprocessing.FullPipeline):
                     'device': train_on,
                     'gpu_use_dp': gpu_use_dp
                 }
-                pruning_callback = optuna.integration.LightGBMPruningCallback(trial, "mean_absolute_error")
                 if tune_mode == 'simple':
                     gbm = lgb.train(param, dtrain, verbose_eval=False)
                     preds = gbm.predict(X_test)
                     mae = mean_absolute_error(Y_test, preds)
                     return mae
                 else:
-                    result = lgb.cv(param, train_set=dtrain, nfold=5, num_boost_round=param['num_boost_round'],
-                                    early_stopping_rounds=10, callbacks=[pruning_callback], seed=42, verbose_eval=False)
-                    avg_result = np.mean(np.array(result["mean_absolute_error-mean"]))
+                    pruning_callback = optuna.integration.LightGBMPruningCallback(trial, "l1")
+                    result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
+                                        stratified=False, callbacks=[pruning_callback],
+                                        early_stopping_rounds=10, seed=42,
+                                        verbose_eval=False)
+                    avg_result = result['l1-mean'][-1]
                     return avg_result
+
             algorithm = 'lgbm'
             study = optuna.create_study(direction='minimize')
-            study.optimize(objective, n_trials=20)
+            study.optimize(objective, n_trials=40)
             self.optuna_studies[f"{algorithm}"] = {}
-            #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
-            #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
             optuna.visualization.plot_optimization_history(study)
             optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(
+                study)
             self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
             lgbm_best_param = study.best_trial.params
             param = {
@@ -355,7 +361,8 @@ class RegressionModels(postprocessing.FullPipeline):
 
             if feat_importance:
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
                 except Exception:
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
             else:
@@ -411,7 +418,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     level0.append(('ard', ARDRegression()))
                     level0.append(('ridge', RidgeCV()))
                     level0.append(('qda', BayesianRidge()))
-                    level0.append(('rdf',  RandomForestRegressor(max_depth=5, n_jobs=-2)))
+                    level0.append(('rdf', RandomForestRegressor(max_depth=5, n_jobs=-2)))
                     # define meta learner model
                     level1 = GradientBoostingRegressor(n_estimators=5000)
                     # define the stacking ensemble
@@ -455,7 +462,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 level0.append(('ard', ARDRegression()))
                 level0.append(('ridge', RidgeCV()))
                 level0.append(('qda', BayesianRidge()))
-                level0.append(('rdf',  RandomForestRegressor(max_depth=5, n_jobs=-2)))
+                level0.append(('rdf', RandomForestRegressor(max_depth=5, n_jobs=-2)))
                 # define meta learner model
                 level1 = GradientBoostingRegressor(n_estimators=5000)
                 # define the stacking ensemble
@@ -488,7 +495,8 @@ class RegressionModels(postprocessing.FullPipeline):
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
                 except Exception:
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
             elif feat_importance and importance_alg == 'permutation':
@@ -578,15 +586,17 @@ class RegressionModels(postprocessing.FullPipeline):
                                              fit_params={'X_val': X_test, 'Y_val': Y_test, 'early_stopping_rounds': 10})
                     mae = np.mean(scores)
                     return mae
+
             algorithm = 'ngboost'
             study = optuna.create_study(direction='maximize')
             study.optimize(objective, n_trials=20)
             self.optuna_studies[f"{algorithm}"] = {}
-            #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
-            #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
             optuna.visualization.plot_optimization_history(study)
             optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(
+                study)
             self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
             lgbm_best_param = study.best_trial.params
 
@@ -654,7 +664,8 @@ class RegressionModels(postprocessing.FullPipeline):
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer="kernel")
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns, explainer="kernel")
                 except Exception:
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer="kernel")
             elif feat_importance and importance_alg == 'permutation':
@@ -672,4 +683,3 @@ class RegressionModels(postprocessing.FullPipeline):
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted
         return self.predicted_values
-

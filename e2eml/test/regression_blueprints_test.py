@@ -79,4 +79,4 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         pass
 
 
-blueprint_regression_test_housingprices(blueprint='avg_booster')
+blueprint_regression_test_housingprices(blueprint='lgbm')

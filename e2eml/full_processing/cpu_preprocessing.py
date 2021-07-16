@@ -100,7 +100,14 @@ class PreProcessing:
         else:
             self.class_problem = ml_task
 
-        if preferred_training_mode == 'cpu' or preferred_training_mode == 'gpu':
+        if preferred_training_mode == 'cpu':
+            logging.warning("""
+            CPU mode has been chosen. Installing e2eml into an environment where LGBM and Xgboost have been installed with GPU acceleration
+            is recommended to be able to use preferred_training_mode='gpu'. This will speed up model training and feature importance
+            via SHAP. 
+            """)
+            self.preferred_training_mode = preferred_training_mode
+        elif preferred_training_mode == 'gpu':
             self.preferred_training_mode = preferred_training_mode
         else:
             self.preferred_training_mode = 'cpu'

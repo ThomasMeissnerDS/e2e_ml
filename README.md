@@ -43,11 +43,12 @@ holdout_target = holdout_df[target].copy()
 del holdout_df[target]
 
 # instantiate the needed blueprints class
-from classification import classification_blueprints
+from classification import classification_blueprints # regression bps are available with from regression import regression_blueprints
 test_class = classification_blueprints.ClassificationBluePrint(datasource=train_df, 
                         target_variable=target,
                         train_split_type='cross',
-                        preferred_training_mode='cpu' # CPU is required for standard installation*
+                        preferred_training_mode='cpu', # CPU is required for standard installation*
+                        tune_mode='accurate' # hyperparameter sets will be validated with 10-fold CV Set this to 'simple' for 1-fold CV
                         #categorical_columns=cat_columns # you can define categorical columns, otherwise e2e does this automatically
                         #date_columns=date_columns # you can also define date columns (expected is YYYY-MM-DD format)
                                                                )
@@ -113,7 +114,8 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 * 0.9.7
   * Enabled tune_mode parameter during class instantiation.
   * Updated docstings across all functions and changed model defaults.
-  * Multiple bug fixes (LGBM accurate mode, label encoding and permutation tests).
+  * Multiple bug fixes (LGBM regression accurate mode, label encoding and permutation tests).
+  * Enhanced user information & better ROC_AUC display
 * 0.9.4
   * First release with classification and regression blueprints. (not available anymore)
 
