@@ -31,7 +31,7 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
     titanic_auto_ml = rb.RegressionBluePrint(datasource=test_df,
                                    target_variable=test_target,
                                    categorical_columns=test_categorical_cols,
-                                   preferred_training_mode='gpu',
+                                   preferred_training_mode='auto',
                                              tune_mode='accurate')
     if blueprint == 'lgbm':
         titanic_auto_ml.ml_bp12_regressions_full_processing_lgbm()
@@ -68,6 +68,13 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         val_y_hat = titanic_auto_ml.predicted_values['linear_regression']
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
+    elif blueprint == 'auto_select':
+        titanic_auto_ml.ml_special_regression_auto_model_exploration()
+        print("Start prediction on holdout dataset")
+        titanic_auto_ml.ml_special_regression_auto_model_exploration(val_df)
+        val_y_hat = titanic_auto_ml.predicted_values[titanic_auto_ml.best_model]
+        mae = mean_absolute_error(val_df_target, val_y_hat)
+        print(mae)
     elif blueprint == 'avg_booster':
         titanic_auto_ml.ml_special_regression_full_processing_boosting_blender()
         print("Start prediction on holdout dataset")
@@ -79,4 +86,4 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         pass
 
 
-blueprint_regression_test_housingprices(blueprint='xgboost')
+blueprint_regression_test_housingprices(blueprint='lgbm')
