@@ -31,7 +31,8 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
     titanic_auto_ml = rb.RegressionBluePrint(datasource=test_df,
                                    target_variable=test_target,
                                    categorical_columns=test_categorical_cols,
-                                   preferred_training_mode='gpu')
+                                   preferred_training_mode='gpu',
+                                             tune_mode='accurate')
     if blueprint == 'lgbm':
         titanic_auto_ml.ml_bp12_regressions_full_processing_lgbm()
         print("Start prediction on holdout dataset")

@@ -114,7 +114,8 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
                                                      target_variable=test_target,
                                                      categorical_columns=test_categorical_cols,
-                                                     preferred_training_mode='gpu')
+                                                     preferred_training_mode='gpu',
+                                                     tune_mode='simple')
     if blueprint == 'lgbm':
         titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob()
         print("Start prediction on holdout dataset")

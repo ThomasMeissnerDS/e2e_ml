@@ -21,7 +21,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
     def spacy_features(self, df: pd.DataFrame, text_column):
         """
         This function generates features using spacy en_core_wb_lg
-        I learned about this from these resources:
+        More information:
         https://www.kaggle.com/konradb/linear-baseline-with-cv
         https://www.kaggle.com/anaverageengineer/comlrp-baseline-for-complete-beginners
         """

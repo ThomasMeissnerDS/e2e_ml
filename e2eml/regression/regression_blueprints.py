@@ -31,6 +31,8 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
      for later processing.
     :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
     :param preferred_training_mode: Must be CPU, if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    :param tune_mode: 'Accurate' will lead use K-fold cross validation per hyperparameter set durig optimization. 'Simple'
+    will make use of use 1-fold validation only, which leads to much faster training times.
     :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
     :param low_memory_mode: Adds a preprocessing feature to reduce dataframe memory footprint. Will lead to a loss in
     model performance. Will be extended by further memory savings features in future releases.
@@ -76,14 +78,14 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
 
-    def train_pred_selected_model(self, algorithm=None, skip_train=False, tune_mode='simple'):
+    def train_pred_selected_model(self, algorithm=None, skip_train=False):
         logging.info(f'Start ML training {algorithm}')
         if algorithm == 'xgboost':
             # train Xgboost
             if skip_train:
                 pass
             else:
-                self.xg_boost_train(autotune=True, tune_mode=tune_mode)
+                self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
             self.xgboost_predict(feat_importance=True)
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'ngboost':
@@ -91,7 +93,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
             if skip_train:
                 pass
             else:
-                self.ngboost_train(tune_mode=tune_mode)
+                self.ngboost_train(tune_mode=self.tune_mode)
             self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'lgbm':
@@ -100,9 +102,9 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
                 pass
             else:
                 try:
-                    self.lgbm_train(tune_mode=tune_mode)
+                    self.lgbm_train(tune_mode=self.tune_mode)
                 except Exception:
-                    self.lgbm_train(tune_mode=tune_mode)
+                    self.lgbm_train(tune_mode=self.tune_mode)
             self.lgbm_predict(feat_importance=True)
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'sklearn_ensemble':
@@ -213,7 +215,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp12_regressions_full_processing_lgbm(self, df=None, preprocessing_type='full'):
+    def ml_bp12_regressions_full_processing_lgbm(self, df=None, preprocessing_type='nlp'):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -255,10 +257,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         if skip_train:
             pass
         else:
-            try:
-                self.lgbm_train(tune_mode='simple')
-            except Exception:
-                self.lgbm_train(tune_mode='simple')
+            self.lgbm_train(tune_mode=self.tune_mode)
         self.lgbm_predict(feat_importance=True)
         self.regression_eval('lgbm')
         self.prediction_mode = True
@@ -356,7 +355,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         if skip_train:
             pass
         else:
-            self.ngboost_train()
+            self.ngboost_train(tune_mode=self.tune_mode)
         self.ngboost_predict(feat_importance=False, importance_alg='permutation')
         self.regression_eval('ngboost')
         self.prediction_mode = True
@@ -404,9 +403,9 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         if skip_train:
             pass
         else:
-            self.ngboost_train(tune_mode='accurate')
-            self.lgbm_train(tune_mode='accurate')
-            self.xg_boost_train(autotune=True, tune_mode='accurate')
+            self.ngboost_train(tune_mode=self.tune_mode)
+            self.lgbm_train(tune_mode=self.tune_mode)
+            self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
         self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
         self.lgbm_predict(feat_importance=True)
         self.xgboost_predict(feat_importance=True)

@@ -47,6 +47,8 @@ class PreProcessing:
      for later processing.
     :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
     :param preferred_training_mode: Must be CPU, if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    :param tune_mode: 'Accurate' will lead use K-fold cross validation per hyperparameter set durig optimization. 'Simple'
+    will make use of use 1-fold validation only, which leads to much faster training times.
     :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
     :param low_memory_mode: Adds a preprocessing feature to reduce dataframe memory footprint. Will lead to a loss in
     model performance. Will be extended by further memory savings features in future releases.
@@ -55,7 +57,7 @@ class PreProcessing:
 
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None, nlp_columns=None,
-                 prediction_mode=False, preferred_training_mode='cpu', preprocess_decisions=None, trained_model=None, ml_task=None,
+                 prediction_mode=False, preferred_training_mode='cpu', preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
                  logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
 
         self.dataframe = datasource
@@ -102,6 +104,7 @@ class PreProcessing:
             self.preferred_training_mode = preferred_training_mode
         else:
             self.preferred_training_mode = 'cpu'
+        self.tune_mode = tune_mode
         self.train_split_type = train_split_type
         self.date_columns = date_columns
         self.date_columns_created = None

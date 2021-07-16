@@ -472,7 +472,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         matthew = matthews_corrcoef(Y_test, pred_labels)
                         return matthew
                     else:
-                        result = lgb.cv(param, train_set=dtrain, nfold=5, num_boost_round=param['num_boost_round'],
+                        result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
                                         early_stopping_rounds=10, callbacks=[pruning_callback], seed=42, verbose_eval=False)
                         avg_result = np.mean(np.array(result["binary_logloss-mean"]))
                         return avg_result
@@ -482,7 +482,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     study = optuna.create_study(direction='maximize')
                 else:
                     study = optuna.create_study(direction='minimize')
-                study.optimize(objective, n_trials=15)
+                study.optimize(objective, n_trials=20)
                 self.optuna_studies[f"{algorithm}"] = {}
                 #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -546,7 +546,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         return matthew
                     else:
                         try:
-                            result = lgb.cv(param, train_set=dtrain, nfold=5, num_boost_round=param['num_boost_round'],
+                            result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
                                         early_stopping_rounds=10, callbacks=[pruning_callback], seed=42, verbose_eval=False)
                         #fobj=lgb_matth_score)
                             avg_result = np.mean(np.array(result["multi_logloss-mean"])) # Planned: matthew-mean
@@ -559,7 +559,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     study = optuna.create_study(direction='maximize')
                 else:
                     study = optuna.create_study(direction='minimize')
-                study.optimize(objective, n_trials=15)
+                study.optimize(objective, n_trials=20)
                 self.optuna_studies[f"{algorithm}"] = {}
                 #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')

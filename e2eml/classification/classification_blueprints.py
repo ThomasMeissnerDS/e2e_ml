@@ -31,6 +31,8 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
      for later processing.
     :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
     :param preferred_training_mode: Must be CPU, if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    :param tune_mode: 'Accurate' will lead use K-fold cross validation per hyperparameter set durig optimization. 'Simple'
+    will make use of use 1-fold validation only, which leads to much faster training times.
     :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
     :param low_memory_mode: Adds a preprocessing feature to reduce dataframe memory footprint. Will lead to a loss in
     model performance. Will be extended by further memory savings features in future releases.
@@ -76,14 +78,14 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
 
-    def train_pred_selected_model(self, algorithm=None, skip_train=False, tune_mode='simple'):
+    def train_pred_selected_model(self, algorithm=None, skip_train=False):
         logging.info(f'Start ML training {algorithm}')
         if algorithm == 'xgboost':
             # train Xgboost
             if skip_train:
                 pass
             else:
-                self.xg_boost_train(autotune=True, tune_mode=tune_mode)
+                self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
             self.xgboost_predict(feat_importance=True)
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'ngboost':
@@ -91,7 +93,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             if skip_train:
                 pass
             else:
-                self.ngboost_train(tune_mode=tune_mode)
+                self.ngboost_train(tune_mode=self.tune_mode)
             self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'lgbm':
@@ -100,9 +102,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
                 pass
             else:
                 try:
-                    self.lgbm_train(tune_mode=tune_mode)
+                    self.lgbm_train(tune_mode=self.tune_mode)
                 except Exception:
-                    self.lgbm_train(tune_mode=tune_mode)
+                    self.lgbm_train(tune_mode=self.tune_mode)
             self.lgbm_predict(feat_importance=True)
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'sklearn_ensemble':
@@ -208,7 +210,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         if skip_train:
             pass
         else:
-            self.xg_boost_train(autotune=True, tune_mode='accurate')
+            self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
         self.xgboost_predict(feat_importance=True)
         self.classification_eval('xgboost')
         self.prediction_mode = True
@@ -256,7 +258,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         if skip_train:
             pass
         else:
-            self.lgbm_train(tune_mode='accurate')
+            self.lgbm_train(tune_mode=self.tune_mode)
         self.lgbm_predict(feat_importance=True)
         self.classification_eval('lgbm')
         self.prediction_mode = True
@@ -354,7 +356,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         if skip_train:
             pass
         else:
-            self.ngboost_train(tune_mode='accurate')
+            self.ngboost_train(tune_mode=self.tune_mode)
         self.ngboost_predict(feat_importance=True, importance_alg='permutation')
         algorithm = 'ngboost'
         self.classification_eval(algorithm)
@@ -403,9 +405,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         if skip_train:
             pass
         else:
-            self.ngboost_train(tune_mode='accurate')
-            self.lgbm_train(tune_mode='accurate')
-            self.xg_boost_train(autotune=True, tune_mode='accurate')
+            self.ngboost_train(tune_mode=self.tune_mode)
+            self.lgbm_train(tune_mode=self.tune_mode)
+            self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
         self.ngboost_predict(feat_importance=False, importance_alg='SHAP')
         self.classification_eval('ngboost')
         self.lgbm_predict(feat_importance=False)
