@@ -46,7 +46,9 @@ class PreProcessing:
     :param unique_identifier: A unique identifier (i.e. an ID column) can be passed as well to preserve this information
      for later processing.
     :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
-    :param preferred_training_mode: Must be CPU, if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    :param preferred_training_mode: Must be 'cpu', if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    Can be set to 'gpu', if LGBM and Xgboost have been installed with GPU support. The default 'auto' will detect GPU support
+    and optimize accordingly. (Default: 'auto')
     :param tune_mode: 'Accurate' will lead use K-fold cross validation per hyperparameter set durig optimization. 'Simple'
     will make use of use 1-fold validation only, which leads to much faster training times.
     :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
@@ -57,7 +59,7 @@ class PreProcessing:
 
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None, nlp_columns=None,
-                 prediction_mode=False, preferred_training_mode='cpu', preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
+                 prediction_mode=False, preferred_training_mode='auto', preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
                  logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
 
         self.dataframe = datasource
@@ -101,16 +103,24 @@ class PreProcessing:
             self.class_problem = ml_task
 
         if preferred_training_mode == 'cpu':
-            logging.warning("""
+            message = """
             CPU mode has been chosen. Installing e2eml into an environment where LGBM and Xgboost have been installed with GPU acceleration
             is recommended to be able to use preferred_training_mode='gpu'. This will speed up model training and feature importance
             via SHAP. 
-            """)
+            """
+            logging.warning(f'{message}')
+            print(f'{message}')
             self.preferred_training_mode = preferred_training_mode
         elif preferred_training_mode == 'gpu':
+            print('GPU acceleration chosen.')
+            self.preferred_training_mode = preferred_training_mode
+        elif preferred_training_mode == 'auto':
+            print("Preferred training mode auto has been chosen. e2eml will automatically detect, if LGBM and Xgboost can"
+                  "use GPU acceleration and optimize the workflow accordingly.")
             self.preferred_training_mode = preferred_training_mode
         else:
             self.preferred_training_mode = 'cpu'
+            print('No preferred_training_mode chosen. Fallback to CPU.')
         self.tune_mode = tune_mode
         self.train_split_type = train_split_type
         self.date_columns = date_columns
@@ -180,6 +190,41 @@ class PreProcessing:
             current_time = time.strftime("%H:%M:%S", t)
             print(f"{current_time}")
         return current_time
+
+    def check_gpu_support(self, algorithm='lgbm'):
+        import lightgbm
+        import xgboost as xgb
+        data = np.random.rand(50, 2)
+        label = np.random.randint(2, size=50)
+        self.preprocess_decisions[f"gpu_support"] = {}
+        if algorithm == 'lgbm':
+            self.get_current_timestamp(task='Check LGBM for GPU acceleration.')
+            train_data = lightgbm.Dataset(data, label=label)
+            params = {'num_iterations': 1, 'device': 'gpu'}
+            try:
+                gbm = lightgbm.train(params, train_set=train_data)
+                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'gpu'
+                print('LGBM uses GPU.')
+                return True
+            except Exception:
+                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'cpu'
+                print('LGBM uses CPU.')
+                return False
+        elif algorithm == 'xgboost':
+            self.get_current_timestamp(task='Check Xgboost for GPU acceleration.')
+            D_train = xgb.DMatrix(data, label=label)
+            params = {'tree_method': 'gpu_hist', 'steps': 2}
+            try:
+                model = xgb.train(params, D_train)
+                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'gpu_hist'
+                print('Xgboost uses GPU.')
+                return True
+            except Exception:
+                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'exact'
+                print('Xgboost uses CPU.')
+                return False
+        else:
+            print("No algorithm has been checked for GPU acceleration.")
 
     def wrap_test_train_to_dict(self, X_train, X_test, Y_train, Y_test):
         """

@@ -30,7 +30,9 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
     :param unique_identifier: A unique identifier (i.e. an ID column) can be passed as well to preserve this information
      for later processing.
     :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
-    :param preferred_training_mode: Must be CPU, if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    :param preferred_training_mode: Must be 'cpu', if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    Can be set to 'gpu', if LGBM and Xgboost have been installed with GPU support. The default 'auto' will detect GPU support
+    and optimize accordingly. (Default: 'auto')
     :param tune_mode: 'Accurate' will lead use K-fold cross validation per hyperparameter set durig optimization. 'Simple'
     will make use of use 1-fold validation only, which leads to much faster training times.
     :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
@@ -94,7 +96,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
                 pass
             else:
                 self.ngboost_train(tune_mode=self.tune_mode)
-            self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
+            self.ngboost_predict(feat_importance=True, importance_alg='permutation')
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'lgbm':
             # train LGBM

@@ -45,7 +45,9 @@ class RegressionModels(postprocessing.FullPipeline):
     :param unique_identifier: A unique identifier (i.e. an ID column) can be passed as well to preserve this information
      for later processing.
     :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
-    :param preferred_training_mode: Must be CPU, if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    :param preferred_training_mode: Must be 'cpu', if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    Can be set to 'gpu', if LGBM and Xgboost have been installed with GPU support. The default 'auto' will detect GPU support
+    and optimize accordingly. (Default: 'auto')
     :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
     :param low_memory_mode: Adds a preprocessing feature to reduce dataframe memory footprint. Will lead to a loss in
     model performance. Will be extended by further memory savings features in future releases.
@@ -118,7 +120,10 @@ class RegressionModels(postprocessing.FullPipeline):
         with 10-fold cross validation. Longer runtimes, but higher performance. (Default: 'Accurate')
         """
         self.get_current_timestamp(task='Train Xgboost')
-        if self.preferred_training_mode == 'gpu':
+        self.check_gpu_support(algorithm='xgboost')
+        if self.preferred_training_mode == 'auto':
+            train_on = self.preprocess_decisions[f"gpu_support"]["xgboost"]
+        elif self.preferred_training_mode == 'gpu':
             train_on = 'gpu_hist'
         else:
             train_on = 'exact'
@@ -231,7 +236,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 self.trained_models[f"{algorithm}"] = model
                 return self.trained_models
 
-    def xgboost_predict(self, feat_importance=True):
+    def xgboost_predict(self, feat_importance=True, importance_alg='auto'):
         """
         Predicts on test & also new data given the prediction_mode is activated in the class.
         :return: Updates class attributes by its predictions.
@@ -256,19 +261,34 @@ class RegressionModels(postprocessing.FullPipeline):
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted_probs
 
-            if feat_importance:
+            if feat_importance and importance_alg == 'auto':
+                if self.preprocess_decisions[f"gpu_support"]["xgboost"] == 'gpu_hist':
+                    self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
+                else:
+                    xgb.plot_importance(model)
+                    plt.figure(figsize=(16, 12))
+                    plt.show()
+            elif feat_importance and importance_alg == 'SHAP':
                 self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
+            elif feat_importance and importance_alg == 'inbuilt':
+                xgb.plot_importance(model)
+                plt.figure(figsize=(16, 12))
+                plt.show()
             else:
                 pass
 
     def lgbm_train(self, tune_mode='accurate', gpu_use_dp=True):
         self.get_current_timestamp()
-        if self.preferred_training_mode == 'gpu':
+        self.check_gpu_support(algorithm='lgbm')
+        if self.preferred_training_mode == 'auto':
+            train_on = self.preprocess_decisions[f"gpu_support"]["lgbm"]
+        elif self.preferred_training_mode == 'gpu':
             train_on = 'gpu'
             gpu_use_dp = True
         else:
             train_on = 'cpu'
             gpu_use_dp = False
+
         if self.prediction_mode:
             pass
         else:
@@ -343,7 +363,7 @@ class RegressionModels(postprocessing.FullPipeline):
             self.trained_models[f"{algorithm}"] = model
             return self.trained_models
 
-    def lgbm_predict(self, feat_importance=True):
+    def lgbm_predict(self, feat_importance=True, importance_alg='auto'):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated based on SHAP values.
@@ -361,12 +381,19 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             predicted_probs = model.predict(X_test)
 
-            if feat_importance:
-                try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns)
-                except Exception:
+            if feat_importance and importance_alg == 'auto':
+                if self.preprocess_decisions[f"gpu_support"]["lgbm"] == 'gpu':
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+                else:
+                    lgb.plot_importance(model)
+                    plt.figure(figsize=(16, 12))
+                    plt.show()
+            elif feat_importance and importance_alg == 'SHAP':
+                self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            elif feat_importance and importance_alg == 'inbuilt':
+                lgb.plot_importance(model)
+                plt.figure(figsize=(16, 12))
+                plt.show()
             else:
                 pass
             self.predicted_values[f"{algorithm}"] = {}

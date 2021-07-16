@@ -103,7 +103,7 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
                                        target_variable=test_target,
                                        categorical_columns=test_categorical_cols,
-                                                     preferred_training_mode='gpu',
+                                                     preferred_training_mode='auto',
                                                      tune_mode='accurate')
     elif dataset == 'synthetic_multiclass':
         test_df, test_target, val_df, val_df_target, test_categorical_cols = synthetic_multiclass_data()
@@ -115,8 +115,8 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
                                                      target_variable=test_target,
                                                      categorical_columns=test_categorical_cols,
-                                                     preferred_training_mode='gpu',
-                                                     tune_mode='simple')
+                                                     preferred_training_mode='auto',
+                                                     tune_mode='accurate')
     if blueprint == 'lgbm':
         titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(preprocessing_type='nlp')
         print("Start prediction on holdout dataset")
@@ -164,4 +164,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         return print('The test failed. Please investigate.')
 
 
-blueprint_binary_test_titanic(blueprint='xgboost', dataset='titanic')
+blueprint_binary_test_titanic(blueprint='lgbm', dataset='titanic')

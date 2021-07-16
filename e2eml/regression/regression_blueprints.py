@@ -30,7 +30,9 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
     :param unique_identifier: A unique identifier (i.e. an ID column) can be passed as well to preserve this information
      for later processing.
     :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
-    :param preferred_training_mode: Must be CPU, if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    :param preferred_training_mode: Must be 'cpu', if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    Can be set to 'gpu', if LGBM and Xgboost have been installed with GPU support. The default 'auto' will detect GPU support
+    and optimize accordingly. (Default: 'auto')
     :param tune_mode: 'Accurate' will lead use K-fold cross validation per hyperparameter set durig optimization. 'Simple'
     will make use of use 1-fold validation only, which leads to much faster training times.
     :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
@@ -86,16 +88,16 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
                 pass
             else:
                 self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
-            self.xgboost_predict(feat_importance=True)
-            self.classification_eval(algorithm=algorithm)
+            self.xgboost_predict(feat_importance=False)
+            self.regression_eval(algorithm=algorithm)
         elif algorithm == 'ngboost':
             # train Ngboost
             if skip_train:
                 pass
             else:
                 self.ngboost_train(tune_mode=self.tune_mode)
-            self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
-            self.classification_eval(algorithm=algorithm)
+            self.ngboost_predict(feat_importance=True, importance_alg='permutation')
+            self.regression_eval(algorithm=algorithm)
         elif algorithm == 'lgbm':
             # train LGBM
             if skip_train:
@@ -105,8 +107,8 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
                     self.lgbm_train(tune_mode=self.tune_mode)
                 except Exception:
                     self.lgbm_train(tune_mode=self.tune_mode)
-            self.lgbm_predict(feat_importance=True)
-            self.classification_eval(algorithm=algorithm)
+            self.lgbm_predict(feat_importance=False)
+            self.regression_eval(algorithm=algorithm)
         elif algorithm == 'sklearn_ensemble':
             # train sklearn ensemble
             if skip_train:
@@ -115,7 +117,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
                 self.sklearn_ensemble_train()
             self.sklearn_ensemble_predict(feat_importance=True, importance_alg='permutation')
             algorithm = 'sklearn_ensemble'
-            self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
+            self.regression_eval(algorithm=algorithm)
 
     def ml_bp10_train_test_regression_full_processing_linear_reg(self, df=None, preprocessing_type='full'):
         """

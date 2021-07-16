@@ -47,7 +47,7 @@ from classification import classification_blueprints # regression bps are availa
 test_class = classification_blueprints.ClassificationBluePrint(datasource=train_df, 
                         target_variable=target,
                         train_split_type='cross',
-                        preferred_training_mode='cpu', # CPU is required for standard installation*
+                        preferred_training_mode='auto', # Auto will automatically identify, if LGBM & Xgboost can use GPU acceleration*
                         tune_mode='accurate' # hyperparameter sets will be validated with 10-fold CV Set this to 'simple' for 1-fold CV
                         #categorical_columns=cat_columns # you can define categorical columns, otherwise e2e does this automatically
                         #date_columns=date_columns # you can also define date columns (expected is YYYY-MM-DD format)
@@ -55,8 +55,9 @@ test_class = classification_blueprints.ClassificationBluePrint(datasource=train_
                                                                  
 """
 *
+'Auto' is recommended for preferred_training_mode parameter, but with 'CPU' and 'GPU' it can also be controlled manually.
 If you install Xgboost & LGBM into the same environment as GPU accelerated versions, you can set preferred_training_mode='gpu'.
-This will massively improve training times and speed up SHAP feature importance for LGBm and Xgboost related tasks.
+This will massively improve training times and speed up SHAP feature importance for LGBM and Xgboost related tasks.
 For Xgboost this should work out of the box, if installed into a RAPIDS environment.
 """
 # run actual blueprint
@@ -111,11 +112,12 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 
 ## Release History
 
-* 0.9.7
+* 0.9.8
   * Enabled tune_mode parameter during class instantiation.
   * Updated docstings across all functions and changed model defaults.
   * Multiple bug fixes (LGBM regression accurate mode, label encoding and permutation tests).
   * Enhanced user information & better ROC_AUC display
+  * Added automated GPU detection for LGBM and Xgboost.
 * 0.9.4
   * First release with classification and regression blueprints. (not available anymore)
 
