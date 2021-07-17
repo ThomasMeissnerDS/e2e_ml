@@ -882,7 +882,7 @@ class PreProcessing:
             else:
                 imp_mean.set_params(**parameters)
             imp_mean.fit(dataframe)
-            imp_mean.transform(dataframe)
+            dataframe = imp_mean.transform(dataframe)
             dataframe = pd.DataFrame(dataframe, columns=dataframe_cols)
             del imp_mean
             _ = gc.collect()
