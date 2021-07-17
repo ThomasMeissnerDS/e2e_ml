@@ -88,10 +88,10 @@ The preproccesing_type has 2 modes as of now:
 - nlp: Adds some NLP related feature enginering steps.
 """
 # After running the blueprint the pipeline is done. I can be saved with:
-test_class.save_load_model_file(action='save')
+save_to_production(test_class, file_name='automl_instance')
 
 # The blueprint can be loaded with
-loaded_test_class = save_load_model_file(action='load')
+loaded_test_class = load_for_production(file_name='automl_instance')
 
 # predict on new data (in this case our holdout) with loaded blueprint
 loaded_test_class.ml_bp01_multiclass_full_processing_xgb_prob(holdout_df, preprocessing_type='nlp')
@@ -112,12 +112,13 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 
 ## Release History
 
-* 0.9.8
+* 0.9.9
   * Enabled tune_mode parameter during class instantiation.
   * Updated docstings across all functions and changed model defaults.
   * Multiple bug fixes (LGBM regression accurate mode, label encoding and permutation tests).
   * Enhanced user information & better ROC_AUC display
   * Added automated GPU detection for LGBM and Xgboost.
+  * Added functions to save and load blueprints
 * 0.9.4
   * First release with classification and regression blueprints. (not available anymore)
 

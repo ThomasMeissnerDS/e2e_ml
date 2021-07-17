@@ -7,6 +7,53 @@ import matplotlib.pyplot as plt
 import numpy as np
 import warnings
 import logging
+import pickle
+import gc
+
+
+def save_to_production(class_instance, file_path=None, file_name='automl_instance', file_type='.dat', clean=True):
+    """
+    Takes a pretrained model and saves it via pickle.
+    :param class_instance: Takes instance of a class.
+    :param file_name: Takes a string containing the whole file name.
+    :param file_type: Takes the expected type of file to export.
+    :return:
+    """
+    if clean:
+        del class_instance.df_dict
+        del class_instance.dataframe
+        _ = gc.collect()
+    else:
+        pass
+
+    if file_path:
+        full_path = file_path+file_name+file_type
+    else:
+        full_path = file_name+file_type
+    filehandler = open(full_path, 'wb')
+    pickle.dump(class_instance, filehandler)
+    filehandler.close()
+
+
+def load_for_production(file_path=None, file_name='automl_instance', file_type='.dat'):
+    """
+    Load in a pretrained auto ml model. This function will try to load the model as provided.
+    It has a fallback logic to impute .dat as file_type in case the import fails initially.
+    :param file_name:
+    :param file_type:
+    :return:
+    """
+    if file_path:
+        full_path = file_path+file_name
+    else:
+        full_path = file_name
+    try:
+        filehandler = open(full_path, 'rb')
+    except Exception:
+        filehandler = open(full_path+file_type, 'rb')
+    automl_model = pickle.load(filehandler)
+    filehandler.close()
+    return automl_model
 
 
 class FullPipeline(cpu_preprocessing.PreProcessing):
