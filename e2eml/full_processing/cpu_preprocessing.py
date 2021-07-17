@@ -60,7 +60,8 @@ class PreProcessing:
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None, nlp_columns=None,
                  prediction_mode=False, preferred_training_mode='auto', preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
-                 logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
+                 logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross',
+                 skip_train=None):
 
         self.dataframe = datasource
         self.low_memory_mode = low_memory_mode

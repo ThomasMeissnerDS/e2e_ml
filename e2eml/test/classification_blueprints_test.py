@@ -72,7 +72,7 @@ def load_titanic_data():
     return test_df, test_target, val_df, val_df_target, test_categorical_cols
 
 
-def synthetic_multiclass_data():
+def steel_fault_multiclass_data():
     data = pd.read_csv("faults.csv")
     test_df = data.head(1500).copy()
     val_df = data.tail(441).copy()
@@ -106,7 +106,7 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
                                                      preferred_training_mode='auto',
                                                      tune_mode='accurate')
     elif dataset == 'synthetic_multiclass':
-        test_df, test_target, val_df, val_df_target, test_categorical_cols = synthetic_multiclass_data()
+        test_df, test_target, val_df, val_df_target, test_categorical_cols = steel_fault_multiclass_data()
         titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
                                                      target_variable=test_target,
                                                      categorical_columns=test_categorical_cols)
