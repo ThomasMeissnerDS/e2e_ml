@@ -100,6 +100,10 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             blueprints can be used as well. These run on GPU by default and usually yield better
             classification results as well."""
             return warnings.warn(warning_message, RuntimeWarning)
+        elif warn_about == 'long runtime':
+            warning_message = """This blueprint has long runtimes. GPU acceleration is only possible for LGBM and Xgboost
+            as of now. Also Ngboost is relatively fast even though it can only run on CPU."""
+            return warnings.warn(warning_message, RuntimeWarning)
         else:
             pass
 

@@ -2,6 +2,7 @@ from e2eml.classification import classification_blueprints as cb
 import pandas as pd
 from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import classification_report
+from sklearn.utils import shuffle
 import re
 
 
@@ -74,6 +75,13 @@ def load_titanic_data():
 
 def steel_fault_multiclass_data():
     data = pd.read_csv("faults.csv")
+    data = shuffle(data)
+    #from sklearn.preprocessing import LabelEncoder
+    #le = LabelEncoder()
+    #X = data.drop('target', axis=1)
+    #Y = le.fit_transform(data['target'])
+
+    #X['target'] = Y
     test_df = data.head(1500).copy()
     val_df = data.tail(441).copy()
     val_df_target = val_df["target"].copy()
@@ -165,4 +173,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
 
 
 if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='lgbm', dataset='titanic')
+    blueprint_binary_test_titanic(blueprint='lgbm', dataset='synthetic_multiclass')

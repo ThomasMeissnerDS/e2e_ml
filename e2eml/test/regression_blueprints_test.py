@@ -86,4 +86,5 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         pass
 
 
-blueprint_regression_test_housingprices(blueprint='lgbm')
+if __name__ == "__main__":
+    blueprint_regression_test_housingprices(blueprint='lgbm')

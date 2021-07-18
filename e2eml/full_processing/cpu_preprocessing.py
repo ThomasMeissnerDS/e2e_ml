@@ -1,6 +1,7 @@
 from pandas.core.common import SettingWithCopyWarning
 from sklearn import model_selection
 from sklearn import preprocessing
+from sklearn.linear_model import BayesianRidge
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import TimeSeriesSplit
 import numpy as np
@@ -876,14 +877,15 @@ class PreProcessing:
 
         def iterative_imputation(dataframe, params=None):
             dataframe_cols = dataframe.columns.to_list()
-            imp_mean = IterativeImputer(random_state=0)
+            imp_mean = IterativeImputer(random_state=0, estimator=BayesianRidge(), imputation_order='ascending')
             if not params:
                 pass
             else:
                 imp_mean.set_params(**parameters)
-            imp_mean.fit(dataframe)
-            dataframe = imp_mean.transform(dataframe)
-            dataframe = pd.DataFrame(dataframe, columns=dataframe_cols)
+            data = dataframe.values
+            imp_mean.fit(data)
+            dataframe_trans = imp_mean.transform(data)
+            dataframe = pd.DataFrame(dataframe_trans, columns=dataframe_cols)
             del imp_mean
             _ = gc.collect()
             return dataframe
@@ -904,7 +906,7 @@ class PreProcessing:
             if how == 'static':
                 self.dataframe = static_filling(self.dataframe, cols)
             elif how == 'iterative_imputation':
-                self.dataframe[cols] = iterative_imputation(self.dataframe,
+                self.dataframe = iterative_imputation(self.dataframe,
                                                             params=self.preprocess_decisions[f"fill_nulls_params"])
             logging.info('Finished filling NULLs.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')

@@ -112,7 +112,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 
 ## Release History
 
-* 0.9.9
+* 0.9.91
   * Enabled tune_mode parameter during class instantiation.
   * Updated docstings across all functions and changed model defaults.
   * Multiple bug fixes (LGBM regression accurate mode, label encoding and permutation tests).
