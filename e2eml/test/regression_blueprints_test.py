@@ -87,4 +87,4 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
 
 
 if __name__ == "__main__":
-    blueprint_regression_test_housingprices(blueprint='lgbm')
+    blueprint_regression_test_housingprices(blueprint='auto_select')

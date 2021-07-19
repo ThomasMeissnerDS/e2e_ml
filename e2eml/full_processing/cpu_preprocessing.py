@@ -436,57 +436,54 @@ class PreProcessing:
             logging.info('Finished sorting columns alphabetically.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def label_encoder_decoder(self, target):
+    def label_encoder_decoder(self, target, mode='fit'):
         """
         Takes a Pandas series and encodes string-based labels to numeric values. Flags previously unseen
-        values with -1. This implementation has been found at:
-        https://stackoverflow.com/questions/21057621/sklearn-labelencoder-with-never-seen-before-values/48169252#48169252
-        The implementation has been adjusted towards e2eml's needs.
+        values with -1.
         :param target: Expects Pandas Series.
-        :return: Return Pandas Series.
+        :param mode: 'Chose' fit to create label encoding dictionary and 'transform' the labels. Chose 'transform'
+        to encode labels based on already created dictionary.
+        :return: Returns Pandas Series.
         """
         self.get_current_timestamp(task='Execute label encoding')
         logging.info('Started label encoding.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
 
-        class PandasLabelEncoder(BaseEstimator, TransformerMixin):
-            def __init__(self):
-                self.label_dict = defaultdict(list)
+        def label_encoder_fit(pandas_series):
+            pandas_series = pandas_series.astype('category')
+            col = pandas_series.name
+            try:
+                pandas_series = pandas_series.to_frame()
+            except Exception:
+                pass
+            values = pandas_series[col].unique()
+            cat_mapping = {}
+            for label, cat in enumerate(values):
+                cat_mapping[cat] = label
+            return cat_mapping
 
-            def fit(self, X):
-                X = X.astype('category')
-                try:
-                    X = X.to_frame()
-                except Exception:
-                    pass
-                cols = X.columns
-                values = list(map(lambda col: X[col].cat.categories, cols))
-                self.label_dict = dict(zip(cols, values))
-                # return as category for xgboost or lightgbm
-                return self
+        def label_encoder_transform(pandas_series, mapping):
+            pandas_series = pandas_series.astype('category')
+            col = pandas_series.name
+            try:
+                pandas_series = pandas_series.to_frame()
+            except Exception:
+                pass
+            mapping = self.preprocess_decisions["label_encoder_mapping"]
+            pandas_series[col] = pandas_series[col].apply(lambda x: mapping.get(x, -1))
+            pandas_series[col].fillna(-1, inplace=True)
+            pandas_series = pandas_series[col]
+            return pandas_series
 
-            def transform(self, X):
-                try:
-                    X = X.to_frame()
-                except Exception:
-                    pass
-                # check missing columns
-                missing_col = set(X.columns)-set(self.label_dict.keys())
-                if missing_col:
-                    raise ValueError('the column named {} is not in the label dictionary. Check your fitting data.'.format(missing_col))
-                return X.apply(lambda x: x.astype('category').cat.set_categories(self.label_dict[x.name]).cat.codes.astype('category').cat.set_categories(np.arange(len(self.label_dict[x.name]))))
-
-            def inverse_transform(self, X):
-                return X.apply(lambda x: pd.Categorical.from_codes(codes=x.values,
-                                                                   categories=self.label_dict[x.name]))
         if self.prediction_mode:
-            enc = self.preprocess_decisions["label_encoder"]
-            target = enc.transform(target)
+            target = label_encoder_transform(target, self.preprocess_decisions["label_encoder_mapping"])
         else:
-            enc = PandasLabelEncoder()
-            enc.fit(target)
-            target = enc.transform(target)
-            self.preprocess_decisions["label_encoder"] = enc
+            if mode == 'fit':
+                cat_mapping = label_encoder_fit(target)
+            else:
+                pass
+            self.preprocess_decisions["label_encoder_mapping"] = cat_mapping
+            target = label_encoder_transform(target, self.preprocess_decisions["label_encoder_mapping"])
         self.labels_encoded = True
         target = target[self.target_variable].astype(float)
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
@@ -595,10 +592,8 @@ class PreProcessing:
                 Y_train = Y_train.astype(float)
                 Y_test = Y_test.astype(float)
             except Exception:
-                Y_train = self.label_encoder_decoder(Y_train)
-                #Y_train = Y_train[self.target_variable]
-                Y_test = self.label_encoder_decoder(Y_test)
-                #Y_test = Y_test[self.target_variable]
+                Y_train = self.label_encoder_decoder(Y_train, mode='fit')
+                Y_test = self.label_encoder_decoder(Y_test, mode='transform')
             del X_train[self.target_variable]
             del X_test[self.target_variable]
             _ = gc.collect()
@@ -895,7 +890,7 @@ class PreProcessing:
         _ = gc.collect()
         return dataframe_final
 
-    def static_filling(self, dataframe, columns=None):
+    def static_filling(self, dataframe, columns=None, fill_with=0):
         dataframe[columns] = dataframe[columns].fillna(fill_with, inplace=False)
         return dataframe
 
@@ -931,7 +926,7 @@ class PreProcessing:
                 pass
 
             if how == 'static':
-                self.dataframe = self.static_filling(self.dataframe, cols)
+                self.dataframe = self.static_filling(self.dataframe, cols, fill_with=fill_with)
             elif how == 'iterative_imputation':
                 self.dataframe = self.iterative_imputation(self.dataframe, imputer=self.preprocess_decisions[f"fill_nulls_imputer"])
             logging.info('Finished filling NULLs.')
@@ -945,8 +940,8 @@ class PreProcessing:
                 cols = selected_cols
 
             if how == 'static':
-                X_train = self.static_filling(X_train, cols)
-                X_test = self.static_filling(X_test, cols)
+                X_train = self.static_filling(X_train, cols, fill_with=fill_with)
+                X_test = self.static_filling(X_test, cols, fill_with=fill_with)
                 self.preprocess_decisions[f"fill_nulls_how"] = how
                 self.preprocess_decisions[f"fill_nulls_params"] = cols
             elif how == 'iterative_imputation':
@@ -1420,7 +1415,7 @@ class PreProcessing:
             _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def automated_feature_selection(self, metric='logloss'):
+    def automated_feature_selection(self, metric=None):
         """
         Uses boostaroota algorithm to automatically chose best features. boostaroota choses XGboost under
         the hood.
@@ -1441,6 +1436,14 @@ class PreProcessing:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             for col in X_train.columns:
                 print(col)
+            if metric:
+                metric = metric
+            elif self.class_problem == 'binary':
+                metric = 'logloss'
+            elif self.class_problem == 'multiclass':
+                metric = 'mlogloss'
+            elif self.class_problem == 'regression':
+                metric = 'mae'
             br = BoostARoota(metric=metric)
             br.fit(X_train, Y_train)
             selected = br.keep_vars_
@@ -1454,3 +1457,6 @@ class PreProcessing:
             _ = gc.collect()
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
+
+
+

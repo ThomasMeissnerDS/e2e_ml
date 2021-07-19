@@ -1,9 +1,9 @@
 from e2eml.regression.regression_models import RegressionModels
-from e2eml.full_processing.cpu_processing_nlp import NlpPreprocessing
+from e2eml.full_processing.preprocessing_blueprints import PreprocessingBluePrint
 import logging
 
 
-class RegressionBluePrint(RegressionModels, NlpPreprocessing):
+class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
     """
     Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
     if the predict_mode attribute is True.
@@ -41,44 +41,6 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
     However we highly recommend GPU usage to heavily decrease model training times.
     :return: Updates class attributes by its predictions.
     """
-    def full_regression_preprocessing(self, df=None, preprocessing_type='full'):
-        """
-        Runs a preprocessing blueprint only. This is useful for building custom pipelines.
-        :param df: Accepts a dataframe to run ml preprocessing on it.
-        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
-        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
-        :return: Updates class attributes.
-        """
-        logging.info('Start blueprint.')
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.datetime_converter(datetime_handling='all')
-        if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
-        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='target')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
-        self.data_binning(nb_bins=10)
-        #self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.8)
-        self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        for nb_cluster in range(2, 10):
-            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='logloss')
-        self.sort_columns_alphabetically()
 
     def train_pred_selected_model(self, algorithm=None):
         logging.info(f'Start ML training {algorithm}')
@@ -119,7 +81,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
             algorithm = 'sklearn_ensemble'
             self.regression_eval(algorithm=algorithm)
 
-    def ml_bp10_train_test_regression_full_processing_linear_reg(self, df=None, preprocessing_type='full'):
+    def ml_bp10_train_test_regression_full_processing_linear_reg(self, df=None, preprocessing_type='full', preprocess_bp="bp_03"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -128,36 +90,14 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
-        logging.info('Start blueprint.')
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.datetime_converter(datetime_handling='all')
-        if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
-        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='target')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
-        self.data_binning(nb_bins=10)
-        self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.8)
-        self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        for nb_cluster in range(2, 10):
-            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='mae')
-        self.sort_columns_alphabetically()
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
         if self.prediction_mode:
             pass
         else:
@@ -169,7 +109,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp11_regression_full_processing_xgboost(self, df=None, preprocessing_type='full'):
+    def ml_bp11_regression_full_processing_xgboost(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -178,36 +118,14 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
-        logging.info('Start blueprint.')
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.datetime_converter(datetime_handling='all')
-        if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
-        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='target')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
-        self.data_binning(nb_bins=10)
-        #self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.8)
-        self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        for nb_cluster in range(2, 10):
-            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='mae')
-        self.sort_columns_alphabetically()
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
         if self.prediction_mode:
             pass
         else:
@@ -217,7 +135,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp12_regressions_full_processing_lgbm(self, df=None, preprocessing_type='nlp'):
+    def ml_bp12_regressions_full_processing_lgbm(self, df=None, preprocessing_type='nlp', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -226,36 +144,14 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
-        logging.info('Start blueprint.')
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.datetime_converter(datetime_handling='all')
-        if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
-        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='target')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
-        self.data_binning(nb_bins=10)
-        #self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.8)
-        self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        for nb_cluster in range(2, 10):
-            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='mae')
-        self.sort_columns_alphabetically()
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
         if self.prediction_mode:
             pass
         else:
@@ -265,7 +161,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp13_regression_full_processing_sklearn_stacking_ensemble(self, df=None, preprocessing_type='full'):
+    def ml_bp13_regression_full_processing_sklearn_stacking_ensemble(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -274,38 +170,14 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
-        logging.info('Start blueprint.')
-        self.runtime_warnings(warn_about="long runtime")
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.datetime_converter(datetime_handling='all')
-        if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
-        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='target')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
-        self.data_binning(nb_bins=10)
-        #self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.8)
-        self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        for nb_cluster in range(2, 10):
-            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='mae')
-        self.sort_columns_alphabetically()
-        self.data_scaling()
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
         if self.prediction_mode:
             pass
         else:
@@ -316,7 +188,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp14_regressions_full_processing_ngboost(self, df=None, preprocessing_type='full'):
+    def ml_bp14_regressions_full_processing_ngboost(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -325,36 +197,14 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
-        logging.info('Start blueprint.')
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split()
-        self.datetime_converter(datetime_handling='all')
-        if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
-        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='target')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
-        self.data_binning(nb_bins=10)
-        #self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.8)
-        self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        for nb_cluster in range(2, 10):
-            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='mae')
-        self.sort_columns_alphabetically()
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
         if self.prediction_mode:
             pass
         else:
@@ -364,7 +214,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_special_regression_full_processing_boosting_blender(self, df=None, preprocessing_type='full'):
+    def ml_special_regression_full_processing_boosting_blender(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -373,36 +223,14 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
-        logging.info('Start blueprint.')
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.datetime_converter(datetime_handling='all')
-        if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
-        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='target')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
-        self.data_binning(nb_bins=10)
-        #self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.8)
-        self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        for nb_cluster in range(2, 10):
-            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='logloss')
-        self.sort_columns_alphabetically()
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
         if self.prediction_mode:
             pass
         else:
@@ -429,7 +257,7 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_special_regression_auto_model_exploration(self, df=None, preprocessing_type='full'):
+    def ml_special_regression_auto_model_exploration(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -438,37 +266,14 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
         :return: Updates class attributes by its predictions.
         """
-        logging.info('Start blueprint.')
-        self.runtime_warnings(warn_about="long runtime")
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.datetime_converter(datetime_handling='all')
-        if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
-        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='target')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(inplace=False, how='iterative_imputation')
-        self.data_binning(nb_bins=10)
-        #self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.8)
-        self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        for nb_cluster in range(2, 10):
-            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='logloss')
-        self.sort_columns_alphabetically()
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
         if not self.prediction_mode:
             self.train_pred_selected_model(algorithm='lgbm')
             self.train_pred_selected_model(algorithm='xgboost')
@@ -476,11 +281,11 @@ class RegressionBluePrint(RegressionModels, NlpPreprocessing):
             self.train_pred_selected_model(algorithm='sklearn_ensemble')
 
             # select best model
-            max_matthews = 0
+            min_mae = 10000000
             self.best_model = 'xgboost'
             for k, v in self.evaluation_scores.items():
-                if max_matthews < (v['matthews']):
-                    max_matthews = (v['matthews'])
+                if (v['mae']) < min_mae:
+                    min_mae = (v['mae'])
                     self.best_model = k
             self.train_pred_selected_model(algorithm=self.best_model)
             self.prediction_mode = True

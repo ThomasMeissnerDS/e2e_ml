@@ -126,9 +126,9 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
                                                      preferred_training_mode='auto',
                                                      tune_mode='accurate')
     if blueprint == 'lgbm':
-        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(preprocessing_type='nlp')
+        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(preprocessing_type='nlp', preprocess_bp='bp_01')
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(val_df, preprocessing_type='nlp')
+        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(val_df, preprocessing_type='nlp', preprocess_bp='bp_01')
         val_y_hat = titanic_auto_ml.predicted_classes['lgbm']
     elif blueprint == 'xgboost':
         titanic_auto_ml.ml_bp01_multiclass_full_processing_xgb_prob(preprocessing_type='nlp')
@@ -178,4 +178,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
 
 
 if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='autoselect', dataset='titanic')
+    blueprint_binary_test_titanic(blueprint='lgbm', dataset='titanic')
