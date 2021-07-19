@@ -18,6 +18,8 @@ from sklearn.decomposition import PCA
 from collections import defaultdict
 from sklearn.base import BaseEstimator, TransformerMixin
 from boostaroota import BoostARoota
+import lightgbm
+import xgboost as xgb
 import gc
 import warnings
 import logging
@@ -61,8 +63,7 @@ class PreProcessing:
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None, nlp_columns=None,
                  prediction_mode=False, preferred_training_mode='auto', preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
-                 logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross',
-                 skip_train=None):
+                 logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
 
         self.dataframe = datasource
         self.low_memory_mode = low_memory_mode
@@ -193,9 +194,30 @@ class PreProcessing:
             print(f"{current_time}")
         return current_time
 
+    def runtime_warnings(self, warn_about='shap_cpu'):
+        """
+        This function returns custom warnings for a better user experience.
+        :return: warning message
+        """
+        if warn_about == 'shap_cpu':
+            warning_message = """Calculating SHAP values for feature importance on CPU might run a long time. To disable
+            the calculation set the parameter 'feat_importance' to False. Alternatively the LGBM and Xgboost
+            blueprints can be used as well. These run on GPU by default and usually yield better
+            classification results as well."""
+            return warnings.warn(warning_message, RuntimeWarning)
+        elif warn_about == 'long runtime':
+            warning_message = """This blueprint has long runtimes. GPU acceleration is only possible for LGBM and Xgboost
+            as of now. Also Ngboost is relatively fast even though it can only run on CPU."""
+            return warnings.warn(warning_message, RuntimeWarning)
+        elif warn_about == 'wrong null algorithm':
+            warning_message = """The chosen option does not exist. Currently only "iterative_imputation" and "static" 
+            exist. Any other declared option will result in not-handling of NULLs and are likely to fail later in the
+             pipeline."""
+            return warnings.warn(warning_message, RuntimeWarning)
+        else:
+            pass
+
     def check_gpu_support(self, algorithm='lgbm'):
-        import lightgbm
-        import xgboost as xgb
         data = np.random.rand(50, 2)
         label = np.random.randint(2, size=50)
         self.preprocess_decisions[f"gpu_support"] = {}
@@ -859,8 +881,26 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
+    def iterative_imputation(self, dataframe, imputer=None):
+        dataframe_cols = dataframe.columns#[dataframe.isna().any()].tolist()
+        imp_mean = IterativeImputer(random_state=0, estimator=BayesianRidge(), imputation_order='ascending')
+        if not imputer:
+            imp_mean.fit(dataframe)
+        else:
+            imp_mean = imputer
+        dataframe = imp_mean.transform(dataframe)
+        dataframe_final = pd.DataFrame(dataframe, columns=dataframe_cols)
+        self.preprocess_decisions[f"fill_nulls_imputer"] = imp_mean
+        del imp_mean
+        _ = gc.collect()
+        return dataframe_final
+
+    def static_filling(self, dataframe, columns=None):
+        dataframe[columns] = dataframe[columns].fillna(fill_with, inplace=False)
+        return dataframe
+
     # TODO: Check if parameters can be used via **kwargs argument
-    def fill_nulls(self, how='imputation', selected_cols=None, fill_with=0, **parameters):
+    def fill_nulls(self, how='iterative_imputation', selected_cols=None, fill_with=0):
         """
         Takes in a dataframe and fills all NULLs with chosen value.
         :param fill_with: Define value to replace NULLs with.
@@ -871,27 +911,14 @@ class PreProcessing:
         """
         self.get_current_timestamp('Fill nulls')
 
-        def static_filling(dataframe, columns=None):
-            dataframe[columns] = dataframe[columns].fillna(fill_with, inplace=False)
-            return dataframe
-
-        def iterative_imputation(dataframe, params=None):
-            dataframe_cols = dataframe.columns.to_list()
-            imp_mean = IterativeImputer(random_state=0, estimator=BayesianRidge(), imputation_order='ascending')
-            if not params:
-                pass
-            else:
-                imp_mean.set_params(**parameters)
-            data = dataframe.values
-            imp_mean.fit(data)
-            dataframe_trans = imp_mean.transform(data)
-            dataframe = pd.DataFrame(dataframe_trans, columns=dataframe_cols)
-            del imp_mean
-            _ = gc.collect()
-            return dataframe
-
         logging.info('Started filling NULLs.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        algorithms = ["iterative_imputation", "static"]
+        if how not in algorithms:
+            self.runtime_warnings(warn_about='wrong null algorithm')
+        else:
+            pass
+
         if self.prediction_mode:
             if not selected_cols:
                 cols = self.dataframe.columns.to_list()
@@ -904,10 +931,9 @@ class PreProcessing:
                 pass
 
             if how == 'static':
-                self.dataframe = static_filling(self.dataframe, cols)
+                self.dataframe = self.static_filling(self.dataframe, cols)
             elif how == 'iterative_imputation':
-                self.dataframe = iterative_imputation(self.dataframe,
-                                                            params=self.preprocess_decisions[f"fill_nulls_params"])
+                self.dataframe = self.iterative_imputation(self.dataframe, imputer=self.preprocess_decisions[f"fill_nulls_imputer"])
             logging.info('Finished filling NULLs.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
@@ -919,15 +945,16 @@ class PreProcessing:
                 cols = selected_cols
 
             if how == 'static':
-                X_train = static_filling(X_train, cols)
-                X_test = static_filling(X_test, cols)
+                X_train = self.static_filling(X_train, cols)
+                X_test = self.static_filling(X_test, cols)
                 self.preprocess_decisions[f"fill_nulls_how"] = how
                 self.preprocess_decisions[f"fill_nulls_params"] = cols
             elif how == 'iterative_imputation':
-                X_train = iterative_imputation(X_train, params=parameters)
-                X_test = iterative_imputation(X_test, params=parameters)
+                # TODO: Test, if it woks + revert LGBM + test model ensemble
+                X_train = self.iterative_imputation(X_train)
+                X_test = self.iterative_imputation(X_test, imputer=self.preprocess_decisions[f"fill_nulls_imputer"])
                 self.preprocess_decisions[f"fill_nulls_how"] = how
-                self.preprocess_decisions[f"fill_nulls_params"] = cols
+                self.preprocess_decisions[f"fill_nulls_cols"] = cols
             logging.info('Finished filling NULLs.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)

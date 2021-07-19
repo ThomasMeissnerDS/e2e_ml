@@ -89,24 +89,6 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             plt.show()
         logging.info('Finished creating SHAP values.')
 
-    def runtime_warnings(self, warn_about='shap_cpu'):
-        """
-        This function returns custom warnings for a better user experience.
-        :return: warning message
-        """
-        if warn_about == 'shap_cpu':
-            warning_message = """Calculating SHAP values for feature importance on CPU might run a long time. To disable
-            the calculation set the parameter 'feat_importance' to False. Alternatively the LGBM and Xgboost
-            blueprints can be used as well. These run on GPU by default and usually yield better
-            classification results as well."""
-            return warnings.warn(warning_message, RuntimeWarning)
-        elif warn_about == 'long runtime':
-            warning_message = """This blueprint has long runtimes. GPU acceleration is only possible for LGBM and Xgboost
-            as of now. Also Ngboost is relatively fast even though it can only run on CPU."""
-            return warnings.warn(warning_message, RuntimeWarning)
-        else:
-            pass
-
     def classification_eval(self, algorithm, pred_probs=None, pred_class=None):
         """
         Takes in the algorithm name. This is needed to grab saved predictions and to store cvlassification scores

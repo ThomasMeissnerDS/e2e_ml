@@ -52,12 +52,12 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         logging.info('Start blueprint.')
         try:
             if df.empty:
-                self.preferred_training_mode = False
+                self.prediction_mode = False
             else:
                 self.dataframe = df
-                self.preferred_training_mode = True
+                self.prediction_mode = True
         except AttributeError:
-            self.preferred_training_mode = False
+            self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         if preprocessing_type == 'nlp':
@@ -80,11 +80,11 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
 
-    def train_pred_selected_model(self, algorithm=None, skip_train=False):
+    def train_pred_selected_model(self, algorithm=None):
         logging.info(f'Start ML training {algorithm}')
         if algorithm == 'xgboost':
             # train Xgboost
-            if self.preferred_training_mode:
+            if self.prediction_mode:
                 pass
             else:
                 self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
@@ -92,7 +92,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'ngboost':
             # train Ngboost
-            if self.preferred_training_mode:
+            if self.prediction_mode:
                 pass
             else:
                 self.ngboost_train(tune_mode=self.tune_mode)
@@ -100,7 +100,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'lgbm':
             # train LGBM
-            if self.preferred_training_mode:
+            if self.prediction_mode:
                 pass
             else:
                 try:
@@ -111,13 +111,13 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             self.classification_eval(algorithm=algorithm)
         elif algorithm == 'sklearn_ensemble':
             # train sklearn ensemble
-            if self.preferred_training_mode:
+            if self.prediction_mode:
                 pass
             else:
                 self.sklearn_ensemble_train()
             self.sklearn_ensemble_predict(feat_importance=True, importance_alg='permutation')
             algorithm = 'sklearn_ensemble'
-            self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
+            self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm])
 
     def ml_bp00_train_test_binary_full_processing_log_reg_prob(self, df=None, preprocessing_type='full'):
         """
@@ -131,12 +131,12 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         logging.info('Start blueprint.')
         try:
             if df.empty:
-                self.preferred_training_mode = False
+                self.prediction_mode = False
             else:
                 self.dataframe = df
-                self.preferred_training_mode = True
+                self.prediction_mode = True
         except AttributeError:
-            self.preferred_training_mode = False
+            self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         if preprocessing_type == 'nlp':
@@ -158,7 +158,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
-        if self.preferred_training_mode:
+        if self.prediction_mode:
             pass
         else:
             self.logistic_regression_train()
@@ -182,12 +182,12 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         logging.info('Start blueprint.')
         try:
             if df.empty:
-                self.preferred_training_mode = False
+                self.prediction_mode = False
             else:
                 self.dataframe = df
-                self.preferred_training_mode = True
+                self.prediction_mode = True
         except AttributeError:
-            self.preferred_training_mode = False
+            self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         if preprocessing_type == 'nlp':
@@ -209,7 +209,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
-        if self.preferred_training_mode:
+        if self.prediction_mode:
             pass
         else:
             self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
@@ -230,12 +230,12 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         logging.info('Start blueprint.')
         try:
             if df.empty:
-                self.preferred_training_mode = False
+                self.prediction_mode = False
             else:
                 self.dataframe = df
-                self.preferred_training_mode = True
+                self.prediction_mode = True
         except AttributeError:
-            self.preferred_training_mode = False
+            self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all', force_conversion=False)
         if preprocessing_type == 'nlp':
@@ -245,7 +245,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.onehot_pca()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
+        self.fill_nulls(how='iterative_imputation')
         self.data_binning(nb_bins=10)
         #self.skewness_removal()
         self.outlier_care(method='isolation', how='append')
@@ -257,7 +257,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
-        if self.preferred_training_mode:
+        if self.prediction_mode:
             pass
         else:
             self.lgbm_train(tune_mode=self.tune_mode)
@@ -279,12 +279,12 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.runtime_warnings(warn_about="long runtime")
         try:
             if df.empty:
-                self.preferred_training_mode = False
+                self.prediction_mode = False
             else:
                 self.dataframe = df
-                self.preferred_training_mode = True
+                self.prediction_mode = True
         except AttributeError:
-            self.preferred_training_mode = False
+            self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         if preprocessing_type == 'nlp':
@@ -307,7 +307,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
         self.smote_data()
-        if self.preferred_training_mode:
+        if self.prediction_mode:
             pass
         else:
             self.sklearn_ensemble_train()
@@ -329,12 +329,12 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         logging.info('Start blueprint.')
         try:
             if df.empty:
-                self.preferred_training_mode = False
+                self.prediction_mode = False
             else:
                 self.dataframe = df
-                self.preferred_training_mode = True
+                self.prediction_mode = True
         except AttributeError:
-            self.preferred_training_mode = False
+            self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         if preprocessing_type == 'nlp':
@@ -356,7 +356,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
-        if self.preferred_training_mode:
+        if self.prediction_mode:
             pass
         else:
             self.ngboost_train(tune_mode=self.tune_mode)
@@ -378,12 +378,12 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         logging.info('Start blueprint.')
         try:
             if df.empty:
-                skip_train = False
+                self.prediction_mode = False
             else:
                 self.dataframe = df
-                skip_train = True
+                self.prediction_mode = True
         except AttributeError:
-            skip_train = False
+            self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         if preprocessing_type == 'nlp':
@@ -405,7 +405,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
-        if skip_train:
+        if self.prediction_mode:
             pass
         else:
             self.ngboost_train(tune_mode=self.tune_mode)
@@ -453,12 +453,12 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.runtime_warnings(warn_about="long runtime")
         try:
             if df.empty:
-                self.preferred_training_mode = False
+                self.prediction_mode = False
             else:
                 self.dataframe = df
-                self.preferred_training_mode = True
+                self.prediction_mode = True
         except AttributeError:
-            self.preferred_training_mode = False
+            self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
         if preprocessing_type == 'nlp':
@@ -468,7 +468,7 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
         self.onehot_pca()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='imputation')
+        self.fill_nulls(how='iterative_imputation')
         self.data_binning(nb_bins=10)
         #self.skewness_removal()
         self.outlier_care(method='isolation', how='append')
@@ -496,5 +496,5 @@ class ClassificationBluePrint(ClassificationModels, NlpPreprocessing):
             self.train_pred_selected_model(algorithm=self.best_model)
             self.prediction_mode = True
         else:
-            self.train_pred_selected_model(algorithm=self.best_model, skip_train=self.preferred_training_mode)
+            self.train_pred_selected_model(algorithm=self.best_model)
         logging.info('Finished blueprint.')
