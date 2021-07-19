@@ -471,8 +471,7 @@ class PreProcessing:
                 pass
             mapping = self.preprocess_decisions["label_encoder_mapping"]
             pandas_series[col] = pandas_series[col].apply(lambda x: mapping.get(x, -1))
-            pandas_series[col].fillna(-1, inplace=True)
-            pandas_series = pandas_series[col]
+            #pandas_series = pandas_series[col]
             return pandas_series
 
         if self.prediction_mode:
@@ -480,9 +479,9 @@ class PreProcessing:
         else:
             if mode == 'fit':
                 cat_mapping = label_encoder_fit(target)
+                self.preprocess_decisions["label_encoder_mapping"] = cat_mapping
             else:
                 pass
-            self.preprocess_decisions["label_encoder_mapping"] = cat_mapping
             target = label_encoder_transform(target, self.preprocess_decisions["label_encoder_mapping"])
         self.labels_encoded = True
         target = target[self.target_variable].astype(float)

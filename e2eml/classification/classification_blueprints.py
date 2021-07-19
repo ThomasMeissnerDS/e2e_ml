@@ -1,10 +1,9 @@
 from e2eml.classification.classification_models import ClassificationModels
-from e2eml.full_processing.cpu_processing_nlp import NlpPreprocessing
 from e2eml.full_processing.preprocessing_blueprints import PreprocessingBluePrint
 import logging
 
 
-class ClassificationBluePrint(ClassificationModels, NlpPreprocessing, PreprocessingBluePrint):
+class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
     """
     Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
     if the predict_mode attribute is True.

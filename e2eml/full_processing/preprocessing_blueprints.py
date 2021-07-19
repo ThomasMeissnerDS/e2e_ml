@@ -1,9 +1,9 @@
-from e2eml.classification.classification_models import ClassificationModels
+from e2eml.full_processing.postprocessing import FullPipeline
 from e2eml.full_processing.cpu_processing_nlp import NlpPreprocessing
 import logging
 
 
-class PreprocessingBluePrint(ClassificationModels, NlpPreprocessing):
+class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
     def pp_bp01_preprocessing(self, df=None, preprocessing_type='nlp'):
         """
         Our recommended blueprint for model testing.
