@@ -88,6 +88,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
@@ -104,7 +105,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
             self.logistic_regression_train()
         algorithm = 'logistic_regression'
         self.logistic_regression_predict(feat_importance=True, importance_alg='permutation')
-        self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
+        self.classification_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -115,6 +116,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
@@ -141,6 +143,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
@@ -167,6 +170,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         logging.info('Start blueprint.')
@@ -207,7 +211,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
             self.sklearn_ensemble_train()
         self.sklearn_ensemble_predict(feat_importance=True, importance_alg='permutation')
         algorithm = 'sklearn_ensemble'
-        self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm][:, 1])
+        self.classification_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -218,6 +222,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
@@ -245,6 +250,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
@@ -297,6 +303,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':

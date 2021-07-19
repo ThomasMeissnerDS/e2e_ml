@@ -14,7 +14,7 @@ From Pypi:
 pip install e2eml
 ```
 We highly recommend to create a new virtual environment first. Then install e2e-ml into it. In the environment also download
-the pretrained spacy model with:
+the pretrained spacy model with. Otherwise e2eml will do this automatically during runtime.
 ```sh
 python3 -m spacy download en
 ```
@@ -61,7 +61,8 @@ This will massively improve training times and speed up SHAP feature importance 
 For Xgboost this should work out of the box, if installed into a RAPIDS environment.
 """
 # run actual blueprint
-test_class.ml_bp01_multiclass_full_processing_xgb_prob(preprocessing_type='nlp')
+test_class.ml_bp01_multiclass_full_processing_xgb_prob(preprocessing_type='nlp') 
+# you could also change the preprocessing blueprint with the parameter "preprocess_bp='bp_01' (or bp_02 or bp_03)"
 """
 When choosing blueprints several options are available:
 
@@ -119,6 +120,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   * Enhanced user information & better ROC_AUC display
   * Added automated GPU detection for LGBM and Xgboost.
   * Added functions to save and load blueprints
+  * architectural changes (preprocessing organized in blueprints as well)
 * 0.9.4
   * First release with classification and regression blueprints. (not available anymore)
 

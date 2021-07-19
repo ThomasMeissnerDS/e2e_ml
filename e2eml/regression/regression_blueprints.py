@@ -88,6 +88,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
@@ -116,6 +117,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
@@ -142,6 +144,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
@@ -168,6 +171,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
@@ -195,6 +199,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
@@ -221,6 +226,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
@@ -264,6 +270,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
         :param df: Accepts a dataframe to make predictions on new data.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
         "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':

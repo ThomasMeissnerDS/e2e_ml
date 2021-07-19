@@ -110,12 +110,12 @@ class ClassificationModels(postprocessing.FullPipeline):
         algorithm = 'logistic_regression'
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
-            predicted_probs = model.predict_proba(self.dataframe)
+            partial_probs = model.predict_proba(self.dataframe)
             if self.class_problem == 'binary':
-                partial_probs = np.asarray([line[1] for line in predicted_probs])
-                predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
-                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+                predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
@@ -123,13 +123,13 @@ class ClassificationModels(postprocessing.FullPipeline):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
-            predicted_probs = model.predict_proba(X_test)
-            self.threshold_refiner(predicted_probs, Y_test)
+            partial_probs = model.predict_proba(X_test)
             if self.class_problem == 'binary':
-                partial_probs = np.asarray([line[1] for line in predicted_probs])
-                predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                self.threshold_refiner(predicted_probs, Y_test)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
-                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+                predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
 
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
@@ -826,6 +826,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 self.threshold_refiner(predicted_probs, Y_test)
                 predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
+                predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
 
             if feat_importance and importance_alg == 'SHAP':

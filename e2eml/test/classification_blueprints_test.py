@@ -178,4 +178,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
 
 
 if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='lgbm', dataset='synthetic_multiclass')
+    blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='titanic')
