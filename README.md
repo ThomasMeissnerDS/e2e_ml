@@ -114,8 +114,9 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 ## Release History
 
 
-* 1.0.0
+* 1.0.1
   - Optimized package requirements
+  - Pinned LGBM requirement to version 3.1.0 due to the bug "LightGBMError: bin size 257 cannot run on GPU #3339"
 * 0.9.9
   * Enabled tune_mode parameter during class instantiation.
   * Updated docstings across all functions and changed model defaults.
