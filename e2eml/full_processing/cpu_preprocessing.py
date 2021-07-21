@@ -1,12 +1,10 @@
 from pandas.core.common import SettingWithCopyWarning
 from sklearn import model_selection
-from sklearn import preprocessing
 from sklearn.linear_model import BayesianRidge
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import TimeSeriesSplit
 import numpy as np
 import pandas as pd
-from pandas.api.types import CategoricalDtype
 from category_encoders import *
 from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import IsolationForest
@@ -15,8 +13,6 @@ from sklearn.mixture import GaussianMixture
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.decomposition import PCA
-from collections import defaultdict
-from sklearn.base import BaseEstimator, TransformerMixin
 from boostaroota import BoostARoota
 import lightgbm
 import xgboost as xgb

@@ -113,6 +113,9 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 
 ## Release History
 
+
+* 1.0.0
+  - Optimized package requirements
 * 0.9.9
   * Enabled tune_mode parameter during class instantiation.
   * Updated docstings across all functions and changed model defaults.
