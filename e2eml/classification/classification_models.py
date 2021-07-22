@@ -115,6 +115,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
+                predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
@@ -129,6 +130,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 self.threshold_refiner(predicted_probs, Y_test)
                 predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
             else:
+                predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
 
             if feat_importance and importance_alg == 'SHAP':
@@ -1006,7 +1008,9 @@ class ClassificationModels(postprocessing.FullPipeline):
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                predicted_classes = predicted_classes.astype(int)
             else:
+                predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()

@@ -24,8 +24,9 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
+            self.pos_tagging_pca(pca_pos_tags=False)
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
@@ -64,8 +65,9 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
+            self.pos_tagging_pca(pca_pos_tags=False)
         self.rare_feature_processor(threshold=0.02, mask_as='miscellaneous')
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
@@ -104,8 +106,9 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
+            self.pos_tagging_pca(pca_pos_tags=False)
         self.rare_feature_processor(threshold=0.02, mask_as='miscellaneous')
         self.cardinality_remover(threshold=100)
         self.onehot_pca()

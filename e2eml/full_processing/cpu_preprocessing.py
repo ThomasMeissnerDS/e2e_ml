@@ -466,7 +466,7 @@ class PreProcessing:
             except Exception:
                 pass
             mapping = self.preprocess_decisions["label_encoder_mapping"]
-            pandas_series[col] = pandas_series[col].apply(lambda x: mapping.get(x, -1))
+            pandas_series[col] = pandas_series[col].apply(lambda x: mapping.get(x, 999))
             #pandas_series = pandas_series[col]
             return pandas_series
 

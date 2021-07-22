@@ -135,12 +135,8 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             """
             Calculating Matthews, ROC_AUC score and different F1 scores.
             """
-            try:
-                matthews = matthews_corrcoef(Y_test, y_hat)
-            except Exception:
-                matthews = 0
-            print(f"The Matthew correlation is {matthews}")
-            logging.info(f'The Matthew correlation of {algorithm} is {matthews}')
+            #y_hat = y_hat.astype(int)
+            #Y_test = Y_test.astype(int)
 
             if self.class_problem == 'binary':
                 def get_preds(threshold, probabilities):
@@ -168,6 +164,17 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                 print(f"The ROC_AUC score is {roc_auc}")
             else:
                 roc_auc = None
+            try:
+                matthews = matthews_corrcoef(Y_test, y_hat)
+            except Exception:
+                matthews = 0
+            print(f"The Matthew correlation is {matthews}")
+            logging.info(f'The Matthew correlation of {algorithm} is {matthews}')
+            print(np.unique(Y_test))
+            print(np.unique(y_hat))
+            print("-------------------")
+            print(Y_test)
+            print(y_hat)
             f1_score_macro = f1_score(Y_test, y_hat, average='macro')
             print(f"The macro F1 score is {f1_score_macro}")
             logging.info(f'The macro F1 score of {algorithm} is {f1_score_macro}')
