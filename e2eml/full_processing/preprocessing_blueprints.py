@@ -27,7 +27,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.pos_tagging_pca(pca_pos_tags=False)
-            self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
+            #self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
+            self.tfidf_naive_bayes_proba()
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=100)
         self.onehot_pca()

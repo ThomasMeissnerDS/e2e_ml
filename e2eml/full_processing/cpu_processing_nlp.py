@@ -1,16 +1,20 @@
 from e2eml.full_processing import cpu_preprocessing
 from sklearn.decomposition import PCA
+import re
 import spacy
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk import pos_tag
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn import naive_bayes, pipeline, manifold, preprocessing
 import pandas as pd
 import numpy as np
 import logging
 
 nltk.download('punkt')
 nltk.download('averaged_perceptron_tagger')
+nltk.download('stopwords')
+nltk.download('wordnet')
 
 # TODO: Continue on NLP
 """
@@ -19,6 +23,39 @@ THIS PART IS UNFINISHED AND UNTESTED.
 
 
 class NlpPreprocessing(cpu_preprocessing.PreProcessing):
+    """
+    Preprocess a string.
+    :parameter
+        :param text: string - name of column containing text
+        :param lst_stopwords: list - list of stopwords to remove
+        :param flg_stemm: bool - whether stemming is to be applied
+        :param flg_lemm: bool - whether lemmitisation is to be applied
+    :return
+        cleaned text
+    """
+    def utils_preprocess_text(self, text, flg_stemm=False, flg_lemm=True, lst_stopwords=None):
+        # clean (convert to lowercase and remove punctuations and   characters and then strip)
+        text = re.sub(r'[^\w\s]', '', str(text).lower().strip())
+
+        # Tokenize (convert from string to list)
+        lst_text = text.split()    # remove Stopwords
+        if lst_stopwords is not None:
+            lst_text = [word for word in lst_text if word not in lst_stopwords]
+
+        # Stemming (remove -ing, -ly, ...)
+        if flg_stemm == True:
+            ps = nltk.stem.porter.PorterStemmer()
+            lst_text = [ps.stem(word) for word in lst_text]
+
+        # Lemmatisation (convert the word into root word)
+        if flg_lemm == True:
+            lem = nltk.stem.wordnet.WordNetLemmatizer()
+            lst_text = [lem.lemmatize(word) for word in lst_text]
+
+        # back to string from list
+        text = " ".join(lst_text)
+        return text
+
     def spacy_features(self, df: pd.DataFrame, text_column):
         """
         This function generates features using spacy en_core_wb_lg
@@ -198,7 +235,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
                     if df[f'nof_words_{text_col}'].max() >= 3:
                         df[text_col].fillna('None', inplace=True)
-                        tfids = TfidfVectorizer(ngram_range=(1, 2), strip_accents="unicode")
+                        tfids = TfidfVectorizer(ngram_range=(1, 2), strip_accents="unicode", max_features=10000)
                         vector = list(tfids.fit_transform(df[text_col]).toarray())
                         self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_{text_col}"] = tfids
                         if pca_pos_tags:
@@ -251,6 +288,86 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             X_test = self.tfidf_pca(X_test,
                                     self.nlp_columns, mode='transform',
                                     pca_pos_tags=pca_pos_tags
+                                    )
+            logging.info('Finished TFIDF to PCA loop.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def tfidf_naive_bayes(self, df, text_cols, target_col=None, mode='fit'):
+        if mode == 'transform':
+            pass
+        else:
+            pass
+        if mode == 'transform':
+            for text_col in text_cols:
+                lst_stopwords = nltk.corpus.stopwords.words("english")
+                df[text_col] = df[text_col].apply(lambda x:
+                                                  self.utils_preprocess_text(x, flg_stemm=False, flg_lemm=True,
+                                                                             lst_stopwords=lst_stopwords))
+                df[text_col].fillna('None', inplace=True)
+                tfids = self.preprocess_decisions[f"tfidf_bayes"][f"tfidf_{text_col}"]
+                classifier = self.preprocess_decisions[f"tfidf_bayes"][f"bayes_model_{text_col}"]
+                X_test_bayes = tfids.transform(df[text_col])
+                y_hat_bayes = classifier.predict(X_test_bayes)
+                df[f"tfid_bayes_pred_{text_col}"] = y_hat_bayes
+        elif mode == 'fit':
+            # if self.nlp_columns
+            nlp_columns = []
+            for text_col in text_cols:
+                try:
+                    # do we have at least 3 words?
+                    df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
+                    if df[f'nof_words_{text_col}'].max() >= 3:
+                        lst_stopwords = nltk.corpus.stopwords.words("english")
+                        df[text_col] = df[text_col].apply(lambda x:
+                                                              self.utils_preprocess_text(x, flg_stemm=False, flg_lemm=True,
+                                                                                    lst_stopwords=lst_stopwords))
+                        df[text_col].fillna('None', inplace=True)
+                        tfids = TfidfVectorizer(ngram_range=(1, 2), strip_accents="unicode", max_features=10000)
+                        tfids.fit(df[text_col])
+                        X_train_bayes = tfids.transform(df[text_col])
+                        Y_train_bayes = target_col
+                        self.preprocess_decisions[f"tfidf_bayes"][f"tfidf_{text_col}"] = tfids
+                        classifier = naive_bayes.MultinomialNB()
+                        classifier.fit(X_train_bayes, Y_train_bayes)
+                        y_hat_bayes = classifier.predict(X_train_bayes)
+                        df[f"tfid_bayes_pred_{text_col}"] = y_hat_bayes
+                        self.preprocess_decisions[f"tfidf_bayes"][f"bayes_model_{text_col}"] = classifier
+                        nlp_columns.append(text_col)
+                    else:
+                        pass
+                    df.drop(f'nof_words_{text_col}', axis=1, inplace=True)
+                except AttributeError:
+                    pass
+            # get unique original column names
+            unique_nlp_cols = list(set(nlp_columns))
+            self.nlp_columns = unique_nlp_cols
+            print(df.info())
+        return df
+
+    def tfidf_naive_bayes_proba(self, pca_pos_tags=True):
+        self.get_current_timestamp(task='Start Spacy, POS tagging')
+        logging.info('Start TFIDF to PCA loop.')
+        algorithm = 'spacy_pos'
+        if self.prediction_mode:
+            text_columns = self.nlp_columns
+            self.dataframe = self.tfidf_naive_bayes(
+                self.dataframe, text_columns, mode='transform')
+            logging.info('Finished TFIDF to PCA loop.')
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            if pca_pos_tags:
+                self.preprocess_decisions[f"tfidf_bayes"] = {}
+            else:
+                pass
+            if not self.nlp_columns:
+                text_columns = X_train.select_dtypes(include=['object']).columns
+            else:
+                text_columns = self.nlp_columns
+            X_train = self.tfidf_naive_bayes(X_train,
+                                     text_columns, mode='fit', target_col=Y_train
+                                     )
+            X_test = self.tfidf_naive_bayes(X_test,
+                                    self.nlp_columns, mode='transform'
                                     )
             logging.info('Finished TFIDF to PCA loop.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
