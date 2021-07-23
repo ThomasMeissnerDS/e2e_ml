@@ -4,6 +4,7 @@ import spacy
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk import pos_tag
+from sklearn.feature_extraction.text import TfidfVectorizer
 import pandas as pd
 import numpy as np
 import logging
@@ -74,7 +75,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                           "VB", "VBD", "VBG", "VBZ", "WDT", "WP", "WRB"]
         if mode == 'transform':
             for text_col in text_cols:
-                temp_target_columns = [x+text_col for x in target_columns]
+                temp_target_columns = [x + text_col for x in target_columns]
                 df[text_col].fillna('None', inplace=True)
                 spacy_df = pd.DataFrame(self.spacy_features(df, text_col), columns=self.get_spacy_col_names())
                 temp_df = pd.merge(df, spacy_df, left_index=True, right_index=True, how='left')
@@ -100,7 +101,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     # do we have at least 3 words?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
                     if df[f'nof_words_{text_col}'].max() >= 3:
-                        temp_target_columns = [x+text_col for x in target_columns]
+                        temp_target_columns = [x + text_col for x in target_columns]
                         df[text_col].fillna('None', inplace=True)
                         spacy_df = pd.DataFrame(self.spacy_features(df, text_col), columns=self.get_spacy_col_names())
                         temp_df = pd.merge(df, spacy_df, left_index=True, right_index=True, how='left')
@@ -157,12 +158,99 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             else:
                 text_columns = self.nlp_columns
             X_train = self.pos_tagging_pca_nlp_cols(X_train,
-                                         text_columns, mode='fit',
+                                                    text_columns, mode='fit',
                                                     pca_pos_tags=pca_pos_tags
-                                         )
+                                                    )
             X_test = self.pos_tagging_pca_nlp_cols(X_test,
-                                        self.nlp_columns, mode='transform',
+                                                   self.nlp_columns, mode='transform',
                                                    pca_pos_tags=pca_pos_tags
-                                        )
+                                                   )
             logging.info('Finished spacy POS tagging loop.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def tfidf_pca(self, df, text_cols, mode='fit', pca_pos_tags=True):
+        if mode == 'transform':
+            pass
+        else:
+            pass
+        if mode == 'transform':
+            for text_col in text_cols:
+                df[text_col].fillna('None', inplace=True)
+                tfids = self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_{text_col}"]
+                vector = list(tfids.transform(df[text_col]).toarray())
+                if pca_pos_tags:
+                    self.get_current_timestamp(task='PCA POS tags')
+                    logging.info('Start to PCA POS tags.')
+                    pca = self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_pca_{text_col}"]
+                    comps = pca.transform(vector)
+                    tfidf_pca_cols = [f'TFIDF PC-1 {text_col}', f'TFIDF PC-2 {text_col}']
+                    pos_df = pd.DataFrame(comps, columns=tfidf_pca_cols)
+                    tfidf_df_pca = pos_df[tfidf_pca_cols]
+                    df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
+                else:
+                    pass
+        elif mode == 'fit':
+            # if self.nlp_columns
+            nlp_columns = []
+            for text_col in text_cols:
+                try:
+                    # do we have at least 3 words?
+                    df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
+                    if df[f'nof_words_{text_col}'].max() >= 3:
+                        df[text_col].fillna('None', inplace=True)
+                        tfids = TfidfVectorizer(ngram_range=(1, 2), strip_accents="unicode")
+                        vector = list(tfids.fit_transform(df[text_col]).toarray())
+                        self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_{text_col}"] = tfids
+                        if pca_pos_tags:
+                            self.get_current_timestamp(task='PCA TfIDF matrix')
+                            logging.info('Start to PCA TfIDF matrix.')
+                            pca = PCA(n_components=2)
+                            comps = pca.fit_transform(vector)
+                            self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_pca_{text_col}"] = pca
+                            tfidf_pca_cols = [f'TFIDF PC-1 {text_col}', f'TFIDF PC-2 {text_col}']
+                            pos_df = pd.DataFrame(comps, columns=tfidf_pca_cols)
+                            tfidf_df_pca = pos_df[tfidf_pca_cols]
+                            df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
+                        else:
+                            pass
+                        nlp_columns.append(text_col)
+                    else:
+                        pass
+                    df.drop(f'nof_words_{text_col}', axis=1, inplace=True)
+                except AttributeError:
+                    pass
+            # get unique original column names
+            unique_nlp_cols = list(set(nlp_columns))
+            self.nlp_columns = unique_nlp_cols
+            print(df.info())
+        return df
+
+    def tfidf_vectorizer_to_pca(self, pca_pos_tags=True):
+        self.get_current_timestamp(task='Start Spacy, POS tagging')
+        logging.info('Start TFIDF to PCA loop.')
+        algorithm = 'spacy_pos'
+        if self.prediction_mode:
+            text_columns = self.nlp_columns
+            self.dataframe = self.tfidf_pca(
+                self.dataframe, text_columns, mode='transform', pca_pos_tags=pca_pos_tags)
+            logging.info('Finished TFIDF to PCA loop.')
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            if pca_pos_tags:
+                self.preprocess_decisions[f"tfidf_vectorizer"] = {}
+            else:
+                pass
+            if not self.nlp_columns:
+                text_columns = X_train.select_dtypes(include=['object']).columns
+            else:
+                text_columns = self.nlp_columns
+            X_train = self.tfidf_pca(X_train,
+                                     text_columns, mode='fit',
+                                     pca_pos_tags=pca_pos_tags
+                                     )
+            X_test = self.tfidf_pca(X_test,
+                                    self.nlp_columns, mode='transform',
+                                    pca_pos_tags=pca_pos_tags
+                                    )
+            logging.info('Finished TFIDF to PCA loop.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
