@@ -6,7 +6,9 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk import pos_tag
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn import naive_bayes, pipeline, manifold, preprocessing
+from sklearn import naive_bayes
+from sklearn.linear_model import Ridge
+import lightgbm as lgb
 import pandas as pd
 import numpy as np
 import logging
@@ -309,6 +311,11 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 X_test_bayes = tfids.transform(df[text_col])
                 y_hat_bayes = classifier.predict(X_test_bayes)
                 df[f"tfid_bayes_pred_{text_col}"] = y_hat_bayes
+                if self.class_problem == 'regression':
+                    ridge = self.preprocess_decisions[f"tfidf_bayes"][f"ridge_model_{text_col}"]
+                    y_hat_ridge = ridge.predict(X_test_bayes)
+                    df[f"tfid_ridge_pred_{text_col}"] = y_hat_ridge
+
         elif mode == 'fit':
             # if self.nlp_columns
             nlp_columns = []
@@ -327,10 +334,23 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                         X_train_bayes = tfids.transform(df[text_col])
                         Y_train_bayes = target_col
                         self.preprocess_decisions[f"tfidf_bayes"][f"tfidf_{text_col}"] = tfids
-                        classifier = naive_bayes.MultinomialNB()
+                        if self.class_problem == 'binary':
+                            classifier = naive_bayes.MultinomialNB()
+                        elif self.class_problem == 'multiclass':
+                            classifier = naive_bayes.MultinomialNB()
+                        elif self.class_problem == 'regression':
+                            classifier = lgb.LGBMRegressor()
+                            ridge = Ridge(alpha=1.0)
+                            ridge.fit(X_train_bayes, Y_train_bayes)
+                            y_hat_ridge = ridge.predict(X_train_bayes)
+                            df[f"tfid_ridge_pred_{text_col}"] = y_hat_ridge
+                            self.preprocess_decisions[f"tfidf_bayes"][f"ridge_model_{text_col}"] = ridge
+                        else:
+                            classifier = naive_bayes.GaussianNB()
                         classifier.fit(X_train_bayes, Y_train_bayes)
                         y_hat_bayes = classifier.predict(X_train_bayes)
                         df[f"tfid_bayes_pred_{text_col}"] = y_hat_bayes
+
                         self.preprocess_decisions[f"tfidf_bayes"][f"bayes_model_{text_col}"] = classifier
                         nlp_columns.append(text_col)
                     else:

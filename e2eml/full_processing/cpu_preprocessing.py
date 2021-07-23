@@ -81,7 +81,9 @@ class PreProcessing:
         # check if we face a classification problem and check how many classes we have
         if not ml_task:
             try:
-                if datasource[target_variable].nunique() > 2:
+                if np.array_equal(datasource[target_variable], datasource[target_variable].astype(float)):
+                    self.class_problem = 'regression'
+                elif datasource[target_variable].nunique() > 2:
                     self.class_problem = 'multiclass'
                     self.num_classes = datasource[target_variable].nunique()
                 elif datasource[target_variable].nunique() == 2:
@@ -90,7 +92,11 @@ class PreProcessing:
                 else:
                     pass
             except Exception:
-                if len(np.unique(np.array(target_variable))) > 2:
+                def isinteger(x):
+                  return np.equal(np.mod(x, 1), 0)
+                if np.sum(isinteger(np.array(target_variable))) > 0:
+                    self.class_problem = 'regression' #TODO: Test this logic
+                elif len(np.unique(np.array(target_variable))) > 2:
                     self.class_problem = 'multiclass'
                     self.num_classes = len(np.unique(np.array(target_variable)))
                 elif len(np.unique(np.array(target_variable))) == 2:

@@ -243,7 +243,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
             self.ngboost_train(tune_mode=self.tune_mode)
             self.lgbm_train(tune_mode=self.tune_mode)
             self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
-        self.ngboost_predict(feat_importance=True, importance_alg='SHAP')
+        self.ngboost_predict(feat_importance=True)
         self.lgbm_predict(feat_importance=True)
         self.xgboost_predict(feat_importance=True)
         if self.prediction_mode:
