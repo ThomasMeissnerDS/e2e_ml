@@ -243,6 +243,34 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
+    def ml_bp05_multiclass_full_processing_vowpal_wabbit(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
+        :return: Updates class attributes by its predictions.
+        """
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
+        if self.prediction_mode:
+            pass
+        else:
+            self.vowpal_wabbit_train()
+        self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
+        algorithm = 'vowpal_wabbit'
+        self.classification_eval(algorithm)
+        self.prediction_mode = True
+        logging.info('Finished blueprint.')
+
     def ml_special_binary_full_processing_boosting_blender(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,

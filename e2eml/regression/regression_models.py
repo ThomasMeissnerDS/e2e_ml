@@ -5,6 +5,7 @@ import pandas as pd
 import optuna
 import xgboost as xgb
 import lightgbm as lgb
+from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
 from sklearn.ensemble import StackingRegressor
 from sklearn.linear_model import RidgeCV
 from sklearn.ensemble import RandomForestRegressor
@@ -80,6 +81,64 @@ class RegressionModels(postprocessing.FullPipeline):
         """
         self.get_current_timestamp(task='Predict with Logistic regression')
         algorithm = 'linear_regression'
+        if self.prediction_mode:
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.predict(self.dataframe)
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.predict(X_test)
+
+            if feat_importance and importance_alg == 'SHAP':
+                self.runtime_warnings(warn_about='shap_cpu')
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            elif feat_importance and importance_alg == 'permutation':
+                result = permutation_importance(
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
+                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                fig, ax = plt.subplots()
+                permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
+                ax.set_title("Feature importances using permutation on full model")
+                ax.set_ylabel("Mean accuracy decrease")
+                fig.tight_layout()
+                plt.show()
+            else:
+                pass
+        self.predicted_values[f"{algorithm}"] = {}
+        self.predicted_values[f"{algorithm}"] = predicted_probs
+
+    def vowpal_wabbit_regression_train(self):
+        """
+        Trains a simple Linear regression classifier.
+        :return: Trained model.
+        """
+        # https://vowpalwabbit.org/docs/vowpal_wabbit/python/latest/reference/vowpalwabbit.sklearn.html
+        self.get_current_timestamp(task='Train logistic regression model')
+        algorithm = 'vowpal_wabbit'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = VWRegressor(convert_labels=False)
+            model.fit(X_train, Y_train)
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            return self.trained_models
+
+    def vowpal_wabbit_predict(self, feat_importance=True, importance_alg='permutation'):
+        """
+        Loads the pretrained model from the class itself and predicts on new data.
+        :param feat_importance: Set True, if feature importance shall be calculated.
+        :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
+        GPU acceleration). (Default: 'permutation')
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp(task='Predict with Logistic regression')
+        algorithm = 'vowpal_wabbit'
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)

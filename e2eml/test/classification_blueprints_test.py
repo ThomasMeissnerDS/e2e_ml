@@ -93,9 +93,6 @@ def steel_fault_multiclass_data():
 
 def nlp_multiclass_data():
     data = pd.read_csv("Corona_NLP_train.csv", encoding='latin-1')
-    data.replace({'Sentiment' : { 'Extremely Negative': 0, 'Negative': 0, 'Neutral': "N",
-                                  'Extremely Positive': 1, 'Positive': 1, }}, inplace=True)
-    data = data[data.Sentiment != 'N']
     test_df = data.head(2500).copy()
     val_df = data.tail(499).copy()
     val_df_target = val_df["Sentiment"].copy()
@@ -124,7 +121,8 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
                                                      target_variable=test_target,
                                                      categorical_columns=test_categorical_cols,
                                                      preferred_training_mode='auto',
-                                                     tune_mode='accurate')
+                                                     tune_mode='accurate',
+                                                     )
     if blueprint == 'lgbm':
         titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(preprocessing_type='nlp', preprocess_bp='bp_01')
         print("Start prediction on holdout dataset")
@@ -152,6 +150,13 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         print("Start prediction on holdout dataset")
         titanic_auto_ml.ml_bp04_multiclass_full_processing_ngboost(val_df, preprocessing_type='nlp')
         val_y_hat = titanic_auto_ml.predicted_classes['ngboost']
+    elif blueprint == 'vowpal_wabbit':
+        titanic_auto_ml.ml_bp05_multiclass_full_processing_vowpal_wabbit(preprocessing_type='nlp')
+        print("Start prediction on holdout dataset")
+        titanic_auto_ml.ml_bp05_multiclass_full_processing_vowpal_wabbit(val_df, preprocessing_type='nlp')
+        # label encode targets
+        #val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
+        val_y_hat = titanic_auto_ml.predicted_classes['vowpal_wabbit']
     elif blueprint == 'avg_booster':
         titanic_auto_ml.ml_special_binary_full_processing_boosting_blender(preprocessing_type='nlp')
         print("Start prediction on holdout dataset")
@@ -180,4 +185,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
 
 
 if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='xgboost', dataset='corona_tweet')
+    blueprint_binary_test_titanic(blueprint='xgboost', dataset='corona_tweet') # corona_tweet

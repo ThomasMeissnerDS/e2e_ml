@@ -81,7 +81,7 @@ class PreProcessing:
         # check if we face a classification problem and check how many classes we have
         if not ml_task:
             try:
-                if np.array_equal(datasource[target_variable], datasource[target_variable].astype(float)):
+                if datasource[target_variable].nunique() > 10:
                     self.class_problem = 'regression'
                 elif datasource[target_variable].nunique() > 2:
                     self.class_problem = 'multiclass'
@@ -90,13 +90,9 @@ class PreProcessing:
                     self.class_problem = 'binary'
                     self.num_classes = 2
                 else:
-                    pass
+                    self.class_problem = 'regression'
             except Exception:
-                def isinteger(x):
-                  return np.equal(np.mod(x, 1), 0)
-                if np.sum(isinteger(np.array(target_variable))) > 0:
-                    self.class_problem = 'regression' #TODO: Test this logic
-                elif len(np.unique(np.array(target_variable))) > 2:
+                if len(np.unique(np.array(target_variable))) > 2:
                     self.class_problem = 'multiclass'
                     self.num_classes = len(np.unique(np.array(target_variable)))
                 elif len(np.unique(np.array(target_variable))) == 2:
@@ -106,6 +102,7 @@ class PreProcessing:
                     pass
         else:
             self.class_problem = ml_task
+        print(f"Ml task is {self.class_problem}")
 
         if preferred_training_mode == 'cpu':
             message = """
@@ -219,10 +216,16 @@ class PreProcessing:
         else:
             pass
 
-    def check_gpu_support(self, algorithm='lgbm'):
+    def check_gpu_support(self, algorithm=None):
         data = np.random.rand(50, 2)
         label = np.random.randint(2, size=50)
-        self.preprocess_decisions[f"gpu_support"] = {}
+        try:
+            if not self.preprocess_decisions[f"gpu_support"]:
+                self.preprocess_decisions[f"gpu_support"] = {}
+        except KeyError:
+            self.preprocess_decisions[f"gpu_support"] = {}
+        else:
+            pass
         if algorithm == 'lgbm':
             self.get_current_timestamp(task='Check LGBM for GPU acceleration.')
             train_data = lightgbm.Dataset(data, label=label)
@@ -231,11 +234,9 @@ class PreProcessing:
                 gbm = lightgbm.train(params, train_set=train_data)
                 self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'gpu'
                 print('LGBM uses GPU.')
-                return True
             except Exception:
                 self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'cpu'
                 print('LGBM uses CPU.')
-                return False
         elif algorithm == 'xgboost':
             self.get_current_timestamp(task='Check Xgboost for GPU acceleration.')
             D_train = xgb.DMatrix(data, label=label)
@@ -244,11 +245,9 @@ class PreProcessing:
                 model = xgb.train(params, D_train)
                 self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'gpu_hist'
                 print('Xgboost uses GPU.')
-                return True
             except Exception:
                 self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'exact'
                 print('Xgboost uses CPU.')
-                return False
         else:
             print("No algorithm has been checked for GPU acceleration.")
 
@@ -486,7 +485,10 @@ class PreProcessing:
                 pass
             target = label_encoder_transform(target, self.preprocess_decisions["label_encoder_mapping"])
         self.labels_encoded = True
-        target = target[self.target_variable].astype(float)
+        if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+            target = target[self.target_variable].astype(int)
+        elif self.class_problem == 'regression':
+            target = target[self.target_variable].astype(float)
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         return target
 

@@ -103,7 +103,6 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
             pass
         else:
             self.linear_regression_train()
-        self.data_scaling()
         algorithm = 'linear_regression'
         self.linear_regression_predict(feat_importance=True, importance_alg='permutation')
         self.regression_eval(algorithm=algorithm)
@@ -219,6 +218,34 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
+    def ml_bp15_train_test_regression_full_processing_vowpal_wabbit_reg(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
+        :return: Updates class attributes by its predictions.
+        """
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
+        if self.prediction_mode:
+            pass
+        else:
+            self.vowpal_wabbit_regression_train()
+        algorithm = 'vowpal_wabbit'
+        self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
+        self.regression_eval(algorithm=algorithm)
+        self.prediction_mode = True
+        logging.info('Finished blueprint.')
+
     def ml_special_regression_full_processing_boosting_blender(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
@@ -259,7 +286,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
             X_test["xgboost_preds"] = self.predicted_values[f"xgboost"]
             X_test["blended_preds"] = (X_test["lgbm_preds"] + X_test["ngboost_preds"] + X_test["xgboost_preds"])/3
             self.predicted_values[f"blended_preds"] = X_test["blended_preds"]
-        self.classification_eval('blended_preds')
+        self.regression_eval('blended_preds')
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 

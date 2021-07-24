@@ -27,8 +27,11 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.pos_tagging_pca(pca_pos_tags=False)
-            #self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
-            self.tfidf_naive_bayes_proba()
+            self.regex_clean_text_data()
+            self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
+            self.tfidf_naive_bayes_proba(analyzer="char_wb")
+            self.tfidf_naive_bayes_proba(analyzer="word")
+            #self.add_vowpal_wabbit_preds_for_nlp_as_feature()
         self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
@@ -50,7 +53,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
                 print("Clustering as a feature skipped due to ValueError.")
         if self.low_memory_mode:
             self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='logloss')
+        self.automated_feature_selection()
         self.sort_columns_alphabetically()
 
     def pp_bp02_preprocessing(self, df=None, preprocessing_type='full'):
@@ -97,7 +100,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
                 print("Clustering as a feature skipped due to ValueError.")
         if self.low_memory_mode:
             self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='logloss')
+        self.automated_feature_selection()
         self.sort_columns_alphabetically()
 
     def pp_bp03_preprocessing(self, df=None, preprocessing_type='full'):
@@ -123,6 +126,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.pos_tagging_pca(pca_pos_tags=False)
+            #self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
+            self.tfidf_naive_bayes_proba()
         self.rare_feature_processor(threshold=0.02, mask_as='miscellaneous')
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
@@ -144,7 +149,10 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
                 print("Clustering as a feature skipped due to ValueError.")
         if self.low_memory_mode:
             self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='logloss')
+        self.automated_feature_selection()
         self.sort_columns_alphabetically()
         self.data_scaling()
-        self.smote_data()
+        if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+            self.smote_data()
+        else:
+            pass

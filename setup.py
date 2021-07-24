@@ -25,6 +25,7 @@ requirements = ["ipython>=6",
                 "setuptools >= 51.1.0",
                 "shap>=0.39.0",
                 "spacy>=3.0.6",
+                "vowpalwabbit>=8.11.0"
                 "wheel==0.36.2",
                 "xgboost>=1.3.3",
                 ]
