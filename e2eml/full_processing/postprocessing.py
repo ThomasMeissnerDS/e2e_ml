@@ -1,6 +1,6 @@
 from e2eml.full_processing import cpu_preprocessing
 from sklearn.metrics import matthews_corrcoef, roc_auc_score, f1_score
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, median_absolute_error
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, median_absolute_error, accuracy_score
 from sklearn.metrics import confusion_matrix, classification_report
 import shap
 import matplotlib.pyplot as plt
@@ -175,13 +175,15 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             print("-------------------")
             print(Y_test)
             print(y_hat)
-            f1_score_macro = f1_score(Y_test, y_hat, average='macro')
+            accuracy = accuracy_score(Y_test, y_hat)
+            print(f"The accuracy is {accuracy}")
+            f1_score_macro = f1_score(Y_test, y_hat, average='macro', zero_division=0)
             print(f"The macro F1 score is {f1_score_macro}")
             logging.info(f'The macro F1 score of {algorithm} is {f1_score_macro}')
-            f1_score_micro = f1_score(Y_test, y_hat, average='micro')
+            f1_score_micro = f1_score(Y_test, y_hat, average='micro', zero_division=0)
             print(f"The micro F1 score is {f1_score_micro}")
             logging.info(f'The micro F1 score of {algorithm} is {f1_score_micro}')
-            f1_score_weighted = f1_score(Y_test, y_hat, average='weighted')
+            f1_score_weighted = f1_score(Y_test, y_hat, average='weighted', zero_division=0)
             print(f"The weighted F1 score is {f1_score_weighted}")
             logging.info(f'The weighted F1 score of {algorithm} is {f1_score_weighted}')
 
@@ -190,6 +192,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             logging.info(f'The classification report of {algorithm} is {full_classification_report}')
             self.evaluation_scores[f"{algorithm}"] = {
                 'matthews': matthews,
+                'accuracy': accuracy,
                 'roc_auc': roc_auc,
                 'f1_score_macro': f1_score_macro,
                 'f1_score_micro': f1_score_micro,

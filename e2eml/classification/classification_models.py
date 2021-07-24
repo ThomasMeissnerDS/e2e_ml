@@ -543,12 +543,14 @@ class ClassificationModels(postprocessing.FullPipeline):
                 y=Y_train)
 
             if self.class_problem == 'binary':
+                weights_for_lgb = self.calc_scale_pos_weight()
                 def objective(trial):
                     dtrain = lgb.Dataset(X_train, label=Y_train)
                     param = {
                         # TODO: Move to additional folder with pyfile "constants" (use OS absolute path)
                         'objective': 'binary',
                         'metric': 'binary_logloss',
+                        'scale_pos_weight': weights_for_lgb,
                         'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
                         'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                         'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
@@ -580,7 +582,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     study = optuna.create_study(direction='maximize')
                 else:
                     study = optuna.create_study(direction='minimize')
-                study.optimize(objective, n_trials=20)
+                study.optimize(objective, n_trials=30)
                 self.optuna_studies[f"{algorithm}"] = {}
                 #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -594,6 +596,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 param = {
                     'objective': 'binary',
                     'metric': 'binary_logloss',
+                    'scale_pos_weight': lgbm_best_param["scale_pos_weight"],
                     'num_boost_round': lgbm_best_param["num_boost_round"],
                     'lambda_l1': lgbm_best_param["lambda_l1"],
                     'lambda_l2': lgbm_best_param["lambda_l2"],
@@ -658,7 +661,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     study = optuna.create_study(direction='maximize')
                 else:
                     study = optuna.create_study(direction='minimize')
-                study.optimize(objective, n_trials=20)
+                study.optimize(objective, n_trials=30)
                 self.optuna_studies[f"{algorithm}"] = {}
                 #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')

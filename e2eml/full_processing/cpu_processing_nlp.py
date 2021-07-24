@@ -311,7 +311,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             logging.info('Finished spacy POS tagging loop.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def tfidf_pca(self, df, text_cols, mode='fit', pca_pos_tags=True):
+    def tfidf_pca(self, df, text_cols, mode='fit', pca_pos_tags=True, ngram_range=(1, 2)):
         if mode == 'transform':
             pass
         else:
@@ -341,7 +341,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
                     if df[f'nof_words_{text_col}'].max() >= 3:
                         df[text_col].fillna('None', inplace=True)
-                        tfids = TfidfVectorizer(ngram_range=(1, 2), strip_accents="unicode", max_features=10000)
+                        tfids = TfidfVectorizer(ngram_range=ngram_range, strip_accents="unicode", max_features=10000)
                         vector = list(tfids.fit_transform(df[text_col]).toarray())
                         self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_{text_col}"] = tfids
                         if pca_pos_tags:
@@ -368,14 +368,14 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             print(df.info())
         return df
 
-    def tfidf_vectorizer_to_pca(self, pca_pos_tags=True):
+    def tfidf_vectorizer_to_pca(self, pca_pos_tags=True, ngram_range=(1, 2)):
         self.get_current_timestamp(task='Start Spacy, POS tagging')
         logging.info('Start TFIDF to PCA loop.')
         algorithm = 'spacy_pos'
         if self.prediction_mode:
             text_columns = self.nlp_columns
             self.dataframe = self.tfidf_pca(
-                self.dataframe, text_columns, mode='transform', pca_pos_tags=pca_pos_tags)
+                self.dataframe, text_columns, mode='transform', pca_pos_tags=pca_pos_tags, ngram_range=ngram_range)
             logging.info('Finished TFIDF to PCA loop.')
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -389,16 +389,18 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 text_columns = self.nlp_columns
             X_train = self.tfidf_pca(X_train,
                                      text_columns, mode='fit',
-                                     pca_pos_tags=pca_pos_tags
+                                     pca_pos_tags=pca_pos_tags,
+                                     ngram_range=ngram_range
                                      )
             X_test = self.tfidf_pca(X_test,
                                     self.nlp_columns, mode='transform',
-                                    pca_pos_tags=pca_pos_tags
+                                    pca_pos_tags=pca_pos_tags,
+                                    ngram_range=ngram_range
                                     )
             logging.info('Finished TFIDF to PCA loop.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def tfidf_naive_bayes(self, df, text_cols, target_col=None, mode='fit', analyzer="char_wb"):
+    def tfidf_naive_bayes(self, df, text_cols, target_col=None, mode='fit', analyzer="char_wb", ngram_range=(1, 2)):
         if mode == 'transform':
             pass
         else:
@@ -442,7 +444,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                                                               self.utils_preprocess_text(x, flg_stemm=False, flg_lemm=True,
                                                                                     lst_stopwords=lst_stopwords))
                         df[text_col].fillna('None', inplace=True)
-                        tfids = TfidfVectorizer(ngram_range=(1, 2), strip_accents="unicode", max_features=20000,
+                        tfids = TfidfVectorizer(ngram_range=ngram_range, strip_accents="unicode", max_features=20000,
                                                 analyzer=analyzer)
                         tfids.fit(df[text_col])
                         X_train_bayes = tfids.transform(df[text_col])
@@ -492,14 +494,14 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             print(df.info())
         return df
 
-    def tfidf_naive_bayes_proba(self, pca_pos_tags=True, analyzer="char_wb"):
+    def tfidf_naive_bayes_proba(self, pca_pos_tags=True, analyzer="char_wb", ngram_range=(1, 2)):
         self.get_current_timestamp(task='Start Spacy, POS tagging')
         logging.info('Start TFIDF to PCA loop.')
         algorithm = 'spacy_pos'
         if self.prediction_mode:
             text_columns = self.nlp_columns
             self.dataframe = self.tfidf_naive_bayes(
-                self.dataframe, text_columns, mode='transform', analyzer=analyzer)
+                self.dataframe, text_columns, mode='transform', analyzer=analyzer, ngram_range=ngram_range)
             logging.info('Finished TFIDF to PCA loop.')
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -512,15 +514,15 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             else:
                 text_columns = self.nlp_columns
             X_train = self.tfidf_naive_bayes(X_train,
-                                     text_columns, mode='fit', target_col=Y_train, analyzer=analyzer
+                                     text_columns, mode='fit', target_col=Y_train, analyzer=analyzer, ngram_range=ngram_range
                                      )
             X_test = self.tfidf_naive_bayes(X_test,
-                                    self.nlp_columns, mode='transform', analyzer=analyzer
+                                    self.nlp_columns, mode='transform', analyzer=analyzer, ngram_range=ngram_range
                                     )
             logging.info('Finished TFIDF to PCA loop.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def vowpal_wabbit_text_prediction_as_feature(self, df, text_cols, target_col=None, mode='fit', analyzer="char_wb"):
+    def vowpal_wabbit_text_prediction_as_feature(self, df, text_cols, target_col=None, mode='fit'):
         if mode == 'transform':
             pass
         else:

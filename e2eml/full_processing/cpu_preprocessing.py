@@ -437,6 +437,21 @@ class PreProcessing:
             logging.info('Finished sorting columns alphabetically.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
+    def calc_scale_pos_weight(self):
+        X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+        try:
+            pos_labels = Y_train.sum()
+        except Exception:
+            pos_labels = np.sum(Y_train)
+
+        try:
+            neg_labels = len(X_train.index)-pos_labels
+        except Exception:
+            neg_labels = len(Y_train)-np.sum(Y_train)
+
+        scale_pos_weight = neg_labels/pos_labels
+        return scale_pos_weight
+
     def label_encoder_decoder(self, target, mode='fit'):
         """
         Takes a Pandas series and encodes string-based labels to numeric values. Flags previously unseen
