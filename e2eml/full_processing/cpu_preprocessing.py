@@ -117,7 +117,7 @@ class PreProcessing:
             print('GPU acceleration chosen.')
             self.preferred_training_mode = preferred_training_mode
         elif preferred_training_mode == 'auto':
-            print("Preferred training mode auto has been chosen. e2eml will automatically detect, if LGBM and Xgboost can"
+            print("Preferred training mode auto has been chosen. e2eml will automatically detect, if LGBM and Xgboost can "
                   "use GPU acceleration and optimize the workflow accordingly.")
             self.preferred_training_mode = preferred_training_mode
         else:
@@ -213,6 +213,11 @@ class PreProcessing:
             exist. Any other declared option will result in not-handling of NULLs and are likely to fail later in the
              pipeline."""
             return warnings.warn(warning_message, RuntimeWarning)
+        elif warn_about == 'future_architecture_change':
+            warning_message = """The organization of blueprints will change in a future version to better separate NLP
+            and non-NLP related preprocessing(!) blueprints. This change is likely to be live with e2eml version 2.0.0
+            """
+            return warnings.warn(warning_message, DeprecationWarning)
         else:
             pass
 
@@ -571,7 +576,6 @@ class PreProcessing:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             skewness = X_train.skew(axis=0, skipna=True)
             left_skewed = skewness[skewness < -0.5].index.to_list()
-            print(left_skewed)
             right_skewed = skewness[skewness > 0.5].index.to_list()
             skewed = left_skewed+right_skewed
             for col in X_train[skewed].columns:
@@ -583,7 +587,6 @@ class PreProcessing:
                 X_test[col] = log_array
             logging.info('Finished skewness removal.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            print(skewed)
             self.preprocess_decisions["skewed_columns"] = skewed
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
                                                 Y_test)
@@ -1453,7 +1456,7 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             for col in X_train.columns:
-                print(col)
+                print(f"Features before selection are...{col}")
             if metric:
                 metric = metric
             elif self.class_problem == 'binary':

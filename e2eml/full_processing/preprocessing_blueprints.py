@@ -4,7 +4,7 @@ import logging
 
 
 class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
-    def pp_bp01_preprocessing(self, df=None, preprocessing_type='nlp'):
+    def pp_bp01_preprocessing(self, df=None, preprocessing_type='full'):
         """
         Our recommended blueprint for model testing.
         Runs a preprocessing blueprint only. This is useful for building custom pipelines.
@@ -14,6 +14,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         :return: Updates class attributes.
         """
         logging.info('Start blueprint.')
+        self.runtime_warnings(warn_about="future_architecture_change")
         try:
             if df.empty:
                 self.prediction_mode = False
@@ -26,6 +27,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         self.datetime_converter(datetime_handling='all')
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
+            self.append_text_sentiment_score()
             self.pos_tagging_pca(pca_pos_tags=False)
             self.regex_clean_text_data()
             self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
@@ -65,6 +67,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         :return: Updates class attributes.
         """
         logging.info('Start blueprint.')
+        self.runtime_warnings(warn_about="future_architecture_change")
         try:
             if df.empty:
                 self.prediction_mode = False
@@ -112,6 +115,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         :return: Updates class attributes.
         """
         logging.info('Start blueprint.')
+        self.runtime_warnings(warn_about="future_architecture_change")
         try:
             if df.empty:
                 self.prediction_mode = False

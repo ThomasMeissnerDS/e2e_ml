@@ -104,8 +104,6 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
         else:
             logging.info('Started classification evaluation.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            print(Y_train)
-            print(Y_test)
             """
             We need a fallback logic as we might receive different types of data.
             If pred_class will not work with numpy arrays and needs the .any() function.
@@ -170,11 +168,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                 matthews = 0
             print(f"The Matthew correlation is {matthews}")
             logging.info(f'The Matthew correlation of {algorithm} is {matthews}')
-            print(np.unique(Y_test))
-            print(np.unique(y_hat))
             print("-------------------")
-            print(Y_test)
-            print(y_hat)
             accuracy = accuracy_score(Y_test, y_hat)
             print(f"The accuracy is {accuracy}")
             f1_score_macro = f1_score(Y_test, y_hat, average='macro', zero_division=0)

@@ -124,10 +124,12 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
                                                      tune_mode='accurate',
                                                      )
     if blueprint == 'lgbm':
-        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(preprocessing_type='nlp', preprocess_bp='bp_01')
+        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(preprocessing_type='full', preprocess_bp='bp_01')
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(val_df, preprocessing_type='nlp', preprocess_bp='bp_01')
+        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(val_df, preprocessing_type='full', preprocess_bp='bp_01')
         val_y_hat = titanic_auto_ml.predicted_classes['lgbm']
+        # nlp+dynamic scale_pos: matth 0.60, no scale_pos: 0.54
+        # no nlp, scale_pos: 0.49, no scale_pos: 0.54
     elif blueprint == 'xgboost':
         titanic_auto_ml.ml_bp01_multiclass_full_processing_xgb_prob(preprocessing_type='nlp')
         print("Start prediction on holdout dataset")
@@ -185,4 +187,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
 
 
 if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='xgboost', dataset='corona_tweet') # corona_tweet
+    blueprint_binary_test_titanic(blueprint='autoselect', dataset='titanic') # corona_tweet

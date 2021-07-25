@@ -71,15 +71,14 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
                     self.lgbm_train(tune_mode=self.tune_mode)
             self.lgbm_predict(feat_importance=True)
             self.classification_eval(algorithm=algorithm)
-        elif algorithm == 'sklearn_ensemble':
+        elif algorithm == 'vowpal_wabbit':
             # train sklearn ensemble
             if self.prediction_mode:
                 pass
             else:
-                self.sklearn_ensemble_train()
-            self.sklearn_ensemble_predict(feat_importance=True, importance_alg='permutation')
-            algorithm = 'sklearn_ensemble'
-            self.classification_eval(algorithm=algorithm, pred_probs=self.predicted_probs[algorithm])
+                self.vowpal_wabbit_train()
+            self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
+            self.classification_eval(algorithm=algorithm)
 
     def ml_bp00_train_test_binary_full_processing_log_reg_prob(self, df=None, preprocessing_type='full', preprocess_bp="bp_03"):
         """
@@ -347,6 +346,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
             self.train_pred_selected_model(algorithm='xgboost')
             self.train_pred_selected_model(algorithm='ngboost')
             self.train_pred_selected_model(algorithm='sklearn_ensemble')
+            self.train_pred_selected_model(algorithm="vowpal_wabbit")
 
             # select best model
             max_matthews = 0

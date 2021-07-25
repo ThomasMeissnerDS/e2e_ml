@@ -6,6 +6,7 @@ import spacy
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk import pos_tag
+from textblob import TextBlob
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import naive_bayes
 from sklearn.linear_model import Ridge, ElasticNet
@@ -159,6 +160,32 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 X_test[text_col] = X_test[text_col].apply(lambda x : self.decontraction(x))
                 X_test[text_col] = X_test[text_col].apply(lambda x : self.seperate_alphanumeric(x))
                 X_test[text_col] = X_test[text_col].apply(lambda x : self.unique_char(self.cont_rep_char,x))
+            logging.info('Finished text cleaning.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def textBlob_sentiment_polarity_score(self, text):
+        # This polarity score is between -1 to 1
+        polarity = TextBlob(text).sentiment.polarity
+        return polarity
+
+    def append_text_sentiment_score(self):
+        self.get_current_timestamp(task='Start text cleaning.')
+        logging.info('Start text cleaning.')
+        algorithm = 'textblob_sentiment_score'
+        if self.prediction_mode:
+            text_columns = self.nlp_columns
+            for text_col in text_columns:
+                self.dataframe[f"{algorithm}_{text_col}"] = self.dataframe[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
+            logging.info('Finished text cleaning.')
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            if not self.nlp_columns:
+                text_columns = X_train.select_dtypes(include=['object']).columns
+            else:
+                text_columns = self.nlp_columns
+            for text_col in text_columns:
+                X_train[f"{algorithm}_{text_col}"] = X_train[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
+                X_test[f"{algorithm}_{text_col}"] = X_test[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
             logging.info('Finished text cleaning.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 

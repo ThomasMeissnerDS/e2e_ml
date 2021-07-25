@@ -116,8 +116,10 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 * 1.1.0
   - Fixed issue with automated GPU-acceleration detection and flagging
   - Fixed avg regression blueprint where eval function tried to call classification evaluation
+  - Moved POS tagging + PCA step into non-NLP pipeline as it showed good results in general
   - improved NLP part (more and better feature engineering and preprocessing) of blueprints for better performance
-  - Added Vowpal Wabbit for classification and regression
+  - Added Vowpal Wabbit for classification and regression and replaced stacking ensemble in automated model exploration
+    by Vowpal Wabbit as well
 * 1.0.1
   - Optimized package requirements
   - Pinned LGBM requirement to version 3.1.0 due to the bug "LightGBMError: bin size 257 cannot run on GPU #3339"
