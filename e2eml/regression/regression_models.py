@@ -111,7 +111,7 @@ class RegressionModels(postprocessing.FullPipeline):
         self.predicted_values[f"{algorithm}"] = {}
         self.predicted_values[f"{algorithm}"] = predicted_probs
 
-    def vowpal_wabbit_regression_train(self):
+    def vowpal_wabbit_train(self):
         """
         Trains a simple Linear regression classifier.
         :return: Trained model.

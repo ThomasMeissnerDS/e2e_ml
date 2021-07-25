@@ -608,7 +608,8 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
                                                                                 self.dataframe[self.target_variable],
-                                                                                train_size=train_size)
+                                                                                train_size=train_size,
+                                                                                random_state=42)
             try:
                 Y_train = Y_train.astype(float)
                 Y_test = Y_test.astype(float)

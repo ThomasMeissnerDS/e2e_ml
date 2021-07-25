@@ -75,9 +75,9 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
     elif blueprint == 'auto_select':
-        titanic_auto_ml.ml_special_regression_auto_model_exploration()
+        titanic_auto_ml.ml_special_regression_auto_model_exploration(preprocessing_type='full')
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_special_regression_auto_model_exploration(val_df)
+        titanic_auto_ml.ml_special_regression_auto_model_exploration(val_df, preprocessing_type='full')
         val_y_hat = titanic_auto_ml.predicted_values[titanic_auto_ml.best_model]
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
@@ -93,4 +93,4 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
 
 
 if __name__ == "__main__":
-    blueprint_regression_test_housingprices(blueprint='vowpal_wabbit')
+    blueprint_regression_test_housingprices(blueprint='auto_select')

@@ -165,9 +165,9 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         titanic_auto_ml.ml_special_binary_full_processing_boosting_blender(val_df, preprocessing_type='nlp')
         val_y_hat = titanic_auto_ml.predicted_classes['blended_preds']
     elif blueprint == 'autoselect':
-        titanic_auto_ml.ml_special_multiclass_auto_model_exploration(preprocessing_type='nlp')
+        titanic_auto_ml.ml_special_multiclass_auto_model_exploration(preprocessing_type='full')
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_special_multiclass_auto_model_exploration(val_df, preprocessing_type='nlp')
+        titanic_auto_ml.ml_special_multiclass_auto_model_exploration(val_df, preprocessing_type='full')
         val_y_hat = titanic_auto_ml.predicted_classes[titanic_auto_ml.best_model]
     else:
         pass

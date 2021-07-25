@@ -71,14 +71,13 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
                     self.lgbm_train(tune_mode=self.tune_mode)
             self.lgbm_predict(feat_importance=False)
             self.regression_eval(algorithm=algorithm)
-        elif algorithm == 'sklearn_ensemble':
+        elif algorithm == 'vowpal_wabbit':
             # train sklearn ensemble
             if self.prediction_mode:
                 pass
             else:
-                self.sklearn_ensemble_train()
-            self.sklearn_ensemble_predict(feat_importance=True, importance_alg='permutation')
-            algorithm = 'sklearn_ensemble'
+                self.vowpal_wabbit_train()
+            self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
             self.regression_eval(algorithm=algorithm)
 
     def ml_bp10_train_test_regression_full_processing_linear_reg(self, df=None, preprocessing_type='full', preprocess_bp="bp_03"):
@@ -239,7 +238,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
         if self.prediction_mode:
             pass
         else:
-            self.vowpal_wabbit_regression_train()
+            self.vowpal_wabbit_train()
         algorithm = 'vowpal_wabbit'
         self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
         self.regression_eval(algorithm=algorithm)
@@ -312,7 +311,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
             self.train_pred_selected_model(algorithm='lgbm')
             self.train_pred_selected_model(algorithm='xgboost')
             self.train_pred_selected_model(algorithm='ngboost')
-            self.train_pred_selected_model(algorithm='sklearn_ensemble')
+            self.train_pred_selected_model(algorithm='vowpal_wabbit')
 
             # select best model
             min_mae = 10000000
@@ -321,6 +320,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
                 if (v['mae']) < min_mae:
                     min_mae = (v['mae'])
                     self.best_model = k
+                    print(f"Best model is {self.best_model} with mean absolute error of {v}")
             self.train_pred_selected_model(algorithm=self.best_model)
             self.prediction_mode = True
         else:

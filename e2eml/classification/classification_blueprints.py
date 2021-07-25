@@ -345,16 +345,16 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
             self.train_pred_selected_model(algorithm='lgbm')
             self.train_pred_selected_model(algorithm='xgboost')
             self.train_pred_selected_model(algorithm='ngboost')
-            self.train_pred_selected_model(algorithm='sklearn_ensemble')
             self.train_pred_selected_model(algorithm="vowpal_wabbit")
 
             # select best model
             max_matthews = 0
             self.best_model = 'xgboost'
             for k, v in self.evaluation_scores.items():
-                if max_matthews < (v['matthews']):
+                if (v['matthews']) > max_matthews:
                     max_matthews = (v['matthews'])
                     self.best_model = k
+                    print(f"Best model is {self.best_model} with matthews of {v}")
             self.train_pred_selected_model(algorithm=self.best_model)
             self.prediction_mode = True
         else:

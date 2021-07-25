@@ -549,7 +549,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         # TODO: Move to additional folder with pyfile "constants" (use OS absolute path)
                         'objective': 'binary',
                         'metric': 'binary_logloss',
-                        'scale_pos_weight': trial.suggest_loguniform('scale_pos_weight', 1e-3, 1e3),
+                        #'scale_pos_weight': trial.suggest_loguniform('scale_pos_weight', 1e-3, 1e3),
                         'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
                         'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                         'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
@@ -595,7 +595,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 param = {
                     'objective': 'binary',
                     'metric': 'binary_logloss',
-                    'scale_pos_weight': lgbm_best_param["scale_pos_weight"],
+                    #'scale_pos_weight': lgbm_best_param["scale_pos_weight"],
                     'num_boost_round': lgbm_best_param["num_boost_round"],
                     'lambda_l1': lgbm_best_param["lambda_l1"],
                     'lambda_l2': lgbm_best_param["lambda_l2"],
