@@ -32,7 +32,7 @@ requirements = ["ipython>=6",
 
 setup(
     name="e2eml",
-    version="1.0.1",
+    version="1.3.1",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",
