@@ -596,7 +596,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 param = {
                     'objective': 'binary',
                     'metric': 'binary_logloss',
-                    'scale_pos_weight': lgbm_best_param["scale_pos_weight"],
+                    'scale_pos_weight': weights_for_lgb,
                     'num_boost_round': lgbm_best_param["num_boost_round"],
                     'lambda_l1': lgbm_best_param["lambda_l1"],
                     'lambda_l2': lgbm_best_param["lambda_l2"],
