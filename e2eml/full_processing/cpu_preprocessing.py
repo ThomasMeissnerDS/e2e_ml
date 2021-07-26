@@ -135,6 +135,7 @@ class PreProcessing:
         self.labels_encoded = False
         self.new_sin_cos_col_names = None
         self.df_dict = None
+        self.max_nlp_text_len = None
         # store chosen preprocessing settings
         if not preprocess_decisions:
             self.preprocess_decisions = {}
