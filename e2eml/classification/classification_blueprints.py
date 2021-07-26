@@ -1,5 +1,6 @@
 from e2eml.classification.classification_models import ClassificationModels
 from e2eml.full_processing.preprocessing_blueprints import PreprocessingBluePrint
+from e2eml.classification.nlp_classification import NlpModel
 import logging
 
 
@@ -269,6 +270,9 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
         self.classification_eval(algorithm)
         self.prediction_mode = True
         logging.info('Finished blueprint.')
+
+    def binary_full_processing_nlp_transformer(self):
+        pass
 
     def ml_special_binary_full_processing_boosting_blender(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """

@@ -2,13 +2,20 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler, Dataset
 import transformers
 from transformers import AutoModel, BertTokenizerFast, AdamW
+from transformers import get_linear_schedule_with_warmup
+from sklearn.metrics import matthews_corrcoef, mean_squared_error
+from tqdm import tqdm
+import os
+import gc
 from sklearn.utils.class_weight import compute_class_weight
 from e2eml.full_processing import postprocessing
+import random
 # specify GPU
-device = torch.device("cuda")
+scaler = torch.cuda.amp.GradScaler() # GPU
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class ClassificationModels(postprocessing.FullPipeline):
@@ -39,181 +46,405 @@ class ClassificationModels(postprocessing.FullPipeline):
     model performance. Will be extended by further memory savings features in future releases.
     However we highly recommend GPU usage to heavily decrease model training times.
     """
-    def import_transformer_model_tokenizer(self, transformer_chosen='bert-base-uncased'):
-        # import BERT-base pretrained model
-        bert = AutoModel.from_pretrained(transformer_chosen)
-        # Load the BERT tokenizer
-        tokenizer = BertTokenizerFast.from_pretrained(transformer_chosen)
+
+
+    def import_transformer_model_tokenizer(self, transformer_chosen=None, text_columns=None):
+        X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+        if text_columns:
+            pass
+        elif not self.nlp_transformer_columns:
+            text_columns = X_train.select_dtypes(include=['object']).columns
+        elif self.nlp_transformer_columns:
+            text_columns = self.nlp_transformer_columns
+        self.nlp_transformer_columns = text_columns
+
+        if not transformer_chosen:
+            transformer_chosen = 'bert-base-uncased'
+        else:
+            transformer_chosen = self.transformer_chosen
+
+        if self.transformer_model_load_from_path:
+            bert = AutoModel.from_pretrained(f"{self.transformer_model_load_from_path}")
+            tokenizer = transformers.BertTokenizer.from_pretrained(f"{self.transformer_model_load_from_path}")
+        else:
+            # import BERT-base pretrained model
+            bert = AutoModel.from_pretrained(transformer_chosen)
+            # Load the BERT tokenizer
+            tokenizer = BertTokenizerFast.from_pretrained(transformer_chosen)
         if "nlp_transformers" in self.preprocess_decisions:
             pass
         else:
             self.preprocess_decisions[f"nlp_transformers"] = {}
+
         self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{transformer_chosen}"] = bert
         self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{transformer_chosen}"] = tokenizer
 
-    def check_max_sentence_length(self, nlp_col):
+    def check_max_sentence_length(self, text_columns=None):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        seq_len = [len(i.split()) for i in X_train[nlp_col]]
+        if text_columns:
+            pass
+        elif not self.nlp_transformer_columns:
+            text_columns = X_train.select_dtypes(include=['object']).columns
+        elif self.nlp_transformer_columns:
+            text_columns = self.nlp_transformer_columns
+        seq_len = [len(i.split()) for i in text_columns]
         pd.Series(seq_len).hist(bins=30)
-        self.max_nlp_text_len = max(seq_len)
+        self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"] = max(seq_len)
 
-    def sequence_encoding(self, max_length=None, transformer_chosen='bert-base-uncased', text_columns=None):
-        if max_length:
-            pass
-        elif not max_length and not self.max_nlp_text_len:
-            max_length = 256
-        elif not max_length and self.max_nlp_text_len:
-            max_length = self.max_nlp_text_len
 
+class BERTDataSet(Dataset, ClassificationModels):
+    def __init__(self, sentences, targets):
+        super(BERTDataSet, self).__init__()
+        self.sentences = sentences
+        self.targets = targets
+        self.transformer_settings = {f"train_batch_size": 16,
+                                     "test_batch_size": 16,
+                                     "pred_batch_size": 16,
+                                     "num_workers": 4,
+                                     "epochs": 20,
+                                     "transformer_model_path": self.transformer_model_load_from_path,
+                                     "model_save_states_path": {self.transformer_model_save_states_path}}
+
+    def __len__(self):
+        return len(self.sentences)
+
+    def __getitem__(self, idx):
+        sentence = self.sentences[idx]
+        bert_sens = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"].encode_plus(
+            sentence,
+            add_special_tokens=True,
+            max_length=self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"],
+            pad_to_max_length=True,
+            return_attention_mask=True)
+        ids = torch.tensor(bert_sens['input_ids'], dtype=torch.long)
+        mask = torch.tensor(bert_sens['attention_mask'], dtype=torch.long)
+        token_type_ids = torch.tensor(bert_sens['token_type_ids'], dtype=torch.long)
+        target = torch.tensor(self.targets[idx], dtype=torch.float)
+
+        return {
+            'ids': ids,
+            'mask': mask,
+            'token_type_ids': token_type_ids,
+            'targets': target
+        }
+
+
+class NlpModel(BERTDataSet):
+    def create_train_dataset(self):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        if text_columns:
-            pass
-        elif not self.nlp_columns:
-            text_columns = X_train.select_dtypes(include=['object']).columns
-        elif self.nlp_columns:
-            text_columns = self.nlp_columns
+        train_dataset = BERTDataSet(X_train[self.nlp_transformer_columns], Y_train)
+        return train_dataset
 
-        for text_col in text_columns:
-            tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{transformer_chosen}"]
-            if self.prediction_mode:
-                tokens = tokenizer.batch_encode_plus(
-                    self.dataframe[text_col].tolist(),
-                    max_length=max_length,
-                    pad_to_max_length=True,
-                    truncation=True
-                )
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_predict"] = tokens
+    def create_test_dataset(self):
+        X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+        test_dataset = BERTDataSet(X_test[self.nlp_transformer_columns], Y_test)
+        return test_dataset
+
+    def create_pred_dataset(self):
+        self.dataframe[self.target_variable] = 0 # creating dummy column
+        dummy_target = self.dataframe[self.target_variable]
+        self.dataframe.drop(self.target_variable, axis=1)
+        pred_dataset = BERTDataSet(self.dataframe, dummy_target)
+        return pred_dataset
+
+    def create_train_dataloader(self, train_batch_size=None, workers=None):
+        if train_batch_size:
+            pass
+        else:
+            train_batch_size = self.transformer_settings["train_batch_size"]
+
+        if workers:
+            pass
+        else:
+            workers = self.transformer_settings["num_workers"]
+        train_dataset = self.create_train_dataset()
+        train_dataloader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=workers,
+                                      pin_memory=True)
+        return train_dataloader
+
+    def create_test_dataloader(self, test_batch_size=None, workers=None):
+        if test_batch_size:
+            pass
+        else:
+            test_batch_size = self.transformer_settings["test_batch_size"]
+
+        if workers:
+            pass
+        else:
+            workers = self.transformer_settings["num_workers"]
+        test_dataset = self.create_test_dataset()
+        test_dataloader = DataLoader(test_dataset, batch_size=test_batch_size, shuffle=True, num_workers=workers,
+                                      pin_memory=True)
+        return test_dataloader
+
+    def pred_dataloader(self, pred_batch_size=None, workers=None):
+        if pred_batch_size:
+            pass
+        else:
+            pred_batch_size = self.transformer_settings["pred_batch_size"]
+
+        if workers:
+            pass
+        else:
+            workers = self.transformer_settings["num_workers"]
+        pred_dataset = self.create_pred_dataset()
+        pred_dataloader = DataLoader(pred_dataset, batch_size=pred_batch_size, shuffle=True, num_workers=workers,
+                                     pin_memory=True)
+        return pred_dataloader
+
+    def loss_fn(self, output, target):
+        return torch.sqrt(nn.CrossEntropyLoss()(output, target))
+    # nn.MultiMarginLoss, #CrossEntropyLoss, #MSELoss
+
+    def model_setup(self, epochs=None):
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{self.transformer_chosen}"]
+            model.to(device)
+            model.train()
+            LR=2e-5
+            optimizer = AdamW(model.parameters(), LR, betas=(0.9, 0.999), weight_decay=1e-2)
+            if epochs:
+                pass
             else:
-                tokens = tokenizer.batch_encode_plus(
-                    X_train[text_col].tolist(),
-                    max_length=max_length,
-                    pad_to_max_length=True,
-                    truncation=True
-                )
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_train"] = tokens
+                epochs = self.transformer_settings["epochs"]
+            epochs = epochs
+            train_steps = int(len(X_train)/self.transformer_settings["train_batch_size"]*epochs)
+            num_steps = int(train_steps*0.1)
+            scheduler = get_linear_schedule_with_warmup(optimizer, num_steps, train_steps)
+            self.preprocess_decisions[f"nlp_transformers"][f"sheduler_{self.transformer_chosen}"] = scheduler
+            return model, optimizer, train_steps, num_steps, scheduler
 
-                tokens = tokenizer.batch_encode_plus(
-                    X_test[text_col].tolist(),
-                    max_length=max_length,
-                    pad_to_max_length=True,
-                    truncation=True
-                )
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_test"] = tokens
+    def training(self, train_dataloader, model, optimizer, scheduler):
+        model.train()
+        allpreds = []
+        alltargets = []
 
+        for a in train_dataloader:
 
-    def token_list_to_tensor(self, transformer_chosen='bert-base-uncased', text_columns=None):
-        X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        if text_columns:
+            losses = []
+
+            optimizer.zero_grad()
+
+            with torch.cuda.amp.autocast():
+                ids = a["ids"].to(device)
+                mask = a["mask"].to(device)
+                tokentype = a["token_type_ids"].to(device)
+                output = model(ids,mask)
+                output = output["logits"].squeeze(-1)
+                target = a["targets"].to(device)
+                loss = self.loss_fn(output,target)
+
+                # For scoring
+                losses.append(loss.item()/len(output))
+                allpreds.append(output.detach().cpu().numpy())
+                alltargets.append(target.detach().squeeze(-1).cpu().numpy())
+
+            scaler.scale(loss).backward() # backwards of loss
+            scaler.step(optimizer) # Update optimizer
+            scaler.update() # scaler update
+            scheduler.step() # Update learning rate schedule
+
+            # Combine dataloader minutes
+
+        allpreds = np.concatenate(allpreds)
+        alltargets = np.concatenate(alltargets)
+
+        # I don't use loss, but I collect it
+        losses = np.mean(losses)
+        # Score with rmse
+        train_rme_loss = matthews_corrcoef(alltargets, allpreds)
+
+        return losses, train_rme_loss
+
+    def validating(self, valid_dataloader, model):
+
+        model.eval()
+        allpreds = []
+        alltargets = []
+
+        for a in valid_dataloader:
+            losses = []
+
+            with torch.no_grad():
+                ids = a["ids"].to(device)
+                mask = a["mask"].to(device)
+                tokentype = a["token_type_ids"].to(device)
+                output = model(ids,mask)
+                output = output["logits"].squeeze(-1)
+                target = a["targets"].to(device)
+                loss = self.loss_fn(output, target)
+                # For scoring
+                losses.append(loss.item()/len(output))
+                allpreds.append(output.detach().cpu().numpy())
+                alltargets.append(target.detach().squeeze(-1).cpu().numpy())
+                # Combine dataloader minutes
+
+        allpreds = np.concatenate(allpreds)
+        alltargets = np.concatenate(alltargets)
+
+        # I don't use loss, but I collect it
+        losses = np.mean(losses)
+        # Score with rmse
+        valid_rme_loss = matthews_corrcoef(alltargets, allpreds)
+
+        return allpreds, losses, valid_rme_loss
+
+    def predicting(self, valid_dataloader, model, pathes):
+        allpreds = []
+        for m_path in pathes:
+            state = torch.load(m_path)
+            model.load_state_dict(state["state_dict"])
+            model.to(device)
+            model.eval()
+            preds = []
+            allvalloss=0
+            with torch.no_grad():
+                for a in valid_dataloader:
+                    ids = a["ids"].to(device)
+                    mask = a["mask"].to(device)
+                    tokentype = a["token_type_ids"].to(device)
+                    output = model(ids,mask,tokentype)
+                    output = output["logits"].squeeze(-1)
+
+                    preds.append(output.cpu().numpy())
+
+                preds = np.concatenate(preds)
+                allpreds.append(preds)
+            del state
+            torch.cuda.empty_cache()
+            _ = gc.collect()
+        return allpreds
+
+    def load_model_states(self):
+        if self.prediction_mode:
+            #pthes = [os.path.join("./", s) for s in os.listdir("./") if ".pth" in s]
+            pthes = [os.path.join(f"{self.transformer_settings['model_save_states_path']}", s) for s in os.listdir(f"{self.transformer_settings['model_save_states_path']}") if ".pth" in s]
+        return pthes
+
+    def transformer_train(self):
+        if self.prediction_mode:
             pass
-        elif not self.nlp_columns:
-            text_columns = X_train.select_dtypes(include=['object']).columns
-        elif self.nlp_columns:
-            text_columns = self.nlp_columns
-        for text_col in text_columns:
-            if self.prediction_mode:
-                tokens = self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_predict"]
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_seq_predict"] = torch.tensor(tokens['input_ids'])
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_mask_predict"] = torch.tensor(tokens['attention_mask'])
-                #self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_y_true_predict"] = torch.tensor(Y_train) # No Y_val
-            else:
-                tokens = self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_train"]
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_seq_train"] = torch.tensor(tokens['input_ids'])
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_mask_train"] = torch.tensor(tokens['attention_mask'])
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_y_true_train"] = torch.tensor(Y_train)
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            train_dataset = self.create_train_dataset()
+            test_dataset = self.create_test_dataset()
+            train_dataloader = self.create_train_dataloader()
+            test_dataloader = self.create_test_dataloader()
+            model, optimizer, train_steps, num_steps, scheduler = self.model_setup()
+            scheduler = get_linear_schedule_with_warmup(optimizer, num_steps, train_steps)
 
-                tokens = self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_test"]
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_seq_test"] = torch.tensor(tokens['input_ids'])
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_mask_test"] = torch.tensor(tokens['attention_mask'])
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_y_true_test"] = torch.tensor(Y_test)
+            trainlosses = []
+            vallosses = []
+            bestscore = None
+            trainscores = []
+            validscores = []
 
-    def batch_data_loader(self, transformer_chosen='bert-base-uncased', text_columns=None, batch_size=16):
-        X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        if text_columns:
-            pass
-        elif not self.nlp_columns:
-            text_columns = X_train.select_dtypes(include=['object']).columns
-        elif self.nlp_columns:
-            text_columns = self.nlp_columns
-        for text_col in text_columns:
-            if self.prediction_mode:
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_predict_data"] = TensorDataset(self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_seq_predict"],
-                                                                                                                                       self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_mask_predict"],
-                                                                                                                                       self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_y_true_predict"])
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_predict_sampler"] = RandomSampler(self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_predict_data"])
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_predict_dataloader"] = DataLoader(self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_predict_data"],
-                                                                                                                                          sampler=self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_predict_sampler"],
-                                                                                                                                          batch_size=batch_size)
-            else:
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_train_data"] = TensorDataset(self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_seq_train"],
-                                                                                                                                        self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_mask_train"],
-                                                                                                                                        self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_y_true_train"])
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_train_sampler"] = RandomSampler(self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_train_data"])
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_train_dataloader"] = DataLoader(self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_train_data"],
-                                                                                                                                           sampler=self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_train_sampler"],
-                                                                                                                                           batch_size=batch_size)
-
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_test_data"] = TensorDataset(self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_seq_test"],
-                                                                                                                                        self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_mask_test"],
-                                                                                                                                        self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_token_y_true_test"])
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_test_sampler"] = RandomSampler(self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_test_data"])
-                self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_test_dataloader"] = DataLoader(self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_test_data"],
-                                                                                                                                           sampler=self.preprocess_decisions[f"nlp_transformers"][f"tokenized_{text_col}_{transformer_chosen}_test_sampler"],
-                                                                                                                                           batch_size=batch_size)
-
-    def freeze_parameters(self, transformer_chosen='bert-base-uncased'):
-        # freeze all the parameters
-        for param in self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{transformer_chosen}"].parameters():
-            param.requires_grad = False
+            for epoch in tqdm(range(self.transformer_settings["epochs"])):
+                print("---------------" + str(epoch) + "start-------------")
+                trainloss, trainscore = self.training(train_dataloader, model, optimizer, scheduler)
+                trainlosses.append(trainloss)
+                trainscores.append(trainscore)
+                print("trainscore is " + str(trainscore))
+                preds, validloss,valscore = self.validating(test_dataloader, model)
+                vallosses.append(validloss)
+                validscores.append(valscore)
 
 
-class BERTArch(nn.Module, ClassificationModels):
-    def __init__(self, bert):
-        super(BERTArch, self).__init__()
-        self.bert = bert
-        # dropout layer
-        self.dropout = nn.Dropout(0.1)
-        # relu activation function
-        self.relu = nn.ReLU()
-        # dense layer 1
-        self.fc1 = nn.Linear(768,512)
-        # dense layer 2 (Output layer)
-        self.fc2 = nn.Linear(512,2)
-        #softmax activation function
-        self.softmax = nn.LogSoftmax(dim=1)
+                print("valscore is " + str(valscore))
+                if bestscore is None:
+                    bestscore = valscore
+                    print("Save first model")
+                    state = {
+                        'state_dict': model.state_dict(),
+                        'optimizer_dict': optimizer.state_dict(),
+                        "bestscore":bestscore
+                    }
+                    torch.save(state, "model0.pth")
 
-    #define the forward pass
-    def forward(self, sent_id, mask):
-        #pass the inputs to the model
-        _, cls_hs = self.bert(sent_id, attention_mask=mask)
-        x = self.fc1(cls_hs)
-        x = self.relu(x)
-        x = self.dropout(x)
-        # output layer
-        x = self.fc2(x)
-        # apply softmax activation
-        x = self.softmax(x)
+                elif bestscore > valscore:
+                    bestscore = valscore
+                    print("found better point")
+                    state = {
+                        'state_dict': model.state_dict(),
+                        'optimizer_dict': optimizer.state_dict(),
+                        "bestscore": bestscore
+                    }
+                    torch.save(state, "model0.pth")
+                else:
+                    pass
 
-        return x
+            bestscores = []
+            bestscores.append(bestscore)
 
-class BERTArchModel(BERTArch):
-    def define_tansformer_model(self, transformer_chosen='bert-base-uncased')
-        X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        model = BERTArch(self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{transformer_chosen}"])
-        # push the model to GPU
-        model = model.to(device)
-        # define the optimizer
-        optimizer = AdamW(model.parameters(), lr = 1e-5)
-        #compute the class weights
-        class_weights = compute_class_weight('balanced', np.unique(Y_train), Y_train)
-        # converting list of class weights to a tensor
-        weights= torch.tensor(class_weights,dtype=torch.float)
+            for fold in range(1, 5):
 
-        # push to GPU
-        weights = weights.to(device)
+                # initializing the data
+                train_dataloader = self.create_train_dataloader()
+                test_dataloader = self.create_test_dataloader()
 
-        # define the loss function
-        cross_entropy  = nn.NLLLoss(weight=weights)
+                #model = transformers.BertForSequenceClassification.from_pretrained("../input/huggingface-bert/bert-base-uncased",num_labels=1)
+                #model.to(device)
+                LR=2e-5
+                optimizer = AdamW(model.parameters(), LR, betas=(0.9, 0.999), weight_decay=1e-2) # AdamW optimizer
+                train_steps = int(len(X_train)/self.transformer_settings["train_batch_size"]*self.transformer_settings["epochs"])
+                num_steps = int(train_steps*0.1)
+                scheduler = get_linear_schedule_with_warmup(optimizer, num_steps, train_steps)
 
-        # number of training epochs
-        epochs = 10
+                trainlosses = []
+                vallosses = []
+                bestscore = None
+                trainscores = []
+                validscores = []
+
+                for epoch in tqdm(range(self.transformer_settings["epochs"])):
+                    print("---------------" + str(epoch) + "start-------------")
+                    trainloss, trainscore = self.training(train_dataloader, model, optimizer, scheduler)
+                    trainlosses.append(trainloss)
+                    trainscores.append(trainscore)
+
+                    print("trainscore is " + str(trainscore))
+                    preds, validloss, valscore=self.validating(test_dataloader, model)
+
+                    vallosses.append(validloss)
+                    validscores.append(valscore)
+                    print("valscore is " + str(valscore))
+
+                    if bestscore is None:
+                        bestscore = valscore
+                        print("Save first model")
+                        state = {
+                            'state_dict': model.state_dict(),
+                            'optimizer_dict': optimizer.state_dict(),
+                            "bestscore":bestscore
+                        }
+                        torch.save(state, "model" + str(fold) + ".pth")
+                    elif bestscore > valscore:
+                        bestscore = valscore
+                        print("found better point")
+                        state = {
+                            'state_dict': model.state_dict(),
+                            'optimizer_dict': optimizer.state_dict(),
+                            "bestscore":bestscore
+                        }
+                        torch.save(state, "model"+ str(fold) + ".pth")
+                    else:
+                        pass
+                bestscores.append(bestscore)
+
+            del model, optimizer, scheduler
+            _ = gc.collect()
+
+        pthes = self.load_model_states()
+        self.transformer_settings["model_save_states_pathes"] = pthes
+
+    def transformer_predict(self):
+        model = transformers.BertForSequenceClassification.from_pretrained(f"{self.transformer_model_load_from_path}", num_labels=1)
+        pred_dataloader = self.pred_dataloader()
+        allpreds = self.predicting(pred_dataloader, model, self.transformer_settings["model_save_states_pathes"])
+        findf = pd.DataFrame(allpreds)
+        findf = findf.T
+        self.predicted_classes[self.transformer_chosen] = findf
 

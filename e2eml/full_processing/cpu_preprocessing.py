@@ -16,6 +16,7 @@ from sklearn.decomposition import PCA
 from boostaroota import BoostARoota
 import lightgbm
 import xgboost as xgb
+import torch
 import gc
 import warnings
 import logging
@@ -23,6 +24,7 @@ import pickle
 import os
 import psutil
 import time
+import random
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
@@ -58,10 +60,13 @@ class PreProcessing:
 
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None, nlp_columns=None,
-                 prediction_mode=False, preferred_training_mode='auto', preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
+                 nlp_transformer_columns=None, transformer_chosen='bert-base-uncased', transformer_model_load_from_path=None,
+                 transformer_model_save_states_path=None, prediction_mode=False, preferred_training_mode='auto',
+                 preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
                  logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
 
         self.dataframe = datasource
+        self.kfolds_column = None
         self.low_memory_mode = low_memory_mode
         self.save_models_path = save_models_path
         self.logging_file_path = logging_file_path
@@ -129,18 +134,22 @@ class PreProcessing:
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
         self.nlp_columns = nlp_columns
+        self.nlp_transformer_columns = nlp_transformer_columns
+        self.nlp_transformers = {}
+        self.transformer_chosen = transformer_chosen
         self.cat_columns_encoded = None
         self.unique_identifier = unique_identifier
         self.target_variable = target_variable
         self.labels_encoded = False
         self.new_sin_cos_col_names = None
         self.df_dict = None
-        self.max_nlp_text_len = None
         # store chosen preprocessing settings
         if not preprocess_decisions:
             self.preprocess_decisions = {}
         else:
             self.preprocess_decisions = preprocess_decisions
+        self.transformer_model_load_from_path = transformer_model_load_from_path
+        self.transformer_model_save_states_path = transformer_model_save_states_path
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -592,6 +601,35 @@ class PreProcessing:
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
                                                 Y_test)
 
+    def create_folds(self, data, num_splits=4):
+        if self.prediction_mode:
+            pass
+        else:
+            # we create a new column called kfold and fill it with -1
+            data["kfold"] = -1
+
+            # the next step is to randomize the rows of the data
+            data = data.sample(frac=1).reset_index(drop=True)
+
+            # calculate number of bins by Sturge's rule
+            # I take the floor of the value, you can also
+            # just round it
+            num_bins = int(np.floor(1 + np.log2(len(data))))
+            # bin targets
+            data.loc[:, "bins"] = pd.cut(
+                data["target"], bins=num_bins, labels=False
+            )
+            # initiate the kfold class from model_selection module
+            kf = model_selection.StratifiedKFold(n_splits=num_splits)
+            # fill the new kfold column
+            # note that, instead of targets, we use bins!
+            for f, (t_, v_) in enumerate(kf.split(X=data, y=data.bins.values)):
+                data.loc[v_, 'kfold'] = f
+            # drop the bins column
+            data = data.drop("bins", axis=1)
+            # return dataframe with folds
+            return data
+
     def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.80):
         """
         This method splits the dataframe either as a simple or as a time split.
@@ -608,9 +646,9 @@ class PreProcessing:
             logging.info('Started test train split.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
-                                                                                self.dataframe[self.target_variable],
-                                                                                train_size=train_size,
-                                                                                random_state=42)
+                                                                                    self.dataframe[self.target_variable],
+                                                                                    train_size=train_size,
+                                                                                    random_state=42)
             try:
                 Y_train = Y_train.astype(float)
                 Y_test = Y_test.astype(float)
@@ -660,6 +698,24 @@ class PreProcessing:
         else:
             logging.warning('No split method provided.')
             raise Exception("Please provide a split method.")
+
+    def set_random_seed(self, seed=42):
+        random.seed(seed)
+        os.environ['PYTHONHASHSEED'] = str(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+
+    def apply_k_folds(self):
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train = self.create_folds(X_train, num_splits=4)
+            X_test["kfold"] = 0
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def data_binning(self, nb_bins=10):
         """
