@@ -4,7 +4,7 @@ from e2eml.classification.nlp_classification import NlpModel
 import logging
 
 
-class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
+class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpModel):
     """
     Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
     if the predict_mode attribute is True.
@@ -271,8 +271,34 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def binary_full_processing_nlp_transformer(self):
-        pass
+    def binary_full_processing_nlp_transformer(self, df=None):
+        logging.info('Start blueprint.')
+        self.runtime_warnings(warn_about="future_architecture_change")
+        try:
+            if df.empty:
+                self.prediction_mode = False
+            else:
+                self.dataframe = df
+                self.prediction_mode = True
+        except AttributeError:
+            self.prediction_mode = False
+        self.train_test_split(how=self.train_split_type)
+        self.datetime_converter(datetime_handling='all')
+        self.delete_high_null_cols(threshold=0.5)
+        self.fill_nulls(how='static')
+        self.sort_columns_alphabetically()
+        self.reset_indices()
+        self.import_transformer_model_tokenizer(transformer_chosen='bert-base-uncased')
+        self.check_max_sentence_length()
+        if self.prediction_mode:
+            pass
+        else:
+            self.transformer_train()
+        self.transformer_predict()
+        algorithm = 'nlp_transformer'
+        self.classification_eval(algorithm)
+        self.prediction_mode = True
+        logging.info('Finished blueprint.')
 
     def ml_special_binary_full_processing_boosting_blender(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """

@@ -150,6 +150,13 @@ class PreProcessing:
             self.preprocess_decisions = preprocess_decisions
         self.transformer_model_load_from_path = transformer_model_load_from_path
         self.transformer_model_save_states_path = transformer_model_save_states_path
+        self.transformer_settings = {f"train_batch_size": 16,
+                                     "test_batch_size": 16,
+                                     "pred_batch_size": 16,
+                                     "num_workers": 4,
+                                     "epochs": 20,
+                                     "transformer_model_path": self.transformer_model_load_from_path,
+                                     "model_save_states_path": {self.transformer_model_save_states_path}}
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model

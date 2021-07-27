@@ -94,6 +94,7 @@ def steel_fault_multiclass_data():
 def nlp_multiclass_data():
     data = pd.read_csv("Corona_NLP_train.csv", encoding='latin-1')
     test_df = data.head(2500).copy()
+    print(test_df[["OriginalTweet"]])
     val_df = data.tail(499).copy()
     val_df_target = val_df["Sentiment"].copy()
     del val_df["Sentiment"]
@@ -122,6 +123,7 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
                                                      categorical_columns=test_categorical_cols,
                                                      preferred_training_mode='auto',
                                                      tune_mode='accurate',
+                                                     nlp_transformer_columns='OriginalTweet'
                                                      )
     if blueprint == 'lgbm':
         titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(preprocessing_type='full', preprocess_bp='bp_01')
@@ -169,6 +171,13 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         print("Start prediction on holdout dataset")
         titanic_auto_ml.ml_special_multiclass_auto_model_exploration(val_df, preprocessing_type='full')
         val_y_hat = titanic_auto_ml.predicted_classes[titanic_auto_ml.best_model]
+    elif blueprint == 'nlp_transformer':
+        titanic_auto_ml.binary_full_processing_nlp_transformer()
+        print("Start prediction on holdout dataset")
+        titanic_auto_ml.binary_full_processing_nlp_transformer(val_df)
+        # label encode targets
+        val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
+        val_y_hat = titanic_auto_ml.predicted_classes['nlp_transformer']
     else:
         pass
 
@@ -187,4 +196,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
 
 
 if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='autoselect', dataset='titanic') # corona_tweet
+    blueprint_binary_test_titanic(blueprint='nlp_transformer', dataset='corona_tweet') # corona_tweet
