@@ -13,8 +13,9 @@ import gc
 from sklearn.utils.class_weight import compute_class_weight
 from e2eml.full_processing import postprocessing
 import random
+
 # specify GPU
-scaler = torch.cuda.amp.GradScaler() # GPU
+scaler = torch.cuda.amp.GradScaler()  # GPU
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -47,7 +48,6 @@ class ClassificationModels(postprocessing.FullPipeline):
     However we highly recommend GPU usage to heavily decrease model training times.
     """
 
-
     def import_transformer_model_tokenizer(self, transformer_chosen=None, text_columns=None):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         if text_columns:
@@ -65,8 +65,8 @@ class ClassificationModels(postprocessing.FullPipeline):
 
         if self.transformer_model_load_from_path:
             bert = AutoModel.from_pretrained(f"{self.transformer_model_load_from_path}",
-                                             output_attentions = False, # Whether the model returns attentions weights.
-                                             output_hidden_states = False)
+                                             output_attentions=False,  # Whether the model returns attentions weights.
+                                             output_hidden_states=False)
             tokenizer = transformers.BertTokenizer.from_pretrained(f"{self.transformer_model_load_from_path}")
         else:
             # import BERT-base pretrained model
@@ -128,7 +128,7 @@ class BERTDataSet(Dataset):
             None,
             add_special_tokens=True,
             padding='max_length',
-            #return_token_type_ids=True,
+            # return_token_type_ids=True,
             truncation=True
         )
         ids = inputs['input_ids']
@@ -171,7 +171,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         return test_dataset
 
     def create_pred_dataset(self):
-        self.dataframe[self.target_variable] = 0 # creating dummy column
+        self.dataframe[self.target_variable] = 0  # creating dummy column
         dummy_target = self.dataframe[self.target_variable]
         self.dataframe.drop(self.target_variable, axis=1)
         tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
@@ -205,7 +205,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             workers = self.transformer_settings["num_workers"]
         test_dataset = self.create_test_dataset()
         test_dataloader = DataLoader(test_dataset, batch_size=test_batch_size, shuffle=True, num_workers=workers,
-                                      pin_memory=True)
+                                     pin_memory=True)
         return test_dataloader
 
     def pred_dataloader(self, pred_batch_size=None, workers=None):
@@ -233,18 +233,20 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            model = BERTClass(self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{self.transformer_chosen}"], self.num_classes)
+            model = BERTClass(
+                self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{self.transformer_chosen}"],
+                self.num_classes)
             model.to(device)
             model.train()
-            LR=2e-5
+            LR = 2e-5
             optimizer = AdamW(model.parameters(), LR, betas=(0.9, 0.999), weight_decay=1e-2)
             if epochs:
                 pass
             else:
                 epochs = self.transformer_settings["epochs"]
             epochs = epochs
-            train_steps = int(len(X_train)/self.transformer_settings["train_batch_size"]*epochs)
-            num_steps = int(train_steps*0.1)
+            train_steps = int(len(X_train) / self.transformer_settings["train_batch_size"] * epochs)
+            num_steps = int(train_steps * 0.1)
             scheduler = get_linear_schedule_with_warmup(optimizer, num_steps, train_steps)
             self.preprocess_decisions[f"nlp_transformers"][f"sheduler_{self.transformer_chosen}"] = scheduler
             return model, optimizer, train_steps, num_steps, scheduler
@@ -264,20 +266,20 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                 target = a["target"].to(device)
                 token_type_ids = a["token_type_ids"].to(device)
 
-                #criterion = nn.BCEWithLogitsLoss()
+                # criterion = nn.BCEWithLogitsLoss()
                 output = model(ids, mask, token_type_ids)
-                #target = target.unsqueeze(1)
+                # target = target.unsqueeze(1)
                 loss = self.loss_fn(output, target)
 
                 # For scoring
-                losses.append(loss.item()/len(output))
+                losses.append(loss.item() / len(output))
                 allpreds.append(output.detach().cpu().numpy())
                 alltargets.append(target.detach().cpu().numpy())
 
-            scaler.scale(loss).backward() # backwards of loss
-            scaler.step(optimizer) # Update optimizer
-            scaler.update() # scaler update
-            scheduler.step() # Update learning rate schedule
+            scaler.scale(loss).backward()  # backwards of loss
+            scaler.step(optimizer)  # Update optimizer
+            scaler.update()  # scaler update
+            scheduler.step()  # Update learning rate schedule
 
             # Combine dataloader minutes
 
@@ -313,7 +315,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                 output = model(ids, mask, token_type_ids)
                 loss = self.loss_fn(output, target)
                 # For scoring
-                losses.append(loss.item()/len(output))
+                losses.append(loss.item() / len(output))
                 allpreds.append(output.detach().cpu().numpy())
                 alltargets.append(target.detach().squeeze(-1).cpu().numpy())
                 # Combine dataloader minutes
@@ -337,7 +339,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             model.to(device)
             model.eval()
             preds = []
-            allvalloss=0
+            allvalloss = 0
             with torch.no_grad():
                 for a in valid_dataloader:
                     ids = a["ids"].to(device)
@@ -355,11 +357,17 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             allpreds = np.asarray([np.argmax(line) for line in allpreds])
         return allpreds
 
-    def load_model_states(self):
+    def load_model_states(self, path=None):
+        if path:
+            pass
+        else:
+            path = os.getcwd()
         if self.prediction_mode:
-            #pthes = [os.path.join("./", s) for s in os.listdir("./") if ".pth" in s]
-            pthes = [os.path.join(f"{self.transformer_settings['model_save_states_path']}", s) for s in os.listdir(f"{self.transformer_settings['model_save_states_path']}") if ".pth" in s]
-        return pthes
+            pthes = [os.path.join(f"{path}/", s) for s in os.listdir(f"{path}/") if ".pth" in s]
+            return pthes
+        else:
+            pthes = [os.path.join(f"{path}/", s) for s in os.listdir(f"{path}/") if ".pth" in s]
+            return pthes
 
     def transformer_train(self):
         if self.prediction_mode:
@@ -385,10 +393,9 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                 trainlosses.append(trainloss)
                 trainscores.append(trainscore)
                 print("trainscore is " + str(trainscore))
-                preds, validloss,valscore = self.validating(test_dataloader, model)
+                preds, validloss, valscore = self.validating(test_dataloader, model)
                 vallosses.append(validloss)
                 validscores.append(valscore)
-
 
                 print("valscore is " + str(valscore))
                 if bestscore is None:
@@ -397,7 +404,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                     state = {
                         'state_dict': model.state_dict(),
                         'optimizer_dict': optimizer.state_dict(),
-                        "bestscore":bestscore
+                        "bestscore": bestscore
                     }
                     torch.save(state, "model0.pth")
 
@@ -422,12 +429,15 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                 train_dataloader = self.create_train_dataloader()
                 test_dataloader = self.create_test_dataloader()
 
-                model = BERTClass(self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{self.transformer_chosen}"], self.num_classes)
+                model = BERTClass(
+                    self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{self.transformer_chosen}"],
+                    self.num_classes)
                 model.to(device)
-                LR=2e-5
-                optimizer = AdamW(model.parameters(), LR, betas=(0.9, 0.999), weight_decay=1e-2) # AdamW optimizer
-                train_steps = int(len(X_train)/self.transformer_settings["train_batch_size"]*self.transformer_settings["epochs"])
-                num_steps = int(train_steps*0.1)
+                LR = 2e-5
+                optimizer = AdamW(model.parameters(), LR, betas=(0.9, 0.999), weight_decay=1e-2)  # AdamW optimizer
+                train_steps = int(
+                    len(X_train) / self.transformer_settings["train_batch_size"] * self.transformer_settings["epochs"])
+                num_steps = int(train_steps * 0.1)
                 scheduler = get_linear_schedule_with_warmup(optimizer, num_steps, train_steps)
 
                 trainlosses = []
@@ -443,7 +453,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                     trainscores.append(trainscore)
 
                     print("trainscore is " + str(trainscore))
-                    preds, validloss, valscore=self.validating(test_dataloader, model)
+                    preds, validloss, valscore = self.validating(test_dataloader, model)
 
                     vallosses.append(validloss)
                     validscores.append(valscore)
@@ -455,7 +465,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                         state = {
                             'state_dict': model.state_dict(),
                             'optimizer_dict': optimizer.state_dict(),
-                            "bestscore":bestscore
+                            "bestscore": bestscore
                         }
                         torch.save(state, "model" + str(fold) + ".pth")
                     elif bestscore > valscore:
@@ -464,9 +474,9 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                         state = {
                             'state_dict': model.state_dict(),
                             'optimizer_dict': optimizer.state_dict(),
-                            "bestscore":bestscore
+                            "bestscore": bestscore
                         }
-                        torch.save(state, "model"+ str(fold) + ".pth")
+                        torch.save(state, "model" + str(fold) + ".pth")
                     else:
                         pass
                 bestscores.append(bestscore)
@@ -474,17 +484,14 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             del model, optimizer, scheduler
             _ = gc.collect()
 
-        pthes = self.load_model_states()
-        self.transformer_settings["model_save_states_pathes"] = pthes
-
     def transformer_predict(self):
-        model = transformers.BertForSequenceClassification.from_pretrained(f"{self.transformer_model_load_from_path}",
-                                                                           num_labels=self.num_classes,
-                                                                           output_attentions = False, # Whether the model returns attentions weights.
-                                                                           output_hidden_states = False)
+        pthes = self.load_model_states()
+        print(pthes)
+        model = transformers.BertForSequenceClassification.from_pretrained(f"{self.transformer_model_load_from_path}")
         pred_dataloader = self.pred_dataloader()
-        allpreds = self.predicting(pred_dataloader, model, self.transformer_settings["model_save_states_pathes"])
+        allpreds = self.predicting(pred_dataloader, model, pthes)
         findf = pd.DataFrame(allpreds)
         findf = findf.T
+        print("---------------")
+        print(findf)
         self.predicted_classes[self.transformer_chosen] = findf
-
