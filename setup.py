@@ -4,7 +4,7 @@ with open("README.md", "r") as readme_file:
     readme = readme_file.read()
 
 requirements = ["ipython>=6",
-                "babel>=2.9.1"
+                "babel>=2.9.1",
                 "boostaroota>=1.3",
                 "category_encoders==2.2.2",
                 "imblearn>=0.0",
@@ -34,7 +34,7 @@ requirements = ["ipython>=6",
 
 setup(
     name="e2eml",
-    version="1.3.8",
+    version="1.3.9",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",

@@ -154,7 +154,7 @@ class PreProcessing:
                                      "test_batch_size": 16,
                                      "pred_batch_size": 16,
                                      "num_workers": 4,
-                                     "epochs": 1,
+                                     "epochs": 10,
                                      "transformer_model_path": self.transformer_model_load_from_path,
                                      "model_save_states_path": {self.transformer_model_save_states_path}}
         self.selected_feats = selected_feats
@@ -250,7 +250,6 @@ class PreProcessing:
         else:
             self.runtime_warnings(warn_about='no_nlp_transformer')
         if isinstance(text_columns, list):
-            print("GGGGGGGGGGGGGGGGGGGGGGGGGGGG")
             if return_list:
                 text_columns_list = text_columns
             else:
