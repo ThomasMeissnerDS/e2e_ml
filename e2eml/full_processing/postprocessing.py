@@ -125,10 +125,13 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                 else:
                     y_hat_probs = self.predicted_probs[f"{algorithm}"]
             except Exception:
-                if pred_probs.any():
-                    y_hat_probs = pred_probs
-                else:
-                    y_hat_probs = self.predicted_probs[f"{algorithm}"]
+                try:
+                    if pred_probs.any():
+                        y_hat_probs = pred_probs
+                    else:
+                        y_hat_probs = self.predicted_probs[f"{algorithm}"]
+                except Exception:
+                    y_hat_probs = None
 
             """
             Calculating Matthews, ROC_AUC score and different F1 scores.
@@ -139,27 +142,30 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             if self.class_problem == 'binary':
                 def get_preds(threshold, probabilities):
                     return [1 if prob > threshold else 0 for prob in probabilities]
-                roc_values = []
-                for thresh in np.linspace(0, 1, 100):
-                    preds = get_preds(thresh, y_hat_probs)
-                    tn, fp, fn, tp = confusion_matrix(Y_test, preds).ravel()
-                    tpr = tp/(tp+fn)
-                    fpr = fp/(fp+tn)
-                    roc_values.append([tpr, fpr])
-                tpr_values, fpr_values = zip(*roc_values)
-                fig, ax = plt.subplots(figsize=(10,7))
-                ax.plot(fpr_values, tpr_values)
-                ax.plot(np.linspace(0, 1, 100),
-                        np.linspace(0, 1, 100),
-                        label='baseline',
-                        linestyle='--')
-                plt.title(f'Receiver Operating Characteristic Curve for {algorithm}', fontsize=18)
-                plt.ylabel('TPR', fontsize=16)
-                plt.xlabel('FPR', fontsize=16)
-                plt.legend(fontsize=12)
-                plt.show()
-                roc_auc = roc_auc_score(Y_test, y_hat_probs)
-                print(f"The ROC_AUC score is {roc_auc}")
+                if y_hat_probs:
+                    roc_values = []
+                    for thresh in np.linspace(0, 1, 100):
+                        preds = get_preds(thresh, y_hat_probs)
+                        tn, fp, fn, tp = confusion_matrix(Y_test, preds).ravel()
+                        tpr = tp/(tp+fn)
+                        fpr = fp/(fp+tn)
+                        roc_values.append([tpr, fpr])
+                    tpr_values, fpr_values = zip(*roc_values)
+                    fig, ax = plt.subplots(figsize=(10,7))
+                    ax.plot(fpr_values, tpr_values)
+                    ax.plot(np.linspace(0, 1, 100),
+                            np.linspace(0, 1, 100),
+                            label='baseline',
+                            linestyle='--')
+                    plt.title(f'Receiver Operating Characteristic Curve for {algorithm}', fontsize=18)
+                    plt.ylabel('TPR', fontsize=16)
+                    plt.xlabel('FPR', fontsize=16)
+                    plt.legend(fontsize=12)
+                    plt.show()
+                    roc_auc = roc_auc_score(Y_test, y_hat_probs)
+                    print(f"The ROC_AUC score is {roc_auc}")
+                else:
+                    pass
             else:
                 roc_auc = None
             try:

@@ -286,17 +286,18 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.datetime_converter(datetime_handling='all')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(how='static')
+        self.regex_clean_text_data()
         self.sort_columns_alphabetically()
-        self.reset_indices()
+        self.reset_indices(mode='fit')
         self.import_transformer_model_tokenizer(transformer_chosen='bert-base-uncased')
-        self.check_max_sentence_length()
+        #self.check_max_sentence_length()
         if self.prediction_mode:
             pass
         else:
             self.transformer_train()
         self.transformer_predict()
         algorithm = 'nlp_transformer'
-        self.classification_eval(algorithm)
+        #self.classification_eval(algorithm)
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 

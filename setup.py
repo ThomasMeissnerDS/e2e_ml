@@ -21,19 +21,20 @@ requirements = ["ipython>=6",
                 "plotly>=4.14.3",
                 "psutil==5.8.0",
                 "seaborn>=0.11.1",
-                "scikit-learn==0.23.1",
+                "scikit-learn==0.22.2",
                 "scipy==1.6.3",
                 "setuptools >= 51.1.0",
                 "shap>=0.39.0",
                 "spacy>=3.0.6",
-                "vowpalwabbit>=8.11.0"
+                "transformers>=4.0.0",
+                "vowpalwabbit>=8.11.0",
                 "wheel==0.36.2",
                 "xgboost>=1.3.3",
                 ]
 
 setup(
     name="e2eml",
-    version="1.3.1",
+    version="1.3.8",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",

@@ -63,14 +63,15 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
 
     def remove_url(self, text):
         url = re.compile(r'https?://\S+|www\.\S+')
-        return url.sub(r'',text)
+        return url.sub(r'', str(text))
 
     def remove_punct(self, text):
         table = str.maketrans('', '', string.punctuation)
         return text.translate(table)
+
     def remove_html(self, text):
-        html=re.compile(r'<.*?>')
-        return html.sub(r'',text)
+        html = re.compile(r'<.*?>')
+        return html.sub(r'', str(text))
 
     def remove_emoji(self, text):
         emoji_pattern = re.compile("["
@@ -81,7 +82,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                                    u"\U00002702-\U000027B0"
                                    u"\U000024C2-\U0001F251"
                                    "]+", flags=re.UNICODE)
-        return emoji_pattern.sub(r'', text)
+        return emoji_pattern.sub(r'', str(text))
+
     def decontraction(self, text):
         text = re.sub(r"won\'t", " will not", text)
         text = re.sub(r"won\'t've", " will not have", text)
@@ -109,7 +111,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         text = re.sub(r"\'ve", " have", text)
         text = re.sub(r"\'m", " am", text)
         text = re.sub(r"\'re", " are", text)
-        return text
+        return str(text)
 
     def seperate_alphanumeric(self, text):
         words = text
@@ -124,7 +126,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
 
     def unique_char(self, rep, text):
         substitute = re.sub(r'(\w)\1+', rep, text)
-        return substitute
+        return str(substitute)
 
     def regex_clean_text_data(self):
         self.get_current_timestamp(task='Start text cleaning.')
@@ -132,6 +134,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         algorithm = 'regex_text'
         if self.prediction_mode:
             text_columns = self.nlp_columns
+            print(self.nlp_columns)
             for text_col in text_columns:
                 self.dataframe[text_col] = self.dataframe[text_col].apply(lambda x : self.remove_url(x))
                 self.dataframe[text_col] = self.dataframe[text_col].apply(lambda x : self.remove_punct(x))
@@ -143,23 +146,60 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             if not self.nlp_columns:
-                text_columns = X_train.select_dtypes(include=['object']).columns
+                self.nlp_columns = X_train.select_dtypes(include=['object']).columns
+                text_columns = self.nlp_columns
             else:
                 text_columns = self.nlp_columns
             for text_col in text_columns:
-                X_train[text_col] = X_train[text_col].apply(lambda x : self.remove_url(x))
-                X_train[text_col] = X_train[text_col].apply(lambda x : self.remove_punct(x))
-                X_train[text_col] = X_train[text_col].apply(lambda x : self.remove_emoji(x))
-                X_train[text_col] = X_train[text_col].apply(lambda x : self.decontraction(x))
-                X_train[text_col] = X_train[text_col].apply(lambda x : self.seperate_alphanumeric(x))
-                X_train[text_col] = X_train[text_col].apply(lambda x : self.unique_char(self.cont_rep_char,x))
+                try:
+                    X_train[text_col] = X_train[text_col].apply(lambda x : self.remove_url(x))
+                except (TypeError, AttributeError):
+                    pass
+                try:
+                    X_train[text_col] = X_train[text_col].apply(lambda x : self.remove_punct(x))
+                except (TypeError, AttributeError):
+                    pass
+                try:
+                    X_train[text_col] = X_train[text_col].apply(lambda x : self.remove_emoji(x))
+                except (TypeError, AttributeError):
+                    pass
+                try:
+                    X_train[text_col] = X_train[text_col].apply(lambda x : self.decontraction(x))
+                except (TypeError, AttributeError):
+                    pass
+                try:
+                    X_train[text_col] = X_train[text_col].apply(lambda x : self.seperate_alphanumeric(x))
+                except (TypeError, AttributeError):
+                    pass
+                try:
+                    X_train[text_col] = X_train[text_col].apply(lambda x : self.unique_char(self.cont_rep_char,x))
+                except (TypeError, AttributeError):
+                    pass
 
-                X_test[text_col] = X_test[text_col].apply(lambda x : self.remove_url(x))
-                X_test[text_col] = X_test[text_col].apply(lambda x : self.remove_punct(x))
-                X_test[text_col] = X_test[text_col].apply(lambda x : self.remove_emoji(x))
-                X_test[text_col] = X_test[text_col].apply(lambda x : self.decontraction(x))
-                X_test[text_col] = X_test[text_col].apply(lambda x : self.seperate_alphanumeric(x))
-                X_test[text_col] = X_test[text_col].apply(lambda x : self.unique_char(self.cont_rep_char,x))
+                try:
+                    X_test[text_col] = X_test[text_col].apply(lambda x : self.remove_url(x))
+                except (TypeError, AttributeError):
+                    pass
+                try:
+                    X_test[text_col] = X_test[text_col].apply(lambda x : self.remove_punct(x))
+                except (TypeError, AttributeError):
+                    pass
+                try:
+                    X_test[text_col] = X_test[text_col].apply(lambda x : self.remove_emoji(x))
+                except (TypeError, AttributeError):
+                    pass
+                try:
+                    X_test[text_col] = X_test[text_col].apply(lambda x : self.decontraction(x))
+                except (TypeError, AttributeError):
+                    pass
+                try:
+                    X_test[text_col] = X_test[text_col].apply(lambda x : self.seperate_alphanumeric(x))
+                except (TypeError, AttributeError):
+                    pass
+                try:
+                    X_test[text_col] = X_test[text_col].apply(lambda x : self.unique_char(self.cont_rep_char,x))
+                except (TypeError, AttributeError):
+                    pass
             logging.info('Finished text cleaning.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
@@ -168,21 +208,18 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         polarity = TextBlob(text).sentiment.polarity
         return polarity
 
-    def append_text_sentiment_score(self):
+    def append_text_sentiment_score(self, text_columns=None):
         self.get_current_timestamp(task='Start text cleaning.')
         logging.info('Start text cleaning.')
         algorithm = 'textblob_sentiment_score'
         if self.prediction_mode:
             text_columns = self.nlp_columns
             for text_col in text_columns:
-                self.dataframe[f"{algorithm}_{text_col}"] = self.dataframe[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
+                self.dataframe[f"{algorithm}_{self.nlp_transformer_columns}"] = self.dataframe[self.nlp_transformer_columns].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
             logging.info('Finished text cleaning.')
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            if not self.nlp_columns:
-                text_columns = X_train.select_dtypes(include=['object']).columns
-            else:
-                text_columns = self.nlp_columns
+            text_columns = self.check_for_nlp_transformer_columns(text_columns=text_columns)
             for text_col in text_columns:
                 X_train[f"{algorithm}_{text_col}"] = X_train[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
                 X_test[f"{algorithm}_{text_col}"] = X_test[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))

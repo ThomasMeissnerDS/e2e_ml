@@ -48,16 +48,7 @@ class ClassificationModels(postprocessing.FullPipeline):
     However we highly recommend GPU usage to heavily decrease model training times.
     """
 
-    def import_transformer_model_tokenizer(self, transformer_chosen=None, text_columns=None):
-        X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        if text_columns:
-            pass
-        elif not self.nlp_transformer_columns:
-            text_columns = X_train.select_dtypes(include=['object']).columns
-        elif self.nlp_transformer_columns:
-            text_columns = self.nlp_transformer_columns
-        self.nlp_transformer_columns = text_columns
-
+    def import_transformer_model_tokenizer(self, transformer_chosen=None):
         if not transformer_chosen:
             transformer_chosen = 'bert-base-uncased'
         else:
@@ -82,23 +73,20 @@ class ClassificationModels(postprocessing.FullPipeline):
         self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{transformer_chosen}"] = tokenizer
 
     def check_max_sentence_length(self, text_columns=None):
-        X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        if text_columns:
-            pass
-        elif not self.nlp_transformer_columns:
-            text_columns = X_train.select_dtypes(include=['object']).columns
-        elif self.nlp_transformer_columns:
-            text_columns = self.nlp_transformer_columns
-        print(X_train[text_columns])
-        seq_len = [len(i.split()) for i in X_train[text_columns]]
-        pd.Series(seq_len).hist(bins=30)
-        self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"] = max(seq_len)
-
-    def reset_indices(self):
         if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            text_columns = self.check_for_nlp_transformer_columns(text_columns=text_columns, return_list=True)
+            seq_len = [len(i.split()) for i in X_train[text_columns]]
+            pd.Series(seq_len).hist(bins=30)
+            self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"] = max(seq_len)
+
+    def reset_indices(self, mode='fit'):
+        if mode == 'transform':
             self.dataframe = self.dataframe.reset_index(drop=True)
             return self.dataframe
-        else:
+        elif mode == 'fit':
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train[self.target_variable] = Y_train
             X_test[self.target_variable] = Y_test
@@ -109,6 +97,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             X_train.drop(self.target_variable, axis=1)
             X_test.drop(self.target_variable, axis=1)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+        else:
+            print("Please chose either 'fit' or 'transform'.")
 
 
 class BERTDataSet(Dataset):
@@ -171,11 +161,12 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         return test_dataset
 
     def create_pred_dataset(self):
-        self.dataframe[self.target_variable] = 0  # creating dummy column
+        self.dataframe[self.target_variable] = 999  # creating dummy column
+        self.reset_indices(mode='transform')
         dummy_target = self.dataframe[self.target_variable]
         self.dataframe.drop(self.target_variable, axis=1)
         tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
-        pred_dataset = BERTDataSet(self.dataframe, dummy_target, tokenizer)
+        pred_dataset = BERTDataSet(self.dataframe[self.nlp_transformer_columns], dummy_target, tokenizer)
         return pred_dataset
 
     def create_train_dataloader(self, train_batch_size=None, workers=None):
@@ -219,7 +210,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         else:
             workers = self.transformer_settings["num_workers"]
         pred_dataset = self.create_pred_dataset()
-        pred_dataloader = DataLoader(pred_dataset, batch_size=pred_batch_size, shuffle=True, num_workers=workers,
+        pred_dataloader = DataLoader(pred_dataset, batch_size=pred_batch_size, shuffle=False, num_workers=workers,
                                      pin_memory=True)
         return pred_dataloader
 
@@ -266,9 +257,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                 target = a["target"].to(device)
                 token_type_ids = a["token_type_ids"].to(device)
 
-                # criterion = nn.BCEWithLogitsLoss()
                 output = model(ids, mask, token_type_ids)
-                # target = target.unsqueeze(1)
                 loss = self.loss_fn(output, target)
 
                 # For scoring
@@ -331,8 +320,10 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
 
         return allpreds, losses, valid_rme_loss
 
-    def predicting(self, valid_dataloader, model, pathes):
+    def predicting(self, pred_dataloader, model, pathes):
         allpreds = []
+        model_no = 0
+        mode_cols = []
         for m_path in pathes:
             state = torch.load(m_path)
             model.load_state_dict(state["state_dict"])
@@ -341,21 +332,36 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             preds = []
             allvalloss = 0
             with torch.no_grad():
-                for a in valid_dataloader:
+                for a in pred_dataloader:
                     ids = a["ids"].to(device)
                     mask = a["mask"].to(device)
                     token_type_ids = a["token_type_ids"].to(device)
                     output = model(ids, mask, token_type_ids)
 
-                    preds.append(output.cpu().numpy())
+                    preds.append(output.detach().cpu().numpy())
 
                 preds = np.concatenate(preds)
+                print("-----preds shape-------")
+                print(preds.shape)
+                pred_classes = np.argmax(preds, axis=1).flatten()
+                self.dataframe[f"preds_model{model_no}"] = pred_classes
+                mode_cols.append(f"preds_model{model_no}")
+                print("-----pred classes shape-------")
+                print(pred_classes.shape)
+                print(pred_classes)
+                print("------------")
                 allpreds.append(preds)
+                print(allpreds)
+                model_no += 1
             del state
             torch.cuda.empty_cache()
             _ = gc.collect()
-            allpreds = np.asarray([np.argmax(line) for line in allpreds])
-        return allpreds
+            print(allpreds)
+            allpreds = np.argmax(preds, axis=1).flatten()
+            print("XXXXXXXXXX")
+            print(allpreds)
+            allpreds = allpreds.tolist()
+        return allpreds, mode_cols
 
     def load_model_states(self, path=None):
         if path:
@@ -374,8 +380,6 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            train_dataset = self.create_train_dataset()
-            test_dataset = self.create_test_dataset()
             train_dataloader = self.create_train_dataloader()
             test_dataloader = self.create_test_dataloader()
             model, optimizer, train_steps, num_steps, scheduler = self.model_setup()
@@ -485,13 +489,18 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             _ = gc.collect()
 
     def transformer_predict(self):
+        model = BERTClass(
+            self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{self.transformer_chosen}"],
+            self.num_classes)
         pthes = self.load_model_states()
         print(pthes)
-        model = transformers.BertForSequenceClassification.from_pretrained(f"{self.transformer_model_load_from_path}")
         pred_dataloader = self.pred_dataloader()
-        allpreds = self.predicting(pred_dataloader, model, pthes)
-        findf = pd.DataFrame(allpreds)
-        findf = findf.T
+        allpreds, mode_cols = self.predicting(pred_dataloader, model, pthes)
+        #print(allpreds)
+        #findf = pd.DataFrame(allpreds)
+        #findf = findf.T
+        self.dataframe["majority_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
+        print(self.dataframe["majority_class"])
         print("---------------")
-        print(findf)
-        self.predicted_classes[self.transformer_chosen] = findf
+        print(self.dataframe)
+        self.predicted_classes['nlp_transformer'] = self.dataframe["majority_class"]

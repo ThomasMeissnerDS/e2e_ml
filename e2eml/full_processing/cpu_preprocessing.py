@@ -154,7 +154,7 @@ class PreProcessing:
                                      "test_batch_size": 16,
                                      "pred_batch_size": 16,
                                      "num_workers": 4,
-                                     "epochs": 20,
+                                     "epochs": 1,
                                      "transformer_model_path": self.transformer_model_load_from_path,
                                      "model_save_states_path": {self.transformer_model_save_states_path}}
         self.selected_feats = selected_feats
@@ -235,8 +235,35 @@ class PreProcessing:
             and non-NLP related preprocessing(!) blueprints. This change is likely to be live with e2eml version 2.0.0
             """
             return warnings.warn(warning_message, DeprecationWarning)
+        elif warn_about == 'no_nlp_transformer':
+            warning_message = """No nlp_transformer_columns have been provided during class instantiation. Some 
+            NLP related functions only run with this information.."""
+            return warnings.warn(warning_message, UserWarning)
         else:
             pass
+
+    def check_for_nlp_transformer_columns(self, text_columns=None, return_list=True):
+        if text_columns:
+            pass
+        elif self.nlp_transformer_columns:
+            text_columns = self.nlp_transformer_columns
+        else:
+            self.runtime_warnings(warn_about='no_nlp_transformer')
+        if isinstance(text_columns, list):
+            print("GGGGGGGGGGGGGGGGGGGGGGGGGGGG")
+            if return_list:
+                text_columns_list = text_columns
+            else:
+                text_columns_list = text_columns[self.nlp_transformer_columns]
+            return text_columns_list
+        else:
+            if return_list:
+                text_columns_list = []
+                text_columns_list.append(text_columns)
+                self.nlp_transformer_columns = text_columns_list
+            else:
+                text_columns_list = text_columns
+            return str(text_columns_list[0])
 
     def check_gpu_support(self, algorithm=None):
         data = np.random.rand(50, 2)
@@ -608,7 +635,7 @@ class PreProcessing:
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
                                                 Y_test)
 
-    def create_folds(self, data, num_splits=4):
+    def create_folds(self, data, target, num_splits=4):
         if self.prediction_mode:
             pass
         else:
@@ -624,7 +651,7 @@ class PreProcessing:
             num_bins = int(np.floor(1 + np.log2(len(data))))
             # bin targets
             data.loc[:, "bins"] = pd.cut(
-                data["target"], bins=num_bins, labels=False
+                data[target], bins=num_bins, labels=False
             )
             # initiate the kfold class from model_selection module
             kf = model_selection.StratifiedKFold(n_splits=num_splits)
