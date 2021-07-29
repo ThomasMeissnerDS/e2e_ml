@@ -165,7 +165,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                     roc_auc = roc_auc_score(Y_test, y_hat_probs)
                     print(f"The ROC_AUC score is {roc_auc}")
                 else:
-                    pass
+                    roc_auc = None
             else:
                 roc_auc = None
             try:

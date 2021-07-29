@@ -271,7 +271,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def binary_full_processing_nlp_transformer(self, df=None):
+    def multiclass_full_processing_nlp_transformer(self, df=None):
         logging.info('Start blueprint.')
         self.runtime_warnings(warn_about="future_architecture_change")
         try:
@@ -297,7 +297,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.transformer_train()
         self.transformer_predict()
         algorithm = 'nlp_transformer'
-        #self.classification_eval(algorithm)
+        self.classification_eval(algorithm)
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 

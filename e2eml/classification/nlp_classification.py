@@ -161,12 +161,17 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         return test_dataset
 
     def create_pred_dataset(self):
-        self.dataframe[self.target_variable] = 999  # creating dummy column
-        self.reset_indices(mode='transform')
-        dummy_target = self.dataframe[self.target_variable]
-        self.dataframe.drop(self.target_variable, axis=1)
-        tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
-        pred_dataset = BERTDataSet(self.dataframe[self.nlp_transformer_columns], dummy_target, tokenizer)
+        if self.prediction_mode:
+            self.dataframe[self.target_variable] = 999  # creating dummy column
+            self.reset_indices(mode='transform')
+            dummy_target = self.dataframe[self.target_variable]
+            self.dataframe.drop(self.target_variable, axis=1)
+            tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
+            pred_dataset = BERTDataSet(self.dataframe[self.nlp_transformer_columns], dummy_target, tokenizer)
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
+            pred_dataset = BERTDataSet(X_test[self.nlp_transformer_columns], Y_test, tokenizer)
         return pred_dataset
 
     def create_train_dataloader(self, train_batch_size=None, workers=None):
@@ -324,6 +329,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         allpreds = []
         model_no = 0
         mode_cols = []
+        predicted_probabs = []
         for m_path in pathes:
             state = torch.load(m_path)
             model.load_state_dict(state["state_dict"])
@@ -343,25 +349,32 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                 preds = np.concatenate(preds)
                 print("-----preds shape-------")
                 print(preds.shape)
-                pred_classes = np.argmax(preds, axis=1).flatten()
-                self.dataframe[f"preds_model{model_no}"] = pred_classes
+                if self.class_problem == 'binary':
+                    predicted_probs = np.asarray([line[1] for line in preds])
+                else:
+                    pred_classes = np.argmax(preds, axis=1).flatten()
+
+                if self.prediction_mode:
+                    if self.class_problem == 'binary':
+                        self.dataframe[f"preds_model{model_no}_probs"] = predicted_probs
+                    else:
+                        self.dataframe[f"preds_model{model_no}"] = pred_classes
+                else:
+                    X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+                    if self.class_problem == 'binary':
+                        X_test[f"preds_model{model_no}_probs"] = predicted_probs
+                    else:
+                        X_test[f"preds_model{model_no}"] = pred_classes
                 mode_cols.append(f"preds_model{model_no}")
-                print("-----pred classes shape-------")
-                print(pred_classes.shape)
-                print(pred_classes)
-                print("------------")
+                predicted_probabs.append(f"preds_model{model_no}_probs")
                 allpreds.append(preds)
-                print(allpreds)
                 model_no += 1
             del state
             torch.cuda.empty_cache()
             _ = gc.collect()
-            print(allpreds)
             allpreds = np.argmax(preds, axis=1).flatten()
-            print("XXXXXXXXXX")
-            print(allpreds)
             allpreds = allpreds.tolist()
-        return allpreds, mode_cols
+        return allpreds, mode_cols, predicted_probabs
 
     def load_model_states(self, path=None):
         if path:
@@ -495,12 +508,27 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         pthes = self.load_model_states()
         print(pthes)
         pred_dataloader = self.pred_dataloader()
-        allpreds, mode_cols = self.predicting(pred_dataloader, model, pthes)
+        allpreds, mode_cols, prob_cols = self.predicting(pred_dataloader, model, pthes)
         #print(allpreds)
         #findf = pd.DataFrame(allpreds)
         #findf = findf.T
-        self.dataframe["majority_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
-        print(self.dataframe["majority_class"])
-        print("---------------")
-        print(self.dataframe)
-        self.predicted_classes['nlp_transformer'] = self.dataframe["majority_class"]
+        if self.prediction_mode:
+            if self.class_problem == 'binary':
+                self.dataframe["avg_class_prob"] = self.dataframe[prob_cols].mean(axis=1)
+                self.dataframe["majority_class"] = self.dataframe["avg_class_prob"] > self.preprocess_decisions[f"probability_threshold"]
+                self.predicted_probs["majority_class"] = self.dataframe["avg_class_prob"]
+                self.predicted_classes['nlp_transformer'] = self.dataframe["majority_class"]
+            else:
+                self.dataframe["majority_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
+                self.predicted_classes['nlp_transformer'] = self.dataframe["majority_class"]
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            if self.class_problem == 'binary':
+                X_test["avg_class_prob"] = X_test[prob_cols].mean(axis=1)
+                self.threshold_refiner(X_test["avg_class_prob"], Y_test)
+                X_test["majority_class"] = X_test["avg_class_prob"] > self.preprocess_decisions[f"probability_threshold"]
+                self.predicted_probs["majority_class"] = X_test["avg_class_prob"]
+                self.predicted_classes['nlp_transformer'] = X_test["majority_class"]
+            else:
+                X_test["majority_class"] = X_test[mode_cols].mode(axis=1)[0]
+                self.predicted_classes['nlp_transformer'] = X_test["majority_class"]

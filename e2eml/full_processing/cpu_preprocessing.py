@@ -61,7 +61,7 @@ class PreProcessing:
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None, nlp_columns=None,
                  nlp_transformer_columns=None, transformer_chosen='bert-base-uncased', transformer_model_load_from_path=None,
-                 transformer_model_save_states_path=None, prediction_mode=False, preferred_training_mode='auto',
+                 transformer_model_save_states_path=None, transformer_epochs=20, prediction_mode=False, preferred_training_mode='auto',
                  preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
                  logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
 
@@ -137,6 +137,7 @@ class PreProcessing:
         self.nlp_transformer_columns = nlp_transformer_columns
         self.nlp_transformers = {}
         self.transformer_chosen = transformer_chosen
+        self.transformer_epochs = transformer_epochs
         self.cat_columns_encoded = None
         self.unique_identifier = unique_identifier
         self.target_variable = target_variable
@@ -154,7 +155,7 @@ class PreProcessing:
                                      "test_batch_size": 16,
                                      "pred_batch_size": 16,
                                      "num_workers": 4,
-                                     "epochs": 10,
+                                     "epochs": self.transformer_epochs, # TODO: Change to 20 again
                                      "transformer_model_path": self.transformer_model_load_from_path,
                                      "model_save_states_path": {self.transformer_model_save_states_path}}
         self.selected_feats = selected_feats
