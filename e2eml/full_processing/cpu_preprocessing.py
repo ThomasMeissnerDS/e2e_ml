@@ -635,34 +635,57 @@ class PreProcessing:
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
                                                 Y_test)
 
-    def create_folds(self, data, target, num_splits=4):
+    def create_folds(self, data, target, num_splits=5, mode='simple'):
         if self.prediction_mode:
             pass
         else:
-            # we create a new column called kfold and fill it with -1
-            data["kfold"] = -1
+            if mode == 'simple':
+                data["kfold"] = data.index % num_splits
+            else:
+                # we create a new column called kfold and fill it with -1
+                data["kfold"] = -1
 
-            # the next step is to randomize the rows of the data
-            data = data.sample(frac=1).reset_index(drop=True)
+                # the next step is to randomize the rows of the data
+                data = data.sample(frac=1).reset_index(drop=True)
+                print(data.info())
 
-            # calculate number of bins by Sturge's rule
-            # I take the floor of the value, you can also
-            # just round it
-            num_bins = int(np.floor(1 + np.log2(len(data))))
-            # bin targets
-            data.loc[:, "bins"] = pd.cut(
-                data[target], bins=num_bins, labels=False
-            )
-            # initiate the kfold class from model_selection module
-            kf = model_selection.StratifiedKFold(n_splits=num_splits)
-            # fill the new kfold column
-            # note that, instead of targets, we use bins!
-            for f, (t_, v_) in enumerate(kf.split(X=data, y=data.bins.values)):
-                data.loc[v_, 'kfold'] = f
-            # drop the bins column
-            data = data.drop("bins", axis=1)
-            # return dataframe with folds
+                # calculate number of bins by Sturge's rule
+                # I take the floor of the value, you can also
+                # just round it
+                num_bins = int(np.floor(1 + np.log2(len(data))))
+                # bin targets
+                data.loc[:, "bins"] = pd.cut(
+                    data[target], bins=num_bins, labels=False
+                )
+                print(data.info())
+                # initiate the kfold class from model_selection module
+                kf = model_selection.StratifiedKFold(n_splits=num_splits)
+                # fill the new kfold column
+                # note that, instead of targets, we use bins!
+                for f, (t_, v_) in enumerate(kf.split(X=data, y=data.bins.values)):
+                    data.loc[v_, 'kfold'] = f
+                # drop the bins column
+                data = data.drop("bins", axis=1)
+                # return dataframe with folds
             return data
+
+    def reset_test_train_index(self):
+        if self.prediction_mode:
+            self.dataframe = self.dataframe.reset_index(drop=True)
+        else:
+            # index shuffling
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train[self.target_variable] = Y_train
+            X_test[self.target_variable] = Y_test
+            all_data = pd.concat([X_train, X_test])
+            all_data = self.create_folds(all_data, self.target_variable)
+            X_train = all_data[all_data["kfold"] != 0].reset_index(drop=True)
+            X_test = all_data[all_data["kfold"] == 0].reset_index(drop=True)
+            Y_train = X_train[self.target_variable]
+            Y_test = X_test[self.target_variable]
+            X_train.drop("kfold", axis=1)
+            X_test.drop("kfold", axis=1)
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.80):
         """

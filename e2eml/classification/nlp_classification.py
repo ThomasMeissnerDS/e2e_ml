@@ -82,24 +82,6 @@ class ClassificationModels(postprocessing.FullPipeline):
             pd.Series(seq_len).hist(bins=30)
             self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"] = max(seq_len)
 
-    def reset_indices(self, mode='fit'):
-        if mode == 'transform':
-            self.dataframe = self.dataframe.reset_index(drop=True)
-            return self.dataframe
-        elif mode == 'fit':
-            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train[self.target_variable] = Y_train
-            X_test[self.target_variable] = Y_test
-            X_train = X_train.reset_index(drop=True)
-            X_test = X_test.reset_index(drop=True)
-            Y_train = X_train[self.target_variable]
-            Y_test = X_test[self.target_variable]
-            X_train.drop(self.target_variable, axis=1)
-            X_test.drop(self.target_variable, axis=1)
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
-        else:
-            print("Please chose either 'fit' or 'transform'.")
-
 
 class BERTDataSet(Dataset):
     def __init__(self, sentences, targets, tokenizer):
@@ -138,14 +120,17 @@ class BERTClass(torch.nn.Module):
         super(BERTClass, self).__init__()
         self.bert = AutoModel.from_pretrained(transformer
                                               , return_dict=False)
+        self.config = self.bert.config
+        self.layer_norm = nn.LayerNorm(self.config.hidden_size)
         self.dropout = nn.Dropout(0.3)
-        self.classifier = torch.nn.Linear(768, num_classes)
+        self.out = torch.nn.Linear(self.config.hidden_size, num_classes)
 
     def forward(self, input_ids, token_type_ids, attention_mask):
-        _, pooled_output = self.bert(input_ids, token_type_ids, attention_mask)
-        pooled_output = self.dropout(pooled_output)
-        logits = self.classifier(pooled_output)
-        return logits
+        outputs = self.bert(input_ids, token_type_ids, attention_mask)
+        sequence_output = outputs[1]
+        sequence_output = self.layer_norm(sequence_output)
+        output = self.dropout(sequence_output)
+        return self.out(output)
 
 
 class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
@@ -164,7 +149,6 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
     def create_pred_dataset(self):
         if self.prediction_mode:
             self.dataframe[self.target_variable] = 999  # creating dummy column
-            self.reset_indices(mode='transform')
             dummy_target = self.dataframe[self.target_variable]
             self.dataframe.drop(self.target_variable, axis=1)
             tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
@@ -201,7 +185,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         else:
             workers = self.transformer_settings["num_workers"]
         test_dataset = self.create_test_dataset()
-        test_dataloader = DataLoader(test_dataset, batch_size=test_batch_size, shuffle=True, num_workers=workers,
+        test_dataloader = DataLoader(test_dataset, batch_size=test_batch_size, shuffle=False, num_workers=workers,
                                      pin_memory=True)
         return test_dataloader
 
@@ -236,7 +220,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             model.to(device)
             model.train()
             LR = 2e-5
-            optimizer = AdamW(model.parameters(), LR, betas=(0.9, 0.999), weight_decay=1e-2)
+            optimizer = AdamW(model.parameters(), LR, betas=(0.99, 0.98), weight_decay=1e-2)
             if epochs:
                 pass
             else:
@@ -252,6 +236,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         model.train()
         allpreds = []
         alltargets = []
+        self.reset_test_train_index()
 
         for a in train_dataloader:
             losses = []
@@ -278,9 +263,9 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
 
             # Combine dataloader minutes
 
-        allpreds = np.concatenate(allpreds)
+        allpreds = np.concatenate(allpreds, axis=0)
         allpreds = np.asarray([np.argmax(line) for line in allpreds])
-        alltargets = np.concatenate(alltargets)
+        alltargets = np.concatenate(alltargets, axis=0)
 
         # I don't use loss, but I collect it
         losses = np.mean(losses)
@@ -312,12 +297,12 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                 # For scoring
                 losses.append(loss.item() / len(output))
                 allpreds.append(output.detach().cpu().numpy())
-                alltargets.append(target.detach().squeeze(-1).cpu().numpy())
+                alltargets.append(target.detach().cpu().numpy())
                 # Combine dataloader minutes
 
-        allpreds = np.concatenate(allpreds)
+        allpreds = np.concatenate(allpreds, axis=0)
         allpreds = np.asarray([np.argmax(line) for line in allpreds])
-        alltargets = np.concatenate(alltargets)
+        alltargets = np.concatenate(alltargets, axis=0)
 
         # I don't use loss, but I collect it
         losses = np.mean(losses)
@@ -330,7 +315,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         allpreds = []
         model_no = 0
         mode_cols = []
-        predicted_probabs = []
+        self.reset_test_train_index()
         for m_path in pathes:
             state = torch.load(m_path)
             model.load_state_dict(state["state_dict"])
@@ -348,34 +333,23 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                     preds.append(output.detach().cpu().numpy())
 
                 preds = np.concatenate(preds)
-                print("-----preds shape-------")
-                print(preds.shape)
-                if self.class_problem == 'binary':
-                    predicted_probs = np.asarray([line[1] for line in preds])
-                else:
-                    pred_classes = np.argmax(preds, axis=1).flatten()
+                pred_classes = np.asarray([np.argmax(line) for line in preds])
 
                 if self.prediction_mode:
-                    if self.class_problem == 'binary':
-                        self.dataframe[f"preds_model{model_no}_probs"] = predicted_probs
-                    else:
-                        self.dataframe[f"preds_model{model_no}"] = pred_classes
+                    self.dataframe[f"preds_model{model_no}"] = pred_classes
                 else:
                     X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-                    if self.class_problem == 'binary':
-                        X_test[f"preds_model{model_no}_probs"] = predicted_probs
-                    else:
-                        X_test[f"preds_model{model_no}"] = pred_classes
+                    X_test[f"preds_model{model_no}"] = pred_classes
                 mode_cols.append(f"preds_model{model_no}")
-                predicted_probabs.append(f"preds_model{model_no}_probs")
+
                 allpreds.append(preds)
                 model_no += 1
             del state
             torch.cuda.empty_cache()
             _ = gc.collect()
-            allpreds = np.argmax(preds, axis=1).flatten()
+            allpreds = np.asarray([np.argmax(line) for line in allpreds])
             allpreds = allpreds.tolist()
-        return allpreds, mode_cols, predicted_probabs
+        return allpreds, mode_cols
 
     def load_model_states(self, path=None):
         if path:
@@ -393,7 +367,8 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         if self.prediction_mode:
             pass
         else:
-            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            self.reset_test_train_index()
+
             train_dataloader = self.create_train_dataloader()
             test_dataloader = self.create_test_dataloader()
             model, optimizer, train_steps, num_steps, scheduler = self.model_setup()
@@ -442,6 +417,9 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             bestscores.append(bestscore)
 
             for fold in range(1, 5):
+
+                self.reset_test_train_index()
+                X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
                 # initializing the data
                 train_dataloader = self.create_train_dataloader()
@@ -503,33 +481,21 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             _ = gc.collect()
 
     def transformer_predict(self):
+        self.reset_test_train_index()
         model = BERTClass(
             self.transformer_chosen,
             self.num_classes)
         pthes = self.load_model_states()
         print(pthes)
         pred_dataloader = self.pred_dataloader()
-        allpreds, mode_cols, prob_cols = self.predicting(pred_dataloader, model, pthes)
+        allpreds, mode_cols = self.predicting(pred_dataloader, model, pthes)
         #print(allpreds)
         #findf = pd.DataFrame(allpreds)
         #findf = findf.T
         if self.prediction_mode:
-            if self.class_problem == 'binary':
-                self.dataframe["avg_class_prob"] = self.dataframe[prob_cols].mean(axis=1)
-                self.dataframe["majority_class"] = self.dataframe["avg_class_prob"] > self.preprocess_decisions[f"probability_threshold"]
-                self.predicted_probs["majority_class"] = self.dataframe["avg_class_prob"]
-                self.predicted_classes['nlp_transformer'] = self.dataframe["majority_class"]
-            else:
-                self.dataframe["majority_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
-                self.predicted_classes['nlp_transformer'] = self.dataframe["majority_class"]
+            self.dataframe["majority_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
+            self.predicted_classes['nlp_transformer'] = self.dataframe["majority_class"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            if self.class_problem == 'binary':
-                X_test["avg_class_prob"] = X_test[prob_cols].mean(axis=1)
-                self.threshold_refiner(X_test["avg_class_prob"], Y_test)
-                X_test["majority_class"] = X_test["avg_class_prob"] > self.preprocess_decisions[f"probability_threshold"]
-                self.predicted_probs["majority_class"] = X_test["avg_class_prob"]
-                self.predicted_classes['nlp_transformer'] = X_test["majority_class"]
-            else:
-                X_test["majority_class"] = X_test[mode_cols].mode(axis=1)[0]
-                self.predicted_classes['nlp_transformer'] = X_test["majority_class"]
+            X_test["majority_class"] = X_test[mode_cols].mode(axis=1)[0]
+            self.predicted_classes['nlp_transformer'] = X_test["majority_class"]

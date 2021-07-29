@@ -113,7 +113,9 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 
 ## Release History
 
-* 1.4.0
+* 1.5.0
+  - Added BERT transformer blueprints for NLP classification and regression
+* 1.3.9
   - Fixed issue with automated GPU-acceleration detection and flagging
   - Fixed avg regression blueprint where eval function tried to call classification evaluation
   - Moved POS tagging + PCA step into non-NLP pipeline as it showed good results in general

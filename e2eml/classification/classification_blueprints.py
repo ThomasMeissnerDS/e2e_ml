@@ -283,13 +283,12 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         except AttributeError:
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
-        self.datetime_converter(datetime_handling='all')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
-        self.regex_clean_text_data()
+        #self.datetime_converter(datetime_handling='all')
+        #self.delete_high_null_cols(threshold=0.5)
+        #self.fill_nulls(how='static')
+        #self.regex_clean_text_data()
         self.sort_columns_alphabetically()
-        self.reset_indices(mode='fit')
-        self.import_transformer_model_tokenizer(transformer_chosen='bert-base-uncased')
+        self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)
         #self.check_max_sentence_length()
         if self.prediction_mode:
             pass
