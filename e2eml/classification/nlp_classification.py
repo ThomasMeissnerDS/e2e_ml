@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler, Dataset
 import transformers
-from transformers import AutoModel, BertTokenizerFast, AdamW, BertModel
+from transformers import AutoModel, BertTokenizerFast, AdamW, BertModel, RobertaModel, AutoTokenizer
 from transformers import get_linear_schedule_with_warmup
 from sklearn.metrics import matthews_corrcoef, mean_squared_error
 from tqdm import tqdm
@@ -58,12 +58,12 @@ class ClassificationModels(postprocessing.FullPipeline):
             bert = AutoModel.from_pretrained(f"{self.transformer_model_load_from_path}",
                                              output_attentions=False,  # Whether the model returns attentions weights.
                                              output_hidden_states=False)
-            tokenizer = transformers.BertTokenizer.from_pretrained(f"{self.transformer_model_load_from_path}")
+            tokenizer = transformers.AutoTokenizer.from_pretrained(f"{self.transformer_model_load_from_path}")
         else:
             # import BERT-base pretrained model
             bert = AutoModel.from_pretrained(transformer_chosen)
             # Load the BERT tokenizer
-            tokenizer = BertTokenizerFast.from_pretrained(transformer_chosen)
+            tokenizer = AutoTokenizer.from_pretrained(transformer_chosen)
         if "nlp_transformers" in self.preprocess_decisions:
             pass
         else:
@@ -118,7 +118,7 @@ class BERTDataSet(Dataset):
             None,
             add_special_tokens=True,
             padding='max_length',
-            # return_token_type_ids=True,
+            return_token_type_ids=True,
             truncation=True
         )
         ids = inputs['input_ids']
@@ -136,7 +136,8 @@ class BERTDataSet(Dataset):
 class BERTClass(torch.nn.Module):
     def __init__(self, transformer, num_classes):
         super(BERTClass, self).__init__()
-        self.bert = BertModel.from_pretrained("bert-base-uncased", return_dict=False)
+        self.bert = AutoModel.from_pretrained(transformer
+                                              , return_dict=False)
         self.dropout = nn.Dropout(0.3)
         self.classifier = torch.nn.Linear(768, num_classes)
 
@@ -230,7 +231,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = BERTClass(
-                self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{self.transformer_chosen}"],
+                self.transformer_chosen,
                 self.num_classes)
             model.to(device)
             model.train()
@@ -447,7 +448,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                 test_dataloader = self.create_test_dataloader()
 
                 model = BERTClass(
-                    self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{self.transformer_chosen}"],
+                    self.transformer_chosen,
                     self.num_classes)
                 model.to(device)
                 LR = 2e-5
@@ -503,7 +504,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
 
     def transformer_predict(self):
         model = BERTClass(
-            self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{self.transformer_chosen}"],
+            self.transformer_chosen,
             self.num_classes)
         pthes = self.load_model_states()
         print(pthes)
