@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler, Dataset
 import transformers
-from transformers import AutoModel, BertTokenizerFast, AdamW, BertModel, RobertaModel, AutoTokenizer
+from transformers import AutoModel, BertTokenizerFast, AdamW, BertModel, RobertaModel, AutoTokenizer, AutoConfig
 from transformers import get_linear_schedule_with_warmup
 from sklearn.metrics import matthews_corrcoef, mean_squared_error
 from tqdm import tqdm
@@ -19,7 +19,7 @@ scaler = torch.cuda.amp.GradScaler()  # GPU
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-class ClassificationModels(postprocessing.FullPipeline):
+class RegressionModels(postprocessing.FullPipeline):
     """
     This class stores all model training and prediction methods for classification tasks.
     This class stores all pipeline relevant information (inherited from cpu preprocessing).
@@ -111,29 +111,61 @@ class BERTDataSet(Dataset):
             'ids': torch.tensor(ids, dtype=torch.long),
             'mask': torch.tensor(mask, dtype=torch.long),
             'token_type_ids': torch.tensor(token_type_ids, dtype=torch.long),
-            'target': torch.tensor(target, dtype=torch.float) #TODO: check difference to long
+            'target': torch.tensor(target, dtype=torch.float)
         }
 
 
 class BERTClass(torch.nn.Module):
-    def __init__(self, transformer, num_classes):
+    def __init__(self, transformer):
         super(BERTClass, self).__init__()
         self.bert = AutoModel.from_pretrained(transformer
-                                              , return_dict=False)
-        self.config = self.bert.config
-        self.layer_norm = nn.LayerNorm(self.config.hidden_size)
-        self.dropout = nn.Dropout(0.3)
-        self.out = torch.nn.Linear(self.config.hidden_size, num_classes)
+                                              )
+        config = AutoConfig.from_pretrained(transformer)
+        config.update({"output_hidden_states": True,
+                       "hidden_dropout_prob": 0.25,
+                       "layer_norm_eps": 1e-7})
+
+        self.roberta = AutoModel.from_pretrained(transformer, config=config)
+
+        self.attention = nn.Sequential(
+            nn.Linear(768, 512),
+            nn.Tanh(),
+            nn.Linear(512, 1),
+            nn.Softmax(dim=1)
+        )
+
+        self.regressor = nn.Sequential(
+            nn.Linear(768, 1)
+        )
 
     def forward(self, input_ids, token_type_ids, attention_mask):
-        outputs = self.bert(input_ids, token_type_ids, attention_mask)
-        sequence_output = outputs[1]
-        sequence_output = self.layer_norm(sequence_output)
-        output = self.dropout(sequence_output)
-        return self.out(output)
+        roberta_output = self.roberta(input_ids=input_ids,
+                                      token_type_ids=token_type_ids,
+                                      attention_mask=attention_mask)
+
+        # There are a total of 13 layers of hidden states.
+        # 1 for the embedding layer, and 12 for the 12 Roberta layers.
+        # We take the hidden states from the last Roberta layer.
+        last_layer_hidden_states = roberta_output.hidden_states[-1]
+
+        # The number of cells is MAX_LEN.
+        # The size of the hidden state of each cell is 768 (for roberta-base).
+        # In order to condense hidden states of all cells to a context vector,
+        # we compute a weighted average of the hidden states of all cells.
+        # We compute the weight of each cell, using the attention neural network.
+        weights = self.attention(last_layer_hidden_states)
+
+        # weights.shape is BATCH_SIZE x MAX_LEN x 1
+        # last_layer_hidden_states.shape is BATCH_SIZE x MAX_LEN x 768
+        # Now we compute context_vector as the weighted average.
+        # context_vector.shape is BATCH_SIZE x 768
+        context_vector = torch.sum(weights * last_layer_hidden_states, dim=1)
+
+        # Now we reduce the context vector to the prediction score.
+        return self.regressor(context_vector)
 
 
-class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
+class NlpModel(RegressionModels, BERTDataSet, BERTClass):
     def create_train_dataset(self):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
@@ -205,7 +237,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         return pred_dataloader
 
     def loss_fn(self, output, target):
-        return torch.nn.CrossEntropyLoss()(output, target)
+        return torch.sqrt(nn.MSELoss()(output, target))
 
     # nn.MultiMarginLoss, #CrossEntropyLoss, #MSELoss
 
@@ -215,8 +247,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = BERTClass(
-                self.transformer_chosen,
-                self.num_classes)
+                self.transformer_chosen)
             model.to(device)
             model.train()
             LR = 2e-5
@@ -249,12 +280,12 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                 token_type_ids = a["token_type_ids"].to(device)
 
                 output = model(ids, mask, token_type_ids)
-                loss = self.loss_fn(output, target)
+                loss = self.loss_fn(output, target.view(-1, 1))
 
                 # For scoring
                 losses.append(loss.item() / len(output))
                 allpreds.append(output.detach().cpu().numpy())
-                alltargets.append(target.detach().cpu().numpy())
+                alltargets.append(target.detach().squeeze(-1).cpu().numpy())
 
             scaler.scale(loss).backward()  # backwards of loss
             scaler.step(optimizer)  # Update optimizer
@@ -263,14 +294,13 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
 
             # Combine dataloader minutes
 
-        allpreds = np.concatenate(allpreds, axis=0)
-        allpreds = np.asarray([np.argmax(line) for line in allpreds])
-        alltargets = np.concatenate(alltargets, axis=0)
+        allpreds = np.concatenate(allpreds)
+        alltargets = np.concatenate(alltargets)
 
         # I don't use loss, but I collect it
         losses = np.mean(losses)
         # Score with rmse
-        train_rme_loss = matthews_corrcoef(alltargets, allpreds)
+        train_rme_loss = np.sqrt(mean_squared_error(alltargets, allpreds))
 
         return losses, train_rme_loss
 
@@ -290,21 +320,20 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                 token_type_ids = a["token_type_ids"].to(device)
 
                 output = model(ids, mask, token_type_ids)
-                loss = self.loss_fn(output, target)
+                loss = self.loss_fn(output, target.view(-1, 1))
                 # For scoring
                 losses.append(loss.item() / len(output))
                 allpreds.append(output.detach().cpu().numpy())
-                alltargets.append(target.detach().cpu().numpy())
+                alltargets.append(target.detach().squeeze(-1).cpu().numpy())
                 # Combine dataloader minutes
 
-        allpreds = np.concatenate(allpreds, axis=0)
-        allpreds = np.asarray([np.argmax(line) for line in allpreds])
-        alltargets = np.concatenate(alltargets, axis=0)
+        allpreds = np.concatenate(allpreds)
+        alltargets = np.concatenate(alltargets)
 
         # I don't use loss, but I collect it
         losses = np.mean(losses)
         # Score with rmse
-        valid_rme_loss = matthews_corrcoef(alltargets, allpreds)
+        valid_rme_loss = np.sqrt(mean_squared_error(alltargets, allpreds))
 
         return allpreds, losses, valid_rme_loss
 
@@ -330,13 +359,12 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                     preds.append(output.detach().cpu().numpy())
 
                 preds = np.concatenate(preds)
-                pred_classes = np.asarray([np.argmax(line) for line in preds])
 
                 if self.prediction_mode:
-                    self.dataframe[f"preds_model{model_no}"] = pred_classes
+                    self.dataframe[f"preds_model{model_no}"] = preds
                 else:
                     X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-                    X_test[f"preds_model{model_no}"] = pred_classes
+                    X_test[f"preds_model{model_no}"] = preds
                 mode_cols.append(f"preds_model{model_no}")
 
                 allpreds.append(preds)
@@ -344,8 +372,6 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
             del state
             torch.cuda.empty_cache()
             _ = gc.collect()
-            allpreds = np.asarray([np.argmax(line) for line in allpreds])
-            allpreds = allpreds.tolist()
         return allpreds, mode_cols
 
     def load_model_states(self, path=None):
@@ -423,8 +449,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
                 test_dataloader = self.create_test_dataloader()
 
                 model = BERTClass(
-                    self.transformer_chosen,
-                    self.num_classes)
+                    self.transformer_chosen)
                 model.to(device)
                 LR = 2e-5
                 optimizer = AdamW(model.parameters(), LR, betas=(0.9, 0.999), weight_decay=1e-2)  # AdamW optimizer
@@ -480,8 +505,7 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
     def transformer_predict(self):
         self.reset_test_train_index()
         model = BERTClass(
-            self.transformer_chosen,
-            self.num_classes)
+            self.transformer_chosen)
         pthes = self.load_model_states()
         print(pthes)
         pred_dataloader = self.pred_dataloader()
@@ -491,8 +515,8 @@ class NlpModel(ClassificationModels, BERTDataSet, BERTClass):
         #findf = findf.T
         if self.prediction_mode:
             self.dataframe["majority_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
-            self.predicted_classes['nlp_transformer'] = self.dataframe["majority_class"]
+            self.predicted_values['nlp_transformer'] = self.dataframe["majority_class"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_test["majority_class"] = X_test[mode_cols].mode(axis=1)[0]
-            self.predicted_classes['nlp_transformer'] = X_test["majority_class"]
+            self.predicted_values['nlp_transformer'] = X_test["majority_class"]

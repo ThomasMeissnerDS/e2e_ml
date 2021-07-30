@@ -26,6 +26,7 @@ import psutil
 import time
 import random
 
+pd.options.display.max_colwidth = 1000
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 

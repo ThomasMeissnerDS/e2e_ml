@@ -1,9 +1,10 @@
 from e2eml.regression.regression_models import RegressionModels
 from e2eml.full_processing.preprocessing_blueprints import PreprocessingBluePrint
+from e2eml.regression.nlp_regression import NlpModel
 import logging
 
 
-class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
+class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
     """
     Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
     if the predict_mode attribute is True.
@@ -242,6 +243,35 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint):
         algorithm = 'vowpal_wabbit'
         self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
         self.regression_eval(algorithm=algorithm)
+        self.prediction_mode = True
+        logging.info('Finished blueprint.')
+
+    def ml_16_regressions_full_processing_nlp_transformer(self, df=None):
+        logging.info('Start blueprint.')
+        self.runtime_warnings(warn_about="future_architecture_change")
+        try:
+            if df.empty:
+                self.prediction_mode = False
+            else:
+                self.dataframe = df
+                self.prediction_mode = True
+        except AttributeError:
+            self.prediction_mode = False
+        self.train_test_split(how=self.train_split_type)
+        #self.datetime_converter(datetime_handling='all')
+        #self.delete_high_null_cols(threshold=0.5)
+        #self.fill_nulls(how='static')
+        self.regex_clean_text_data()
+        self.sort_columns_alphabetically()
+        self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)
+        #self.check_max_sentence_length()
+        if self.prediction_mode:
+            pass
+        else:
+            self.transformer_train()
+        self.transformer_predict()
+        algorithm = 'nlp_transformer'
+        self.regression_eval(algorithm)
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
