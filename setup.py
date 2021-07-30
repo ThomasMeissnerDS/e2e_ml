@@ -33,7 +33,7 @@ requirements = ["babel>=2.9.1",
 
 setup(
     name="e2eml",
-    version="1.3.9",
+    version="1.5.0",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",

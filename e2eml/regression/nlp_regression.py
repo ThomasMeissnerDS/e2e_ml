@@ -47,6 +47,24 @@ class RegressionModels(postprocessing.FullPipeline):
     model performance. Will be extended by further memory savings features in future releases.
     However we highly recommend GPU usage to heavily decrease model training times.
     """
+    def create_bert_regression_model(self, chosen_model='bert-base-uncased'):
+        if not self.transformer_chosen:
+            chosen_model = chosen_model
+        if chosen_model == 'bert-base-uncased' or chosen_model == 'bert-base-cased':
+            model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
+        elif chosen_model == 'roberta-base':
+            model = transformers.RobertaForSequenceClassification.from_pretrained(
+                self.transformer_chosen, num_labels=1)
+        elif chosen_model == 'roberta-large':
+            model = transformers.RobertaForSequenceClassification.from_pretrained(
+                self.transformer_chosen, num_labels=1)
+        elif chosen_model == 'google/electra-small-discriminator':
+            model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
+        elif chosen_model == 'xlnet-base-cased':
+            model = transformers.XLNetForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
+        else:
+            model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
+        return model
 
     def import_transformer_model_tokenizer(self, transformer_chosen=None):
         if not transformer_chosen:
@@ -61,7 +79,7 @@ class RegressionModels(postprocessing.FullPipeline):
             tokenizer = transformers.AutoTokenizer.from_pretrained(f"{self.transformer_model_load_from_path}")
         else:
             # import BERT-base pretrained model
-            bert = AutoModel.from_pretrained(transformer_chosen)
+            bert = self.create_bert_regression_model(transformer_chosen)
             # Load the BERT tokenizer
             tokenizer = AutoTokenizer.from_pretrained(transformer_chosen)
         if "nlp_transformers" in self.preprocess_decisions:
@@ -71,16 +89,6 @@ class RegressionModels(postprocessing.FullPipeline):
 
         self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{transformer_chosen}"] = bert
         self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{transformer_chosen}"] = tokenizer
-
-    def check_max_sentence_length(self, text_columns=None):
-        if self.prediction_mode:
-            pass
-        else:
-            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            text_columns = self.check_for_nlp_transformer_columns(text_columns=text_columns, return_list=True)
-            seq_len = [len(i.split()) for i in X_train[text_columns]]
-            pd.Series(seq_len).hist(bins=30)
-            self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"] = max(seq_len)
 
 
 class BERTDataSet(Dataset):
@@ -122,8 +130,9 @@ class BERTClass(torch.nn.Module):
                                               )
         config = AutoConfig.from_pretrained(transformer)
         config.update({"output_hidden_states": True,
-                       "hidden_dropout_prob": 0.25,
-                       "layer_norm_eps": 1e-7})
+                       "hidden_dropout_prob": 0.30,
+                       #"layer_norm_eps": 1e-7
+                       })
 
         self.roberta = AutoModel.from_pretrained(transformer, config=config)
 
@@ -165,7 +174,7 @@ class BERTClass(torch.nn.Module):
         return self.regressor(context_vector)
 
 
-class NlpModel(RegressionModels, BERTDataSet, BERTClass):
+class NlpModel(RegressionModels, BERTDataSet):
     def create_train_dataset(self):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
@@ -246,12 +255,11 @@ class NlpModel(RegressionModels, BERTDataSet, BERTClass):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            model = BERTClass(
-                self.transformer_chosen)
+            model = BERTClass(self.transformer_chosen, 1)
             model.to(device)
             model.train()
-            LR = 2e-5
-            optimizer = AdamW(model.parameters(), LR, betas=(0.99, 0.98), weight_decay=1e-2)
+            LR = 2e-5 #1e-3
+            optimizer = AdamW(model.parameters(), LR, betas=(0.99, 0.999), weight_decay=1e-2)
             if epochs:
                 pass
             else:
@@ -279,13 +287,13 @@ class NlpModel(RegressionModels, BERTDataSet, BERTClass):
                 target = a["target"].to(device)
                 token_type_ids = a["token_type_ids"].to(device)
 
-                output = model(ids, mask, token_type_ids)
-                loss = self.loss_fn(output, target.view(-1, 1))
+                output = model(ids, mask)
+                loss = self.loss_fn(output, target)
 
                 # For scoring
                 losses.append(loss.item() / len(output))
                 allpreds.append(output.detach().cpu().numpy())
-                alltargets.append(target.detach().squeeze(-1).cpu().numpy())
+                alltargets.append(target.detach().cpu().numpy())
 
             scaler.scale(loss).backward()  # backwards of loss
             scaler.step(optimizer)  # Update optimizer
@@ -319,12 +327,12 @@ class NlpModel(RegressionModels, BERTDataSet, BERTClass):
                 target = a["target"].to(device)
                 token_type_ids = a["token_type_ids"].to(device)
 
-                output = model(ids, mask, token_type_ids)
-                loss = self.loss_fn(output, target.view(-1, 1))
+                output = model(ids, mask)
+                loss = self.loss_fn(output, target)
                 # For scoring
                 losses.append(loss.item() / len(output))
                 allpreds.append(output.detach().cpu().numpy())
-                alltargets.append(target.detach().squeeze(-1).cpu().numpy())
+                alltargets.append(target.detach().cpu().numpy())
                 # Combine dataloader minutes
 
         allpreds = np.concatenate(allpreds)
@@ -448,11 +456,10 @@ class NlpModel(RegressionModels, BERTDataSet, BERTClass):
                 train_dataloader = self.create_train_dataloader()
                 test_dataloader = self.create_test_dataloader()
 
-                model = BERTClass(
-                    self.transformer_chosen)
+                model = BERTClass(self.transformer_chosen, 1)
                 model.to(device)
                 LR = 2e-5
-                optimizer = AdamW(model.parameters(), LR, betas=(0.9, 0.999), weight_decay=1e-2)  # AdamW optimizer
+                optimizer = AdamW(model.parameters(), LR, betas=(0.99, 0.999), weight_decay=1e-2)  # AdamW optimizer
                 train_steps = int(
                     len(X_train) / self.transformer_settings["train_batch_size"] * self.transformer_settings["epochs"])
                 num_steps = int(train_steps * 0.1)
@@ -504,8 +511,7 @@ class NlpModel(RegressionModels, BERTDataSet, BERTClass):
 
     def transformer_predict(self):
         self.reset_test_train_index()
-        model = BERTClass(
-            self.transformer_chosen)
+        model = BERTClass(self.transformer_chosen, 1)
         pthes = self.load_model_states()
         print(pthes)
         pred_dataloader = self.pred_dataloader()

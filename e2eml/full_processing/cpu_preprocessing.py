@@ -62,7 +62,7 @@ class PreProcessing:
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None, nlp_columns=None,
                  nlp_transformer_columns=None, transformer_chosen='bert-base-uncased', transformer_model_load_from_path=None,
-                 transformer_model_save_states_path=None, transformer_epochs=20, prediction_mode=False, preferred_training_mode='auto',
+                 transformer_model_save_states_path=None, transformer_epochs=3, prediction_mode=False, preferred_training_mode='auto',
                  preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
                  logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
 
@@ -155,7 +155,7 @@ class PreProcessing:
         self.transformer_settings = {f"train_batch_size": 16,
                                      "test_batch_size": 16,
                                      "pred_batch_size": 16,
-                                     "num_workers": 4,
+                                     "num_workers": 2,
                                      "epochs": self.transformer_epochs, # TODO: Change to 20 again
                                      "transformer_model_path": self.transformer_model_load_from_path,
                                      "model_save_states_path": {self.transformer_model_save_states_path}}
@@ -556,6 +556,20 @@ class PreProcessing:
             target = target[self.target_variable].astype(float)
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         return target
+
+    def check_max_sentence_length(self, text_columns=None):
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            text_columns = self.check_for_nlp_transformer_columns(text_columns=text_columns, return_list=True)
+            seq_len = [len(i.split()) for i in X_train[text_columns]]
+            pd.Series(seq_len).hist(bins=30)
+            if "nlp_transformers" in self.preprocess_decisions:
+                pass
+            else:
+                self.preprocess_decisions[f"nlp_transformers"] = {}
+            self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"] = max(seq_len)
 
     def data_scaling(self, scaling='minmax'):
         """
