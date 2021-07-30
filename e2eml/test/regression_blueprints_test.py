@@ -68,9 +68,9 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         val_y_hat = titanic_auto_ml.predicted_values['linear_regression']
         mae = mean_absolute_error(val_df_target, val_y_hat)
     elif blueprint == 'vowpal_wabbit':
-        titanic_auto_ml.ml_bp15_train_test_regression_full_processing_vowpal_wabbit_reg(preprocessing_type='nlp')
+        titanic_auto_ml.ml_bp15_regression_full_processing_vowpal_wabbit_reg(preprocessing_type='nlp')
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp15_train_test_regression_full_processing_vowpal_wabbit_reg(val_df, preprocessing_type='nlp')
+        titanic_auto_ml.ml_bp15_regression_full_processing_vowpal_wabbit_reg(val_df, preprocessing_type='nlp')
         val_y_hat = titanic_auto_ml.predicted_classes['vowpal_wabbit']
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)

@@ -218,7 +218,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp15_train_test_regression_full_processing_vowpal_wabbit_reg(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+    def ml_bp15_regression_full_processing_vowpal_wabbit_reg(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -246,7 +246,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_16_regressions_full_processing_nlp_transformer(self, df=None):
+    def ml_16_regressions_full_processing_bert_transformer(self, df=None):
         logging.info('Start blueprint.')
         self.runtime_warnings(warn_about="future_architecture_change")
         try:

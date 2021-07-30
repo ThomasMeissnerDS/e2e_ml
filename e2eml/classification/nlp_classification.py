@@ -111,7 +111,7 @@ class BERTDataSet(Dataset):
             'ids': torch.tensor(ids, dtype=torch.long),
             'mask': torch.tensor(mask, dtype=torch.long),
             'token_type_ids': torch.tensor(token_type_ids, dtype=torch.long),
-            'target': torch.tensor(target, dtype=torch.float) #TODO: check difference to long
+            'target': torch.tensor(target, dtype=torch.long)
         }
 
 

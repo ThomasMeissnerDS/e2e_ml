@@ -3,8 +3,7 @@ from setuptools import setup, find_packages
 with open("README.md", "r") as readme_file:
     readme = readme_file.read()
 
-requirements = ["ipython>=6",
-                "babel>=2.9.1",
+requirements = ["babel>=2.9.1",
                 "boostaroota>=1.3",
                 "category_encoders==2.2.2",
                 "imblearn>=0.0",

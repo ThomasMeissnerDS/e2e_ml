@@ -514,9 +514,9 @@ class NlpModel(RegressionModels, BERTDataSet, BERTClass):
         #findf = pd.DataFrame(allpreds)
         #findf = findf.T
         if self.prediction_mode:
-            self.dataframe["majority_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
-            self.predicted_values['nlp_transformer'] = self.dataframe["majority_class"]
+            self.dataframe["transformers_mean"] = self.dataframe[mode_cols].mean(axis=1)[0]
+            self.predicted_values['nlp_transformer'] = self.dataframe["transformers_mean"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_test["majority_class"] = X_test[mode_cols].mode(axis=1)[0]
-            self.predicted_values['nlp_transformer'] = X_test["majority_class"]
+            X_test["transformers_mean"] = X_test[mode_cols].mean(axis=1)[0]
+            self.predicted_values['nlp_transformer'] = X_test["transformers_mean"]
