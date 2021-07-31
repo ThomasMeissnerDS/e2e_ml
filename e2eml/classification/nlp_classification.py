@@ -465,7 +465,7 @@ class NlpModel(ClassificationModels, BERTDataSet):
                             "bestscore": bestscore
                         }
                         torch.save(state, "model" + str(fold) + ".pth")
-                    elif bestscore > valscore:
+                    elif bestscore < valscore:
                         bestscore = valscore
                         print("found better point")
                         state = {
