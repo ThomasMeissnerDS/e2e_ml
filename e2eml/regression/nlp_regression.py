@@ -104,6 +104,7 @@ class BERTDataSet(Dataset):
             sentence,
             None,
             add_special_tokens=True,
+            max_length=256,
             padding='max_length',
             return_token_type_ids=True,
             truncation=True
@@ -493,7 +494,7 @@ class NlpModel(RegressionModels, BERTDataSet):
                             "bestscore": bestscore
                         }
                         torch.save(state, "model" + str(fold) + ".pth")
-                    elif bestscore > valscore:
+                    elif bestscore < valscore:
                         bestscore = valscore
                         print("found better point")
                         state = {
@@ -520,7 +521,7 @@ class NlpModel(RegressionModels, BERTDataSet):
         #findf = pd.DataFrame(allpreds)
         #findf = findf.T
         if self.prediction_mode:
-            self.dataframe["transformers_mean"] = self.dataframe[mode_cols].mean(axis=1)[0]
+            self.dataframe["transformers_mean"] = self.dataframe[mode_cols].mean(axis=0)[0]
             self.predicted_values['nlp_transformer'] = self.dataframe["transformers_mean"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
