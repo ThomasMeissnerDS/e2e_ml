@@ -104,6 +104,7 @@ class BERTDataSet(Dataset):
             sentence,
             None,
             add_special_tokens=True,
+            max_length=256,
             padding='max_length',
             return_token_type_ids=True,
             truncation=True

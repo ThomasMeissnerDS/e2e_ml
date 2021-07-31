@@ -286,7 +286,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         #self.datetime_converter(datetime_handling='all')
         #self.delete_high_null_cols(threshold=0.5)
         #self.fill_nulls(how='static')
-        self.regex_clean_text_data()
+        #self.regex_clean_text_data()
         self.sort_columns_alphabetically()
         self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)
         #self.check_max_sentence_length()

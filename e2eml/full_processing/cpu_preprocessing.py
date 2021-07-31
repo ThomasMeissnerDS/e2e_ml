@@ -650,7 +650,7 @@ class PreProcessing:
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
                                                 Y_test)
 
-    def create_folds(self, data, target, num_splits=5, mode='simple'):
+    def create_folds(self, data, target, num_splits=5, mode='advanced'):
         if self.prediction_mode:
             pass
         else:
