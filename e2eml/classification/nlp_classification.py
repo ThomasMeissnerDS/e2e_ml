@@ -52,10 +52,7 @@ class ClassificationModels(postprocessing.FullPipeline):
             chosen_model = chosen_model
         if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'distilbert-base-uncased']:
             model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
-        elif chosen_model == 'roberta-base':
-            model = transformers.RobertaForSequenceClassification.from_pretrained(
-                self.transformer_chosen, num_labels=self.num_classes)
-        elif chosen_model in ['roberta-large', 'distilroberta-base']:
+        elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base']:
             model = transformers.RobertaForSequenceClassification.from_pretrained(
                 self.transformer_chosen, num_labels=self.num_classes)
         elif chosen_model == 'google/electra-small-discriminator':

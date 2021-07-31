@@ -52,10 +52,7 @@ class RegressionModels(postprocessing.FullPipeline):
             chosen_model = chosen_model
         if chosen_model == 'bert-base-uncased' or chosen_model == 'bert-base-cased':
             model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
-        elif chosen_model == 'roberta-base':
-            model = transformers.RobertaForSequenceClassification.from_pretrained(
-                self.transformer_chosen, num_labels=1)
-        elif chosen_model == 'roberta-large':
+        elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base']:
             model = transformers.RobertaForSequenceClassification.from_pretrained(
                 self.transformer_chosen, num_labels=1)
         elif chosen_model == 'google/electra-small-discriminator':
@@ -123,7 +120,7 @@ class BERTDataSet(Dataset):
         }
 
 
-class BERTClass(torch.nn.Module):
+"""class BERTClass(torch.nn.Module):
     def __init__(self, transformer):
         super(BERTClass, self).__init__()
         self.bert = AutoModel.from_pretrained(transformer
@@ -171,7 +168,7 @@ class BERTClass(torch.nn.Module):
         context_vector = torch.sum(weights * last_layer_hidden_states, dim=1)
 
         # Now we reduce the context vector to the prediction score.
-        return self.regressor(context_vector)
+        return self.regressor(context_vector)"""
 
 
 class NlpModel(RegressionModels, BERTDataSet):
@@ -255,7 +252,7 @@ class NlpModel(RegressionModels, BERTDataSet):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            model = BERTClass(self.transformer_chosen, 1)
+            model = self.create_bert_regression_model(chosen_model=self.transformer_chosen)
             model.to(device)
             model.train()
             LR = 2e-5 #1e-3
@@ -288,12 +285,13 @@ class NlpModel(RegressionModels, BERTDataSet):
                 token_type_ids = a["token_type_ids"].to(device)
 
                 output = model(ids, mask)
+                output = output[0].squeeze(-1)
                 loss = self.loss_fn(output, target)
 
                 # For scoring
                 losses.append(loss.item() / len(output))
                 allpreds.append(output.detach().cpu().numpy())
-                alltargets.append(target.detach().cpu().numpy())
+                alltargets.append(target.detach().squeeze(-1).cpu().numpy())
 
             scaler.scale(loss).backward()  # backwards of loss
             scaler.step(optimizer)  # Update optimizer
@@ -328,11 +326,12 @@ class NlpModel(RegressionModels, BERTDataSet):
                 token_type_ids = a["token_type_ids"].to(device)
 
                 output = model(ids, mask)
+                output = output[0].squeeze(-1)
                 loss = self.loss_fn(output, target)
                 # For scoring
                 losses.append(loss.item() / len(output))
                 allpreds.append(output.detach().cpu().numpy())
-                alltargets.append(target.detach().cpu().numpy())
+                alltargets.append(target.detach().squeeze(-1).cpu().numpy())
                 # Combine dataloader minutes
 
         allpreds = np.concatenate(allpreds)
@@ -363,6 +362,7 @@ class NlpModel(RegressionModels, BERTDataSet):
                     mask = a["mask"].to(device)
                     token_type_ids = a["token_type_ids"].to(device)
                     output = model(ids, mask, token_type_ids)
+                    output = output[0].squeeze(-1)
 
                     preds.append(output.detach().cpu().numpy())
 
@@ -456,7 +456,7 @@ class NlpModel(RegressionModels, BERTDataSet):
                 train_dataloader = self.create_train_dataloader()
                 test_dataloader = self.create_test_dataloader()
 
-                model = BERTClass(self.transformer_chosen, 1)
+                model = self.create_bert_regression_model(chosen_model=self.transformer_chosen)
                 model.to(device)
                 LR = 2e-5
                 optimizer = AdamW(model.parameters(), LR, betas=(0.99, 0.999), weight_decay=1e-2)  # AdamW optimizer
@@ -511,7 +511,7 @@ class NlpModel(RegressionModels, BERTDataSet):
 
     def transformer_predict(self):
         self.reset_test_train_index()
-        model = BERTClass(self.transformer_chosen, 1)
+        model = self.create_bert_regression_model(chosen_model=self.transformer_chosen)
         pthes = self.load_model_states()
         print(pthes)
         pred_dataloader = self.pred_dataloader()
