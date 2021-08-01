@@ -18,6 +18,7 @@ import lightgbm as lgb
 import pandas as pd
 import numpy as np
 import logging
+import psutil
 
 nltk.download('punkt')
 nltk.download('averaged_perceptron_tagger')
@@ -42,6 +43,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         cleaned text
     """
     def utils_preprocess_text(self, text, flg_stemm=False, flg_lemm=True, lst_stopwords=None):
+        logging.info('Start text cleaning.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         # clean (convert to lowercase and remove punctuations and   characters and then strip)
         text = re.sub(r'[^\w\s]', '', str(text).lower().strip())
 
@@ -52,11 +55,13 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
 
         # Stemming (remove -ing, -ly, ...)
         if flg_stemm == True:
+            logging.info('Start text stemming.')
             ps = nltk.stem.porter.PorterStemmer()
             lst_text = [ps.stem(word) for word in lst_text]
 
         # Lemmatisation (convert the word into root word)
         if flg_lemm == True:
+            logging.info('Start text lemmatisation.')
             lem = nltk.stem.wordnet.WordNetLemmatizer()
             lst_text = [lem.lemmatize(word) for word in lst_text]
 
@@ -65,18 +70,22 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         return text
 
     def remove_url(self, text):
+        logging.info('Start removing URLs.')
         url = re.compile(r'https?://\S+|www\.\S+')
         return url.sub(r'', str(text))
 
     def remove_punct(self, text):
+        logging.info('Start removing punctuation.')
         table = str.maketrans('', '', string.punctuation)
         return text.translate(table)
 
     def remove_html(self, text):
+        logging.info('Start removing HTML.')
         html = re.compile(r'<.*?>')
         return html.sub(r'', str(text))
 
     def remove_emoji(self, text):
+        logging.info('Start removing emojis.')
         emoji_pattern = re.compile("["
                                    u"\U0001F600-\U0001F64F"  # emoticons
                                    u"\U0001F300-\U0001F5FF"  # symbols & pictographs
@@ -88,6 +97,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         return emoji_pattern.sub(r'', str(text))
 
     def decontraction(self, text):
+        logging.info('Start decontraction.')
         text = re.sub(r"won\'t", " will not", text)
         text = re.sub(r"won\'t've", " will not have", text)
         text = re.sub(r"can\'t", " can not", text)
@@ -117,6 +127,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         return str(text)
 
     def seperate_alphanumeric(self, text):
+        logging.info('Start seperating alphanumeric.')
         words = text
         words = re.findall(r"[^\W\d_]+|\d+", words)
         return " ".join(words)
@@ -132,6 +143,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         return str(substitute)
 
     def regex_clean_text_data(self):
+        logging.info('Start text cleaning.')
         self.get_current_timestamp(task='Start text cleaning.')
         logging.info('Start text cleaning.')
         algorithm = 'regex_text'
@@ -213,7 +225,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
 
     def append_text_sentiment_score(self, text_columns=None):
         self.get_current_timestamp(task='Start text cleaning.')
-        logging.info('Start text cleaning.')
+        logging.info('Start sentiment polarity score.')
         algorithm = 'textblob_sentiment_score'
         if self.prediction_mode:
             text_columns = self.nlp_columns
@@ -664,6 +676,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def create_bert_classification_model(self, chosen_model='bert-base-uncased'):
+        logging.info('Start creating or loading transformer model for classification.')
         if not self.transformer_chosen:
             chosen_model = chosen_model
         if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'distilbert-base-uncased']:
@@ -680,6 +693,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         return model
 
     def create_bert_regression_model(self, chosen_model='bert-base-uncased'):
+        logging.info('Start creating or loading transformer model for regression.')
         if not self.transformer_chosen:
             chosen_model = chosen_model
         if chosen_model == 'bert-base-uncased' or chosen_model == 'bert-base-cased':
@@ -696,6 +710,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         return model
 
     def import_transformer_model_tokenizer(self, transformer_chosen=None):
+        logging.info('Start importing transformer tokenizer.')
         if not transformer_chosen:
             transformer_chosen = 'bert-base-uncased'
         else:

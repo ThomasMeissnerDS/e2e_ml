@@ -8,10 +8,12 @@ from transformers import AutoModel, BertTokenizerFast, AdamW, BertModel, Roberta
 from transformers import get_linear_schedule_with_warmup
 from sklearn.metrics import matthews_corrcoef, mean_squared_error
 from tqdm import tqdm
+import logging
+import psutil
 import os
 import gc
 from sklearn.utils.class_weight import compute_class_weight
-from e2eml.full_processing import postprocessing
+from e2eml.full_processing import postprocessing, cpu_processing_nlp
 import random
 
 # specify GPU
@@ -103,7 +105,7 @@ class BERTDataSet(Dataset):
         return self.regressor(context_vector)"""
 
 
-class NlpModel(postprocessing.FullPipeline, BERTDataSet):
+class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing, BERTDataSet):
     """
     This class stores all model training and prediction methods for classification tasks.
     This class stores all pipeline relevant information (inherited from cpu preprocessing).
@@ -132,18 +134,24 @@ class NlpModel(postprocessing.FullPipeline, BERTDataSet):
     However we highly recommend GPU usage to heavily decrease model training times.
     """
     def create_train_dataset(self):
+        logging.info('Create NLP train dataset.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
         train_dataset = BERTDataSet(X_train[self.nlp_transformer_columns], Y_train, tokenizer)
         return train_dataset
 
     def create_test_dataset(self):
+        logging.info('Create NLP test dataset.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
         test_dataset = BERTDataSet(X_test[self.nlp_transformer_columns], Y_test, tokenizer)
         return test_dataset
 
     def create_pred_dataset(self):
+        logging.info('Create NLP prediction dataset.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
             self.dataframe[self.target_variable] = 999  # creating dummy column
             dummy_target = self.dataframe[self.target_variable]
@@ -166,6 +174,8 @@ class NlpModel(postprocessing.FullPipeline, BERTDataSet):
             pass
         else:
             workers = self.transformer_settings["num_workers"]
+        logging.info('Create NLP train dataloader.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         train_dataset = self.create_train_dataset()
         train_dataloader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=workers,
                                       pin_memory=True)
@@ -181,6 +191,8 @@ class NlpModel(postprocessing.FullPipeline, BERTDataSet):
             pass
         else:
             workers = self.transformer_settings["num_workers"]
+        logging.info('Create NLP test dataloader.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         test_dataset = self.create_test_dataset()
         test_dataloader = DataLoader(test_dataset, batch_size=test_batch_size, shuffle=False, num_workers=workers,
                                      pin_memory=True)
@@ -196,6 +208,8 @@ class NlpModel(postprocessing.FullPipeline, BERTDataSet):
             pass
         else:
             workers = self.transformer_settings["num_workers"]
+        logging.info('Create NLP prediction dataloader.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         pred_dataset = self.create_pred_dataset()
         pred_dataloader = DataLoader(pred_dataset, batch_size=pred_batch_size, shuffle=False, num_workers=workers,
                                      pin_memory=True)
@@ -210,6 +224,8 @@ class NlpModel(postprocessing.FullPipeline, BERTDataSet):
         if self.prediction_mode:
             pass
         else:
+            logging.info('Define NLP model.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.create_bert_regression_model(chosen_model=self.transformer_chosen)
             model.to(device)
@@ -228,6 +244,8 @@ class NlpModel(postprocessing.FullPipeline, BERTDataSet):
             return model, optimizer, train_steps, num_steps, scheduler
 
     def training(self, train_dataloader, model, optimizer, scheduler):
+        logging.info('Start NLP training loop.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         model.train()
         allpreds = []
         alltargets = []
@@ -270,7 +288,8 @@ class NlpModel(postprocessing.FullPipeline, BERTDataSet):
         return losses, train_rme_loss
 
     def validating(self, valid_dataloader, model):
-
+        logging.info('Start NLP validation loop.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         model.eval()
         allpreds = []
         alltargets = []
@@ -304,6 +323,8 @@ class NlpModel(postprocessing.FullPipeline, BERTDataSet):
         return allpreds, losses, valid_rme_loss
 
     def predicting(self, pred_dataloader, model, pathes):
+        logging.info('Start NLP prediction loop.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         allpreds = []
         model_no = 0
         mode_cols = []
@@ -342,6 +363,8 @@ class NlpModel(postprocessing.FullPipeline, BERTDataSet):
         return allpreds, mode_cols
 
     def load_model_states(self, path=None):
+        logging.info('Load model save states.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if path:
             pass
         else:
@@ -357,6 +380,8 @@ class NlpModel(postprocessing.FullPipeline, BERTDataSet):
         if self.prediction_mode:
             pass
         else:
+            logging.info('Start NLP transformer training.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             self.reset_test_train_index()
 
             train_dataloader = self.create_train_dataloader()
@@ -469,6 +494,8 @@ class NlpModel(postprocessing.FullPipeline, BERTDataSet):
             _ = gc.collect()
 
     def transformer_predict(self):
+        logging.info('Start NLP transformer prediction.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         self.reset_test_train_index()
         model = self.create_bert_regression_model(chosen_model=self.transformer_chosen)
         pthes = self.load_model_states()
