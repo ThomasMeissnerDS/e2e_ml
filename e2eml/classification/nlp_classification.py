@@ -87,8 +87,7 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
     e2eml will try to detect datetime columns automatically. Date format is expected as YYYY-MM-DD anyway.
     :param categorical_columns: Categorical columns can be passed as lists additionally for respective preprocessing.
     If not provided e2eml will try to detect categorical columns automatically.
-    :param nlp_columns: NLP columns can be passed specifically. This only makes sense, if the chosen blueprint runs under 'nlp' processing.
-    If NLP columns are not declared, categorical columns will be interpreted as such.
+    :param nlp_columns: NLP columns expect a string declaring one text column.
     :param unique_identifier: A unique identifier (i.e. an ID column) can be passed as well to preserve this information
      for later processing.
     :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.

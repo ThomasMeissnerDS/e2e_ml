@@ -272,6 +272,13 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         logging.info('Finished blueprint.')
 
     def ml_bp_06_multiclass_full_processing_bert_transformer(self, df=None, preprocess_bp="bp_nlp_10"):
+        """
+        Runs an NLP transformer blue print specifically for text classification. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_nlp_10" or "bp_nlp_11")
+        :return: Updates class attributes by its predictions.
+        """
         if preprocess_bp == 'bp_nlp_10':
             self.pp_bp10_nlp_preprocessing(df=df)
         elif preprocess_bp == 'bp_nlp_11':

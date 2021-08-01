@@ -696,15 +696,13 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         logging.info('Start creating or loading transformer model for regression.')
         if not self.transformer_chosen:
             chosen_model = chosen_model
-        if chosen_model == 'bert-base-uncased' or chosen_model == 'bert-base-cased':
+        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'bert-large-uncased']:
             model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
         elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base']:
             model = transformers.RobertaForSequenceClassification.from_pretrained(
                 self.transformer_chosen, num_labels=1)
         elif chosen_model == 'google/electra-small-discriminator':
             model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
-        elif chosen_model == 'xlnet-base-cased':
-            model = transformers.XLNetForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
         else:
             model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
         return model

@@ -24,7 +24,7 @@ pip install e2eml[rapids]
 ```
 This will additionally install cupy and cython to prevent issues. Additionally it is needed to run:
 ```sh
-pip install torch==1.7.0+cu110 torchvision==0.8.1+cu110 torchaudio===0.7.0 -f https://download.pytorch.org/whl/torch_stable.html
+pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html
 ```
 Otherwise Pytorch will fail trying to run on GPU.
 If e2eml shall e installed together with Jupyter core and ipython, please install with:
