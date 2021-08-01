@@ -92,11 +92,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
-            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_02':
-            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
-            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -120,11 +120,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
-            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_02':
-            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
-            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -147,11 +147,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
-            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_02':
-            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
-            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -174,11 +174,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
-            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_02':
-            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
-            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -202,11 +202,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
-            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_02':
-            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
-            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -229,11 +229,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
-            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_02':
-            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
-            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -286,11 +286,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
-            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_02':
-            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
-            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -330,11 +330,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         :return: Updates class attributes by its predictions.
         """
         if preprocess_bp == 'bp_01':
-            self.pp_bp01_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_02':
-            self.pp_bp02_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
-            self.pp_bp03_preprocessing(df=df, preprocessing_type=preprocessing_type)
+            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if not self.prediction_mode:

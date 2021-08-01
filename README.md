@@ -15,14 +15,23 @@ pip install e2eml
 ```
 We highly recommend to create a new virtual environment first. Then install e2e-ml into it. In the environment also download
 the pretrained spacy model with. Otherwise e2eml will do this automatically during runtime.
+
+e2eml can also be installed into a RAPIDS environment. For this we recommend to create a fresh environment following
+[RAPIDS](https://rapids.ai/start.html) instructions. After environment installation and activation, a special installation is needed to not run into installation issues.
+Just run:
 ```sh
-python3 -m spacy download en
+pip install e2eml[rapids]
 ```
-or
+This will additionally install cupy and cython to prevent issues. Additionally it is needed to run:
 ```sh
-python -m spacy download en
+pip install torch==1.7.0+cu110 torchvision==0.8.1+cu110 torchaudio===0.7.0 -f https://download.pytorch.org/whl/torch_stable.html
 ```
-(depending on your operating system.)
+Otherwise Pytorch will fail trying to run on GPU.
+If e2eml shall e installed together with Jupyter core and ipython, please install with:
+```sh
+pip install e2eml[full]
+```
+instead.
 
 ## Usage example
 
@@ -72,6 +81,8 @@ Multiclass blueprints can handle binary and multiclass tasks:
 - ml_bp02_multiclass_full_processing_lgbm_prob()
 - ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble()
 - ml_bp04_multiclass_full_processing_ngboost()
+- ml_bp05_multiclass_full_processing_vowpal_wabbit
+- ml_bp_06_multiclass_full_processing_bert_transformer() # for NLP specifically
 - ml_special_binary_full_processing_boosting_blender()
 - ml_special_multiclass_auto_model_exploration()
 
@@ -81,6 +92,8 @@ There are regression blueprints as well (in regression module):
 - ml_bp12_regressions_full_processing_lgbm()
 - ml_bp13_regression_full_processing_sklearn_stacking_ensemble()
 - ml_bp14_regressions_full_processing_ngboost()
+- ml_bp15_regression_full_processing_vowpal_wabbit_reg()
+- ml_16_regressions_full_processing_bert_transformer()
 - ml_special_regression_full_processing_boosting_blender()
 - ml_special_regression_auto_model_exploration()
 
@@ -106,16 +119,18 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 - preprocessing (outlier, rare feature, datetime, categorical and NLP handling)
 - feature creation (binning, clustering, categorical and NLP features)
 - automated feature selection
-- model training with crossfold validation
+- model training (with crossfold validation)
 - automated hyperparameter tuning
 - model evaluation
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
 
-* 1.5.0
-  - Added BERT transformer blueprints for NLP classification and regression
+* 1.5.3
+  - Added transformer blueprints for NLP classification and regression
   - renamed Vowpal Wabbit blueprint to fit into blueprint naming convention
+  - Created "extras" options for library installation: 'rapids' installs extras, so e2eml can be installed into
+    into a rapids environment while 'jupyter' adds jupyter core and ipython. 'full' installs all of them.
 * 1.3.9
   - Fixed issue with automated GPU-acceleration detection and flagging
   - Fixed avg regression blueprint where eval function tried to call classification evaluation

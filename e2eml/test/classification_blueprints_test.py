@@ -93,7 +93,7 @@ def steel_fault_multiclass_data():
 
 def nlp_multiclass_data():
     data = pd.read_csv("Corona_NLP_train.csv", encoding='latin-1')
-    test_df = data.head(100).copy()
+    test_df = data.head(1000).copy()
     print(test_df[["OriginalTweet"]])
     val_df = data.tail(499).copy()
     val_df_target = val_df["Sentiment"].copy()

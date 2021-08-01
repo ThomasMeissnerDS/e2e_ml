@@ -7,6 +7,9 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk import pos_tag
 from textblob import TextBlob
+import transformers
+from transformers import AutoModel, AutoTokenizer, AdamW, BertModel, RobertaModel, RobertaTokenizer, BertTokenizer, ElectraTokenizer, ElectraForSequenceClassification, XLNetForSequenceClassification
+from transformers import get_linear_schedule_with_warmup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import naive_bayes
 from sklearn.linear_model import Ridge, ElasticNet
@@ -659,3 +662,59 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                                             )
             logging.info('Finished Vowpal Wabbit NLP prediction as a feature.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def create_bert_classification_model(self, chosen_model='bert-base-uncased'):
+        if not self.transformer_chosen:
+            chosen_model = chosen_model
+        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'distilbert-base-uncased']:
+            model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
+        elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base']:
+            model = transformers.RobertaForSequenceClassification.from_pretrained(
+                self.transformer_chosen, num_labels=self.num_classes)
+        elif chosen_model == 'google/electra-small-discriminator':
+            model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
+        elif chosen_model == 'xlnet-base-cased':
+            model = transformers.XLNetForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
+        else:
+            model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
+        return model
+
+    def create_bert_regression_model(self, chosen_model='bert-base-uncased'):
+        if not self.transformer_chosen:
+            chosen_model = chosen_model
+        if chosen_model == 'bert-base-uncased' or chosen_model == 'bert-base-cased':
+            model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
+        elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base']:
+            model = transformers.RobertaForSequenceClassification.from_pretrained(
+                self.transformer_chosen, num_labels=1)
+        elif chosen_model == 'google/electra-small-discriminator':
+            model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
+        elif chosen_model == 'xlnet-base-cased':
+            model = transformers.XLNetForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
+        else:
+            model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
+        return model
+
+    def import_transformer_model_tokenizer(self, transformer_chosen=None):
+        if not transformer_chosen:
+            transformer_chosen = 'bert-base-uncased'
+        else:
+            transformer_chosen = self.transformer_chosen
+
+        if self.transformer_model_load_from_path:
+            bert = AutoModel.from_pretrained(f"{self.transformer_model_load_from_path}",
+                                             output_attentions=False,  # Whether the model returns attentions weights.
+                                             output_hidden_states=False)
+            tokenizer = transformers.AutoTokenizer.from_pretrained(f"{self.transformer_model_load_from_path}")
+        else:
+            # import BERT-base pretrained model
+            bert = self.create_bert_classification_model(transformer_chosen)
+            # Load the BERT tokenizer
+            tokenizer = AutoTokenizer.from_pretrained(transformer_chosen)
+        if "nlp_transformers" in self.preprocess_decisions:
+            pass
+        else:
+            self.preprocess_decisions[f"nlp_transformers"] = {}
+
+        self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{transformer_chosen}"] = bert
+        self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{transformer_chosen}"] = tokenizer

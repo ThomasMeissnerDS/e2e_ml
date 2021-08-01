@@ -19,75 +19,6 @@ scaler = torch.cuda.amp.GradScaler()  # GPU
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-class RegressionModels(postprocessing.FullPipeline):
-    """
-    This class stores all model training and prediction methods for classification tasks.
-    This class stores all pipeline relevant information (inherited from cpu preprocessing).
-    The attribute "df_dict" always holds train and test as well as
-    to predict data. The attribute "preprocess_decisions" stores encoders and other information generated during the
-    model training. The attributes "predicted_classes" and "predicted_probs" store dictionaries (model names are dictionary keys)
-    with predicted classes and probabilities (classification tasks) while "predicted_values" stores regression based
-    predictions. The attribute "evaluation_scores" keeps track of model evaluation metrics (in dictionary format).
-    :param datasource: Expects a Pandas dataframe (containing the target feature as a column)
-    :param target_variable: Name of the target feature's column within the datasource dataframe.
-    :param date_columns: Date columns can be passed as lists additionally for respective preprocessing. If not provided
-    e2eml will try to detect datetime columns automatically. Date format is expected as YYYY-MM-DD anyway.
-    :param categorical_columns: Categorical columns can be passed as lists additionally for respective preprocessing.
-    If not provided e2eml will try to detect categorical columns automatically.
-    :param nlp_columns: NLP columns can be passed specifically. This only makes sense, if the chosen blueprint runs under 'nlp' processing.
-    If NLP columns are not declared, categorical columns will be interpreted as such.
-    :param unique_identifier: A unique identifier (i.e. an ID column) can be passed as well to preserve this information
-     for later processing.
-    :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
-    :param preferred_training_mode: Must be 'cpu', if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
-    Can be set to 'gpu', if LGBM and Xgboost have been installed with GPU support. The default 'auto' will detect GPU support
-    and optimize accordingly. (Default: 'auto')
-    :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
-    :param low_memory_mode: Adds a preprocessing feature to reduce dataframe memory footprint. Will lead to a loss in
-    model performance. Will be extended by further memory savings features in future releases.
-    However we highly recommend GPU usage to heavily decrease model training times.
-    """
-    def create_bert_regression_model(self, chosen_model='bert-base-uncased'):
-        if not self.transformer_chosen:
-            chosen_model = chosen_model
-        if chosen_model == 'bert-base-uncased' or chosen_model == 'bert-base-cased':
-            model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
-        elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base']:
-            model = transformers.RobertaForSequenceClassification.from_pretrained(
-                self.transformer_chosen, num_labels=1)
-        elif chosen_model == 'google/electra-small-discriminator':
-            model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
-        elif chosen_model == 'xlnet-base-cased':
-            model = transformers.XLNetForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
-        else:
-            model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
-        return model
-
-    def import_transformer_model_tokenizer(self, transformer_chosen=None):
-        if not transformer_chosen:
-            transformer_chosen = 'bert-base-uncased'
-        else:
-            transformer_chosen = self.transformer_chosen
-
-        if self.transformer_model_load_from_path:
-            bert = AutoModel.from_pretrained(f"{self.transformer_model_load_from_path}",
-                                             output_attentions=False,  # Whether the model returns attentions weights.
-                                             output_hidden_states=False)
-            tokenizer = transformers.AutoTokenizer.from_pretrained(f"{self.transformer_model_load_from_path}")
-        else:
-            # import BERT-base pretrained model
-            bert = self.create_bert_regression_model(transformer_chosen)
-            # Load the BERT tokenizer
-            tokenizer = AutoTokenizer.from_pretrained(transformer_chosen)
-        if "nlp_transformers" in self.preprocess_decisions:
-            pass
-        else:
-            self.preprocess_decisions[f"nlp_transformers"] = {}
-
-        self.preprocess_decisions[f"nlp_transformers"][f"transformer_model_{transformer_chosen}"] = bert
-        self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{transformer_chosen}"] = tokenizer
-
-
 class BERTDataSet(Dataset):
     def __init__(self, sentences, targets, tokenizer):
         self.sentences = sentences
@@ -172,7 +103,34 @@ class BERTDataSet(Dataset):
         return self.regressor(context_vector)"""
 
 
-class NlpModel(RegressionModels, BERTDataSet):
+class NlpModel(postprocessing.FullPipeline, BERTDataSet):
+    """
+    This class stores all model training and prediction methods for classification tasks.
+    This class stores all pipeline relevant information (inherited from cpu preprocessing).
+    The attribute "df_dict" always holds train and test as well as
+    to predict data. The attribute "preprocess_decisions" stores encoders and other information generated during the
+    model training. The attributes "predicted_classes" and "predicted_probs" store dictionaries (model names are dictionary keys)
+    with predicted classes and probabilities (classification tasks) while "predicted_values" stores regression based
+    predictions. The attribute "evaluation_scores" keeps track of model evaluation metrics (in dictionary format).
+    :param datasource: Expects a Pandas dataframe (containing the target feature as a column)
+    :param target_variable: Name of the target feature's column within the datasource dataframe.
+    :param date_columns: Date columns can be passed as lists additionally for respective preprocessing. If not provided
+    e2eml will try to detect datetime columns automatically. Date format is expected as YYYY-MM-DD anyway.
+    :param categorical_columns: Categorical columns can be passed as lists additionally for respective preprocessing.
+    If not provided e2eml will try to detect categorical columns automatically.
+    :param nlp_columns: NLP columns can be passed specifically. This only makes sense, if the chosen blueprint runs under 'nlp' processing.
+    If NLP columns are not declared, categorical columns will be interpreted as such.
+    :param unique_identifier: A unique identifier (i.e. an ID column) can be passed as well to preserve this information
+     for later processing.
+    :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
+    :param preferred_training_mode: Must be 'cpu', if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
+    Can be set to 'gpu', if LGBM and Xgboost have been installed with GPU support. The default 'auto' will detect GPU support
+    and optimize accordingly. (Default: 'auto')
+    :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
+    :param low_memory_mode: Adds a preprocessing feature to reduce dataframe memory footprint. Will lead to a loss in
+    model performance. Will be extended by further memory savings features in future releases.
+    However we highly recommend GPU usage to heavily decrease model training times.
+    """
     def create_train_dataset(self):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
@@ -517,9 +475,6 @@ class NlpModel(RegressionModels, BERTDataSet):
         print(pthes)
         pred_dataloader = self.pred_dataloader()
         allpreds, mode_cols = self.predicting(pred_dataloader, model, pthes)
-        #print(allpreds)
-        #findf = pd.DataFrame(allpreds)
-        #findf = findf.T
         if self.prediction_mode:
             self.dataframe["transformers_mean"] = self.dataframe[mode_cols].mean(axis=1)
             self.predicted_values['nlp_transformer'] = self.dataframe["transformers_mean"]

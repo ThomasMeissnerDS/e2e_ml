@@ -7,8 +7,6 @@ requirements = ["babel>=2.9.1",
                 "boostaroota>=1.3",
                 "category_encoders==2.2.2",
                 "imblearn>=0.0",
-                "ipython>=7.10.0",
-                "jupyter_core>=4.7.0",
                 "lightgbm==3.1.0",
                 "matplotlib>=3.3.4",
                 "ngboost>=0.3.1",
@@ -25,15 +23,22 @@ requirements = ["babel>=2.9.1",
                 "setuptools >= 51.1.0",
                 "shap>=0.39.0",
                 "spacy>=3.0.6",
+                "textblob>=0.15.3",
+                "torch >= 1.7.0",
                 "transformers>=4.0.0",
                 "vowpalwabbit>=8.11.0",
                 "wheel==0.36.2",
                 "xgboost>=1.3.3",
                 ]
+extras_require = {
+    'rapids': ['cupy', 'cython'],
+    'jupyter': ['ipython>=7.10.0', 'jupyter_core>=4.7.0'],
+    'full': ['cupy', 'cython', 'ipython>=7.10.0', 'jupyter_core>=4.7.0']
+}
 
 setup(
     name="e2eml",
-    version="1.5.0",
+    version="1.5.3",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",
