@@ -61,7 +61,7 @@ class PreProcessing:
     def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None, nlp_columns=None,
                  nlp_transformer_columns=None, transformer_chosen='bert-base-uncased', transformer_model_load_from_path=None,
-                 transformer_model_save_states_path=None, transformer_epochs=3, prediction_mode=False, preferred_training_mode='auto',
+                 transformer_model_save_states_path=None, transformer_epochs=20, prediction_mode=False, preferred_training_mode='auto',
                  preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
                  logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
 

@@ -93,7 +93,7 @@ def steel_fault_multiclass_data():
 
 def nlp_multiclass_data():
     data = pd.read_csv("Corona_NLP_train.csv", encoding='latin-1')
-    test_df = data.head(1000).copy()
+    test_df = data.head(100).copy()
     print(test_df[["OriginalTweet"]])
     val_df = data.tail(499).copy()
     val_df_target = val_df["Sentiment"].copy()
@@ -196,4 +196,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
 
 
 if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='vowpal_wabbit', dataset='titanic') # corona_tweet
+    blueprint_binary_test_titanic(blueprint='nlp_transformer', dataset='corona_tweet') # corona_tweet
