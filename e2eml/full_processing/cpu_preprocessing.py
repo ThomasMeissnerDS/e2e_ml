@@ -133,7 +133,11 @@ class PreProcessing:
         self.date_columns = date_columns
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
-        self.nlp_columns = nlp_columns
+        if isinstance(nlp_columns, list):
+            print("Please provide nlp_columns parameter with a string.")
+            self.nlp_columns = nlp_columns
+        else:
+            self.nlp_columns = nlp_columns
         self.nlp_transformer_columns = nlp_transformer_columns
         self.nlp_transformers = {}
         self.transformer_chosen = transformer_chosen
@@ -242,28 +246,6 @@ class PreProcessing:
             return warnings.warn(warning_message, UserWarning)
         else:
             pass
-
-    def check_for_nlp_transformer_columns(self, text_columns=None, return_list=True):
-        if text_columns:
-            pass
-        elif self.nlp_transformer_columns:
-            text_columns = self.nlp_transformer_columns
-        else:
-            self.runtime_warnings(warn_about='no_nlp_transformer')
-        if isinstance(text_columns, list):
-            if return_list:
-                text_columns_list = text_columns
-            else:
-                text_columns_list = text_columns[self.nlp_transformer_columns]
-            return text_columns_list
-        else:
-            if return_list:
-                text_columns_list = []
-                text_columns_list.append(text_columns)
-                self.nlp_transformer_columns = text_columns_list
-            else:
-                text_columns_list = text_columns
-            return str(text_columns_list[0])
 
     def check_gpu_support(self, algorithm=None):
         data = np.random.rand(50, 2)
@@ -561,7 +543,7 @@ class PreProcessing:
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            text_columns = self.check_for_nlp_transformer_columns(text_columns=text_columns, return_list=True)
+            text_columns = self.nlp_columns
             seq_len = [len(i.split()) for i in X_train[text_columns]]
             pd.Series(seq_len).hist(bins=30)
             if "nlp_transformers" in self.preprocess_decisions:

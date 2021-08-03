@@ -126,9 +126,9 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
                                                      nlp_transformer_columns='OriginalTweet'
                                                      )
     if blueprint == 'lgbm':
-        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(preprocessing_type='full', preprocess_bp='bp_01')
+        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(preprocessing_type='nlp', preprocess_bp='bp_01')
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(val_df, preprocessing_type='full', preprocess_bp='bp_01')
+        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(val_df, preprocessing_type='nlp', preprocess_bp='bp_01')
         val_y_hat = titanic_auto_ml.predicted_classes['lgbm']
         # nlp+dynamic scale_pos: matth 0.60, no scale_pos: 0.54
         # no nlp, scale_pos: 0.49, no scale_pos: 0.54
@@ -196,4 +196,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
 
 
 if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='nlp_transformer', dataset='corona_tweet') # corona_tweet
+    blueprint_binary_test_titanic(blueprint='vowpal_wabbit', dataset='titanic') # corona_tweet

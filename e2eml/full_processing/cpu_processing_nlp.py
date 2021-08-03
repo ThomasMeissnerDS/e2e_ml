@@ -160,11 +160,9 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             logging.info('Finished text cleaning.')
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            if not self.nlp_columns:
-                self.nlp_columns = X_train.select_dtypes(include=['object']).columns
-                text_columns = self.nlp_columns
-            else:
-                text_columns = self.nlp_columns
+            text_columns = []
+            text_columns.append(self.nlp_columns)
+
             for text_col in text_columns:
                 try:
                     X_train[text_col] = X_train[text_col].apply(lambda x : self.remove_url(x))
@@ -230,11 +228,11 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         if self.prediction_mode:
             text_columns = self.nlp_columns
             for text_col in text_columns:
-                self.dataframe[f"{algorithm}_{self.nlp_transformer_columns}"] = self.dataframe[self.nlp_transformer_columns].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
+                self.dataframe[f"{algorithm}_{text_col}"] = self.dataframe[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
             logging.info('Finished text cleaning.')
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            text_columns = self.check_for_nlp_transformer_columns(text_columns=text_columns)
+            text_columns = self.nlp_columns
             for text_col in text_columns:
                 X_train[f"{algorithm}_{text_col}"] = X_train[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
                 X_test[f"{algorithm}_{text_col}"] = X_test[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))

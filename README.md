@@ -125,7 +125,9 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-
+* 1.5.6
+  - Fixes bug around preprocessing_type='nlp'
+  - replaced pickle with dill for saving and loading objects
 * 1.5.3
   - Added transformer blueprints for NLP classification and regression
   - renamed Vowpal Wabbit blueprint to fit into blueprint naming convention

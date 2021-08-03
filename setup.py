@@ -6,6 +6,7 @@ with open("README.md", "r") as readme_file:
 requirements = ["babel>=2.9.1",
                 "boostaroota>=1.3",
                 "category_encoders==2.2.2",
+                "dill>=0.3.4",
                 "imblearn>=0.0",
                 "lightgbm==3.1.0",
                 "matplotlib>=3.3.4",
@@ -38,7 +39,7 @@ extras_require = {
 
 setup(
     name="e2eml",
-    version="1.5.3",
+    version="1.5.6",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",

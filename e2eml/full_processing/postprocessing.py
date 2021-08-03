@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import warnings
 import logging
-import pickle
+import dill as pickle
 import gc
 
 
