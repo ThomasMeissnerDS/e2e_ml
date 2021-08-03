@@ -125,7 +125,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 1.5.7
+* 1.5.8
   - Fixes bug around preprocessing_type='nlp'
   - replaced pickle with dill for saving and loading objects
 * 1.5.3

@@ -107,6 +107,10 @@ class PreProcessing:
                     pass
         else:
             self.class_problem = ml_task
+            if ml_task == 'multiclass':
+                self.num_classes = datasource[target_variable].nunique()
+            elif ml_task == 'binary':
+                self.num_classes = 2
         print(f"Ml task is {self.class_problem}")
 
         if preferred_training_mode == 'cpu':
