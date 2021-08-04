@@ -162,6 +162,7 @@ class PreProcessing:
         self.transformer_settings = {f"train_batch_size": 16,
                                      "test_batch_size": 16,
                                      "pred_batch_size": 16,
+
                                      "num_workers": 2,
                                      "epochs": self.transformer_epochs, # TODO: Change to 20 again
                                      "transformer_model_path": self.transformer_model_load_from_path,
@@ -542,19 +543,18 @@ class PreProcessing:
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         return target
 
-    def check_max_sentence_length(self, text_columns=None):
+    def check_max_sentence_length(self):
         if self.prediction_mode:
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            text_columns = self.nlp_columns
-            seq_len = [len(i.split()) for i in X_train[text_columns]]
-            pd.Series(seq_len).hist(bins=30)
+            text_columns = self.nlp_transformer_columns
+            sentence_length = X_train[text_columns].apply(lambda x: np.max([len(w) for w in x.split()]))
             if "nlp_transformers" in self.preprocess_decisions:
                 pass
             else:
                 self.preprocess_decisions[f"nlp_transformers"] = {}
-            self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"] = max(seq_len)
+            self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"] = sentence_length.max()
 
     def data_scaling(self, scaling='minmax'):
         """

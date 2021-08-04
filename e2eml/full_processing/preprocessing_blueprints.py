@@ -172,6 +172,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.sort_columns_alphabetically()
+        self.check_max_sentence_length()
         self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)
 
     def pp_bp11_nlp_preprocessing(self, df):
@@ -188,4 +189,5 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         self.train_test_split(how=self.train_split_type)
         self.regex_clean_text_data()
         self.sort_columns_alphabetically()
+        self.check_max_sentence_length()
         self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)

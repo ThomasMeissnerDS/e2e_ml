@@ -22,10 +22,11 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class BERTDataSet(Dataset):
-    def __init__(self, sentences, targets, tokenizer):
+    def __init__(self, sentences, targets, tokenizer, max_length):
         self.sentences = sentences
         self.targets = targets
         self.tokenizer = tokenizer
+        self.max_sen_length = max_length
 
     def __len__(self):
         return len(self.sentences)
@@ -37,7 +38,7 @@ class BERTDataSet(Dataset):
             sentence,
             None,
             add_special_tokens=True,
-            max_length=256,
+            max_length=self.max_sen_length,
             padding='max_length',
             return_token_type_ids=True,
             truncation=True
@@ -137,7 +138,7 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
-        train_dataset = BERTDataSet(X_train[self.nlp_transformer_columns], Y_train, tokenizer)
+        train_dataset = BERTDataSet(X_train[self.nlp_transformer_columns], Y_train, tokenizer, self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"])
         return train_dataset
 
     def create_test_dataset(self):
@@ -145,7 +146,7 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
-        test_dataset = BERTDataSet(X_test[self.nlp_transformer_columns], Y_test, tokenizer)
+        test_dataset = BERTDataSet(X_test[self.nlp_transformer_columns], Y_test, tokenizer, self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"])
         return test_dataset
 
     def create_pred_dataset(self):
@@ -156,11 +157,11 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
             dummy_target = self.dataframe[self.target_variable]
             self.dataframe.drop(self.target_variable, axis=1)
             tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
-            pred_dataset = BERTDataSet(self.dataframe[self.nlp_transformer_columns], dummy_target, tokenizer)
+            pred_dataset = BERTDataSet(self.dataframe[self.nlp_transformer_columns], dummy_target, tokenizer, self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"])
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
-            pred_dataset = BERTDataSet(X_test[self.nlp_transformer_columns], Y_test, tokenizer)
+            pred_dataset = BERTDataSet(X_test[self.nlp_transformer_columns], Y_test, tokenizer, self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"])
         return pred_dataset
 
     def create_train_dataloader(self, train_batch_size=None, workers=None):
