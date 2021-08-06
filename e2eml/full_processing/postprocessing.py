@@ -1,6 +1,6 @@
 from e2eml.full_processing import cpu_preprocessing
 from sklearn.metrics import matthews_corrcoef, roc_auc_score, f1_score
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, median_absolute_error, accuracy_score
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, median_absolute_error, accuracy_score, recall_score
 from sklearn.metrics import confusion_matrix, classification_report
 import shap
 import matplotlib.pyplot as plt
@@ -201,6 +201,8 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             print("-------------------")
             accuracy = accuracy_score(Y_test, y_hat)
             print(f"The accuracy is {accuracy}")
+            recall = recall_score(Y_test, y_hat, average='weighted')
+            print(f"The recall is {recall}")
             f1_score_macro = f1_score(Y_test, y_hat, average='macro', zero_division=0)
             print(f"The macro F1 score is {f1_score_macro}")
             logging.info(f'The macro F1 score of {algorithm} is {f1_score_macro}')
@@ -217,6 +219,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             self.evaluation_scores[f"{algorithm}"] = {
                 'matthews': matthews,
                 'accuracy': accuracy,
+                'recall': recall,
                 'roc_auc': roc_auc,
                 'f1_score_macro': f1_score_macro,
                 'f1_score_micro': f1_score_micro,

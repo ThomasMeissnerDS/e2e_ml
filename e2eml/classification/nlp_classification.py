@@ -38,7 +38,7 @@ class BERTDataSet(Dataset):
             sentence,
             None,
             add_special_tokens=True,
-            max_length=self.max_sen_length,
+            max_length=int(self.max_sen_length*1.2),
             padding='max_length',
             return_token_type_ids=True,
             truncation=True
@@ -197,8 +197,17 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
             model = self.create_bert_classification_model(self.transformer_chosen)
             model.to(device)
             model.train()
+            param_optimizer = list(model.named_parameters())
+            no_decay = ['bias', 'gamma', 'beta']
+            optimizer_grouped_parameters = [
+                {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
+                 'weight_decay_rate': 0.01},
+                {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
+                 'weight_decay_rate': 0.0}
+            ]
+
             LR = 2e-5
-            optimizer = AdamW(model.parameters(), LR, betas=(0.99, 0.999), weight_decay=1e-2)
+            optimizer = AdamW(optimizer_grouped_parameters, LR)  # AdamW optimizer
             if epochs:
                 pass
             else:
@@ -297,7 +306,6 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         allpreds = []
         model_no = 0
         mode_cols = []
-        self.reset_test_train_index()
         for m_path in pathes:
             state = torch.load(m_path)
             model.load_state_dict(state["state_dict"])
@@ -407,6 +415,7 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
 
                 self.reset_test_train_index()
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+                self.set_random_seed(fold)
 
                 # initializing the data
                 train_dataloader = self.create_train_dataloader()
@@ -414,8 +423,18 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
 
                 model = self.create_bert_classification_model(self.transformer_chosen)
                 model.to(device)
+
+                param_optimizer = list(model.named_parameters())
+                no_decay = ['bias', 'gamma', 'beta']
+                optimizer_grouped_parameters = [
+                    {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
+                     'weight_decay_rate': 0.01},
+                    {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
+                     'weight_decay_rate': 0.0}
+                ]
+
                 LR = 2e-5
-                optimizer = AdamW(model.parameters(), LR, betas=(0.99, 0.999), weight_decay=1e-2)  # AdamW optimizer
+                optimizer = AdamW(optimizer_grouped_parameters, LR)  # AdamW optimizer
                 train_steps = int(
                     len(X_train) / self.transformer_settings["train_batch_size"] * self.transformer_settings["epochs"])
                 num_steps = int(train_steps * 0.1)

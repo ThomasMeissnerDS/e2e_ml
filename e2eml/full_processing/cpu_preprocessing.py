@@ -58,10 +58,10 @@ class PreProcessing:
     However we highly recommend GPU usage to heavily decrease model training times.
     """
 
-    def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None,
+    def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None, rarity_cols=None,
                  unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None, nlp_columns=None,
                  nlp_transformer_columns=None, transformer_chosen='bert-base-uncased', transformer_model_load_from_path=None,
-                 transformer_model_save_states_path=None, transformer_epochs=20, prediction_mode=False, preferred_training_mode='auto',
+                 transformer_model_save_states_path=None, transformer_epochs=25, prediction_mode=False, preferred_training_mode='auto',
                  preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
                  logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
 
@@ -137,6 +137,7 @@ class PreProcessing:
         self.date_columns = date_columns
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
+        self.rarity_cols = rarity_cols
         if isinstance(nlp_columns, list):
             print("Please provide nlp_columns parameter with a string.")
             self.nlp_columns = nlp_columns
@@ -163,7 +164,7 @@ class PreProcessing:
                                      "test_batch_size": 16,
                                      "pred_batch_size": 16,
 
-                                     "num_workers": 2,
+                                     "num_workers": 4,
                                      "epochs": self.transformer_epochs, # TODO: Change to 20 again
                                      "transformer_model_path": self.transformer_model_load_from_path,
                                      "model_save_states_path": {self.transformer_model_save_states_path}}
@@ -248,6 +249,34 @@ class PreProcessing:
         elif warn_about == 'no_nlp_transformer':
             warning_message = """No nlp_transformer_columns have been provided during class instantiation. Some 
             NLP related functions only run with this information.."""
+            return warnings.warn(warning_message, UserWarning)
+        elif warn_about == 'not_enough_target_class_members':
+            warning_message = """Some target classes have less members than allowed. You can ignore this message, if you
+            are running a blueprint without NLP transformers.
+            
+            In order to create a strong model e2eml splits the data into several folds. Please provide data with at least
+             6 class members for each target class. Otherwise the model is likely to fail to a CUDA error on runtime. 
+             You can use the following function on your dataframe before passing it to e2eml:
+            
+            def handle_rarity(all_data, threshold=6, mask_as='miscellaneous', rarity_cols=None, normalize=False):
+                if isinstance(rarity_cols, list):
+                    for col in rarity_cols:
+                        frequencies = all_data[col].value_counts(normalize=normalize)
+                        condition = frequencies < threshold
+                        mask_obs = frequencies[condition].index
+                        mask_dict = dict.fromkeys(mask_obs, mask_as)
+                        all_data[col] = all_data[col].replace(mask_dict)
+                    del rarity_cols
+                else:
+                    pass
+                return all_data
+                
+            Example usage:
+            train_df = handle_rarity(train_df, rarity_cols=["your_target_column_name"])
+            
+            Important:
+            This function modifies the original data. It is recommended to create a copy of your data first.
+            """
             return warnings.warn(warning_message, UserWarning)
         else:
             pass
@@ -702,6 +731,7 @@ class PreProcessing:
         elif how == 'cross':
             logging.info('Started test train split.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            self.check_target_class_distribution()
             X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
                                                                                     self.dataframe[self.target_variable],
                                                                                     train_size=train_size,
@@ -755,6 +785,16 @@ class PreProcessing:
         else:
             logging.warning('No split method provided.')
             raise Exception("Please provide a split method.")
+
+    def check_target_class_distribution(self):
+        if self.prediction_mode:
+            pass
+        else:
+            min_target_train = self.dataframe[self.target_variable].value_counts().min()
+            if min_target_train < 7:
+                self.runtime_warnings(warn_about='not_enough_target_class_members')
+            else:
+                pass
 
     def set_random_seed(self, seed=42):
         random.seed(seed)
@@ -858,7 +898,7 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def rare_feature_processor(self, threshold=0.03, mask_as='miscellaneous'):
+    def rare_feature_processor(self, threshold=0.005, mask_as='miscellaneous', rarity_cols=None, normalize=True):
         """
         Loops through categorical columns and identifies categories, which occur less than the
         given threshold. These features will be grouped together as defined by mask_as parameter.
@@ -868,30 +908,30 @@ class PreProcessing:
         """
         self.get_current_timestamp('Handle rare features')
 
-        def handle_rarity(all_data, threshold=threshold, mask_as=mask_as):
-            cat_columns = all_data.select_dtypes(include=['category']).columns
-            for col in cat_columns:
-                frequencies = all_data[col].value_counts(normalize=True)
-                condition = frequencies < threshold
-                mask_obs = frequencies[condition].index
-                mask_dict = dict.fromkeys(mask_obs, mask_as)
-                all_data[col] = all_data[col].replace(mask_dict)  # or you could make a copy not to modify original data
-            del cat_columns
-            _ = gc.collect()
+        def handle_rarity(all_data, threshold=threshold, mask_as=mask_as, rarity_cols=rarity_cols, normalize=normalize):
+            if isinstance(rarity_cols, list):
+                for col in rarity_cols:
+                    frequencies = all_data[col].value_counts(normalize=normalize)
+                    condition = frequencies < threshold
+                    mask_obs = frequencies[condition].index
+                    mask_dict = dict.fromkeys(mask_obs, mask_as)
+                    all_data[col] = all_data[col].replace(mask_dict)  # or you could make a copy not to modify original data
+                del rarity_cols
+                _ = gc.collect()
             return all_data
 
         logging.info('Start rare feature processing.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
             threshold = self.preprocess_decisions["rare_feature_threshold"]
-            self.dataframe = handle_rarity(self.dataframe, threshold)
+            self.dataframe = handle_rarity(self.dataframe, threshold, mask_as, rarity_cols, normalize)
             logging.info('Finished rare feature processing.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train = handle_rarity(X_train)
-            X_test = handle_rarity(X_test)
+            X_train = handle_rarity(X_train, threshold, mask_as, rarity_cols, normalize)
+            X_test = handle_rarity(X_test, threshold, mask_as, rarity_cols, normalize)
             self.preprocess_decisions["rare_feature_threshold"] = threshold
             logging.info('Finished rare feature processing.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')

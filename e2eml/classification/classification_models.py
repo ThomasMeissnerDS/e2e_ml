@@ -307,8 +307,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                     self.optuna_studies[f"{algorithm}"] = {}
                     #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-                    optuna.visualization.plot_optimization_history(study)
-                    optuna.visualization.plot_param_importances(study)
+                    optuna.visualization.plot_optimization_history(study)#.show()
+                    optuna.visualization.plot_param_importances(study)#.show()
                     self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
                     self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
 

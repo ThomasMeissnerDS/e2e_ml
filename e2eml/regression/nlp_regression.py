@@ -230,8 +230,17 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
             model = self.create_bert_regression_model(chosen_model=self.transformer_chosen)
             model.to(device)
             model.train()
-            LR = 2e-5 #1e-3
-            optimizer = AdamW(model.parameters(), LR, betas=(0.99, 0.999), weight_decay=1e-2)
+            param_optimizer = list(model.named_parameters())
+            no_decay = ['bias', 'gamma', 'beta']
+            optimizer_grouped_parameters = [
+                {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
+                 'weight_decay_rate': 0.01},
+                {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
+                 'weight_decay_rate': 0.0}
+            ]
+
+            LR = 2e-5
+            optimizer = AdamW(optimizer_grouped_parameters, LR)  # AdamW optimizer
             if epochs:
                 pass
             else:
@@ -328,7 +337,6 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         allpreds = []
         model_no = 0
         mode_cols = []
-        self.reset_test_train_index()
         for m_path in pathes:
             state = torch.load(m_path)
             model.load_state_dict(state["state_dict"])
@@ -442,8 +450,17 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
 
                 model = self.create_bert_regression_model(chosen_model=self.transformer_chosen)
                 model.to(device)
+                param_optimizer = list(model.named_parameters())
+                no_decay = ['bias', 'gamma', 'beta']
+                optimizer_grouped_parameters = [
+                    {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
+                     'weight_decay_rate': 0.01},
+                    {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
+                     'weight_decay_rate': 0.0}
+                ]
+
                 LR = 2e-5
-                optimizer = AdamW(model.parameters(), LR, betas=(0.99, 0.999), weight_decay=1e-2)  # AdamW optimizer
+                optimizer = AdamW(optimizer_grouped_parameters, LR)  # AdamW optimizer
                 train_steps = int(
                     len(X_train) / self.transformer_settings["train_batch_size"] * self.transformer_settings["epochs"])
                 num_steps = int(train_steps * 0.1)

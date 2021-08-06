@@ -32,7 +32,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
             self.tfidf_naive_bayes_proba(analyzer="char_wb", ngram_range=(1, 2))
             self.tfidf_naive_bayes_proba(analyzer="word", ngram_range=(1, 1))
-        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
+        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='target')
@@ -80,7 +80,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.pos_tagging_pca(pca_pos_tags=False)
-        self.rare_feature_processor(threshold=0.02, mask_as='miscellaneous')
+        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='GLMM')
@@ -130,7 +130,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.pos_tagging_pca(pca_pos_tags=False)
             #self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
             self.tfidf_naive_bayes_proba()
-        self.rare_feature_processor(threshold=0.02, mask_as='miscellaneous')
+        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='GLMM')
@@ -171,6 +171,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         except AttributeError:
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
+        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
         self.sort_columns_alphabetically()
         self.check_max_sentence_length()
         self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)
@@ -187,6 +188,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         except AttributeError:
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
+        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
         self.regex_clean_text_data()
         self.sort_columns_alphabetically()
         self.check_max_sentence_length()

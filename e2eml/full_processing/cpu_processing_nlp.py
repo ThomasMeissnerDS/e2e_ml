@@ -9,7 +9,7 @@ from nltk.tokenize import word_tokenize
 from nltk import pos_tag
 from textblob import TextBlob
 import transformers
-from transformers import AutoModel, AutoTokenizer, AdamW, BertModel, RobertaModel, RobertaTokenizer, BertTokenizer, ElectraTokenizer, ElectraForSequenceClassification, XLNetForSequenceClassification
+from transformers import AutoModel, AutoTokenizer, AdamW, BertModel, RobertaModel, RobertaTokenizer, BertTokenizer, ElectraTokenizer, ElectraForSequenceClassification, XLNetForSequenceClassification, XLMRobertaForSequenceClassification
 from transformers import get_linear_schedule_with_warmup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import naive_bayes
@@ -155,8 +155,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         logging.info('Start text cleaning.')
         algorithm = 'regex_text'
         if self.prediction_mode:
-            text_columns = self.nlp_columns
-            print(self.nlp_columns)
+            text_columns = []
+            text_columns.append(self.nlp_transformer_columns)
             for text_col in text_columns:
                 self.dataframe[text_col] = self.dataframe[text_col].apply(lambda x : self.remove_url(x))
                 self.dataframe[text_col] = self.dataframe[text_col].apply(lambda x : self.remove_punct(x))
@@ -168,7 +168,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             text_columns = []
-            text_columns.append(self.nlp_columns)
+            text_columns.append(self.nlp_transformer_columns)
 
             for text_col in text_columns:
                 try:
@@ -684,10 +684,13 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         logging.info('Start creating or loading transformer model for classification.')
         if not self.transformer_chosen:
             chosen_model = chosen_model
-        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'distilbert-base-uncased']:
+        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'distilbert-base-uncased', 'bert-large-cased']:
             model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
         elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base']:
             model = transformers.RobertaForSequenceClassification.from_pretrained(
+                self.transformer_chosen, num_labels=self.num_classes)
+        elif chosen_model in ['xlm-roberta', 'xlm-roberta-base', 'xlm-roberta-large']:
+            model = transformers.XLMRobertaForSequenceClassification.from_pretrained(
                 self.transformer_chosen, num_labels=self.num_classes)
         elif chosen_model == 'google/electra-small-discriminator':
             model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
@@ -701,10 +704,13 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         logging.info('Start creating or loading transformer model for regression.')
         if not self.transformer_chosen:
             chosen_model = chosen_model
-        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'bert-large-uncased']:
+        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'bert-large-uncased', 'bert-large-cased']:
             model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
         elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base']:
             model = transformers.RobertaForSequenceClassification.from_pretrained(
+                self.transformer_chosen, num_labels=1)
+        elif chosen_model in ['xlm-roberta', 'xlm-roberta-base', 'xlm-roberta-large']:
+            model = transformers.XLMRobertaForSequenceClassification.from_pretrained(
                 self.transformer_chosen, num_labels=1)
         elif chosen_model == 'google/electra-small-discriminator':
             model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
