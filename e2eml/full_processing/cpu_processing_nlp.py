@@ -684,30 +684,34 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         logging.info('Start creating or loading transformer model for classification.')
         if not self.transformer_chosen:
             chosen_model = chosen_model
-        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'distilbert-base-uncased', 'bert-large-cased']:
+        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'bert-large-cased', 'bert-base-multilingual-cased']:
             model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
-        elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base']:
+        elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base', 'roberta-base-openai-detector']:
             model = transformers.RobertaForSequenceClassification.from_pretrained(
+                self.transformer_chosen, num_labels=self.num_classes)
+        elif chosen_model in ['xlm-mlm-enfr-1024', 'xlm-mlm-17-1280', 'xlm-mlm-100-1280']:
+            model = transformers.XLMForSequenceClassification.from_pretrained(
                 self.transformer_chosen, num_labels=self.num_classes)
         elif chosen_model in ['xlm-roberta', 'xlm-roberta-base', 'xlm-roberta-large']:
             model = transformers.XLMRobertaForSequenceClassification.from_pretrained(
                 self.transformer_chosen, num_labels=self.num_classes)
         elif chosen_model == 'google/electra-small-discriminator':
             model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
-        elif chosen_model == 'xlnet-base-cased':
-            model = transformers.XLNetForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
         else:
-            model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
+            model = transformers.AutoModel.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
         return model
 
     def create_bert_regression_model(self, chosen_model='bert-base-uncased'):
         logging.info('Start creating or loading transformer model for regression.')
         if not self.transformer_chosen:
             chosen_model = chosen_model
-        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'bert-large-uncased', 'bert-large-cased']:
+        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'bert-large-uncased', 'bert-large-cased', 'bert-base-multilingual-cased']:
             model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
         elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base']:
             model = transformers.RobertaForSequenceClassification.from_pretrained(
+                self.transformer_chosen, num_labels=1)
+        elif chosen_model in ['xlm-mlm-enfr-1024', 'xlm-mlm-17-1280', 'xlm-mlm-100-1280']:
+            model = transformers.XLMForSequenceClassification.from_pretrained(
                 self.transformer_chosen, num_labels=1)
         elif chosen_model in ['xlm-roberta', 'xlm-roberta-base', 'xlm-roberta-large']:
             model = transformers.XLMRobertaForSequenceClassification.from_pretrained(
@@ -715,7 +719,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         elif chosen_model == 'google/electra-small-discriminator':
             model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
         else:
-            model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
+            model = transformers.AutoModel.from_pretrained(self.transformer_chosen, num_labels=1)
         return model
 
     def import_transformer_model_tokenizer(self, transformer_chosen=None):
