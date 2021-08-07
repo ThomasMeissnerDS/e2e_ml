@@ -283,6 +283,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.pp_bp10_nlp_preprocessing(df=df)
         elif preprocess_bp == 'bp_nlp_11':
             self.pp_bp11_nlp_preprocessing(df=df)
+        elif preprocess_bp == 'bp_nlp_12':
+            self.pp_bp12_nlp_preprocessing(df=df)
         else:
             pass
         if self.prediction_mode:
@@ -345,6 +347,57 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             predicted_classes = self.predicted_probs[f"blended_preds"] > self.preprocess_decisions[f"probability_threshold"]
             self.predicted_classes[f"blended_preds"] = predicted_classes
         self.classification_eval('blended_preds')
+        self.prediction_mode = True
+        logging.info('Finished blueprint.')
+
+    def ml_special_multiclass_full_processing_multimodel_max_voting(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
+        :return: Updates class attributes by its predictions.
+        """
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
+        if self.prediction_mode:
+            pass
+        else:
+            self.lgbm_train(tune_mode=self.tune_mode)
+            self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
+            self.vowpal_wabbit_train()
+        self.lgbm_predict(feat_importance=False)
+        self.classification_eval('lgbm')
+        self.xgboost_predict(feat_importance=True)
+        self.classification_eval('xgboost')
+        self.vowpal_wabbit_predict(feat_importance=True)
+        self.classification_eval('vowpal_wabbit')
+        algorithm = 'max_voting'
+        mode_cols = ["lgbm_class",
+                     "xgboost_class",
+                     "vowpal_wabbit"]
+        if self.prediction_mode:
+            self.dataframe["lgbm_class"] = self.predicted_classes[f"lgbm"]
+            self.dataframe["xgboost_class"] = self.predicted_classes[f"xgboost"]
+            self.dataframe["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
+            self.dataframe["max_voting_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
+            self.predicted_classes[f"max_voting"] = self.dataframe["max_voting_class"]
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_test["lgbm_class"] = self.predicted_classes[f"lgbm"]
+            X_test["xgboost_class"] = self.predicted_classes[f"xgboost"]
+            X_test["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
+            X_test["max_voting_class"] = X_test[mode_cols].mode(axis=1)[0]
+            self.predicted_classes[f"max_voting"] = X_test["max_voting_class"]
+        self.classification_eval('max_voting')
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 

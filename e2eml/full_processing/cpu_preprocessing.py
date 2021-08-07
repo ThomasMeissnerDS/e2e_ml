@@ -1591,6 +1591,69 @@ class PreProcessing:
             _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
+    def naive_undersampling(self, df, target_name):
+        """
+        Takes a dataframe and the name of the target variable to undersample all classes other than the minority class.
+        This is a naive undersampling technique and should only be done on the training dataset.
+        :param df: Expects a Pandas dataframe.
+        :param target_name: Expects a string with the name of the target column.
+        :return: Returns the modified Pandas dataframe.
+        """
+        classes = df[target_name].value_counts().to_dict()
+        least_class_amount = min(classes.values())
+        classes_list = []
+        for key in classes:
+            classes_list.append(df[df[target_name] == key])
+        classes_sample = []
+        for i in range(0, len(classes_list)-1):
+            classes_sample.append(classes_list[i].sample(least_class_amount, random_state=50))
+        df_maybe = pd.concat(classes_sample)
+        final_df = pd.concat([df_maybe, classes_list[-1]], axis=0)
+        final_df = final_df.reset_index(drop=True)
+        return final_df
+
+    def naive_oversampling(self, df, target_name):
+        classes = df[target_name].value_counts().to_dict()
+        most = max(classes.values())
+        classes_list = []
+        for key in classes:
+            classes_list.append(df[df[target_name] == key])
+        classes_sample = []
+        for i in range(1, len(classes_list)):
+            classes_sample.append(classes_list[i].sample(most, replace=True, random_state=50))
+        df_maybe = pd.concat(classes_sample)
+        final_df = pd.concat([df_maybe, classes_list[0]], axis=0)
+        final_df = final_df.reset_index(drop=True)
+        return final_df
+
+    def undersample_train_data(self):
+        if self.prediction_mode:
+            pass
+        else:
+            if self.class_problem == 'regression':
+                pass
+            else:
+                X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+                X_train[self.target_variable] = Y_train
+                X_train = self.naive_undersampling(X_train, self.target_variable)
+                Y_train = X_train[self.target_variable]
+                X_train.drop(self.target_variable, axis=1)
+                return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def oversample_train_data(self):
+        if self.prediction_mode:
+            pass
+        else:
+            if self.class_problem == 'regression':
+                pass
+            else:
+                X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+                X_train[self.target_variable] = Y_train
+                X_train = self.naive_oversampling(X_train, self.target_variable)
+                Y_train = X_train[self.target_variable]
+                X_train.drop(self.target_variable, axis=1)
+                return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
     def automated_feature_selection(self, metric=None):
         """
         Uses boostaroota algorithm to automatically chose best features. boostaroota choses XGboost under

@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler, Dataset
 import transformers
 from transformers import AutoModel, AutoTokenizer, AdamW, BertModel, RobertaModel, RobertaTokenizer, BertTokenizer, ElectraTokenizer, ElectraForSequenceClassification, XLNetForSequenceClassification
-from transformers import get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
 from sklearn.metrics import matthews_corrcoef, mean_squared_error
 from tqdm import tqdm
 import logging
@@ -26,7 +26,7 @@ class BERTDataSet(Dataset):
         self.sentences = sentences
         self.targets = targets
         self.tokenizer = tokenizer
-        self.max_sen_length = max_length
+        self.max_sen_length = 300
 
     def __len__(self):
         return len(self.sentences)
@@ -484,6 +484,13 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
             del model, optimizer, scheduler
             _ = gc.collect()
 
+    def matthews_eval(self, true_y, predicted):
+        try:
+            matthews = matthews_corrcoef(true_y, predicted)
+        except Exception:
+            matthews = 0
+        return matthews
+
     def transformer_predict(self):
         logging.info('Start NLP transformer prediction.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
@@ -501,5 +508,25 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
             self.predicted_classes['nlp_transformer'] = self.dataframe["majority_class"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+            # we check, if one savestate underperforms and delete him out
+            scorings = []
+            states = []
+            for state in mode_cols:
+                state_score = self.matthews_eval(Y_test, X_test[state])
+                scorings.append(state_score)
+                states.append(state)
+            scorings_arr = np.array(scorings)
+            scorings_mean = np.mean(scorings_arr)
+            scorings_std = np.std(scorings_arr)
+            keep_state = scorings_arr > scorings_mean-scorings_std
+            for state in range(len(states)):
+                if keep_state.tolist()[state]:
+                    pass
+                else:
+                    states.remove(states[state])
+                    X_test.drop(states[state], axis=1)
+                    os.remove(f"model{state}.pth")
+
             X_test["majority_class"] = X_test[mode_cols].mode(axis=1)[0]
             self.predicted_classes['nlp_transformer'] = X_test["majority_class"]

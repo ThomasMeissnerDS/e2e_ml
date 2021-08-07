@@ -735,8 +735,13 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                                              output_hidden_states=False)
             tokenizer = transformers.AutoTokenizer.from_pretrained(f"{self.transformer_model_load_from_path}")
         else:
-            # import BERT-base pretrained model
-            bert = self.create_bert_classification_model(transformer_chosen)
+            if self.class_problem in ['binary', 'multiclass']:
+                # import BERT-base pretrained model
+                bert = self.create_bert_classification_model(transformer_chosen)
+            elif self.class_problem == 'regression':
+                bert = self.create_bert_regression_model(transformer_chosen)
+            else:
+                print("No correct ml_task defined during class instantiation.")
             # Load the BERT tokenizer
             tokenizer = AutoTokenizer.from_pretrained(transformer_chosen)
         if "nlp_transformers" in self.preprocess_decisions:

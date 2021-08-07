@@ -6,7 +6,7 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, Sequentia
 import transformers
 from transformers import AutoModel, BertTokenizerFast, AdamW, BertModel, RobertaModel, AutoTokenizer, AutoConfig
 from transformers import get_linear_schedule_with_warmup
-from sklearn.metrics import matthews_corrcoef, mean_squared_error
+from sklearn.metrics import matthews_corrcoef, mean_squared_error, median_absolute_error
 from tqdm import tqdm
 import logging
 import psutil
@@ -26,7 +26,7 @@ class BERTDataSet(Dataset):
         self.sentences = sentences
         self.targets = targets
         self.tokenizer = tokenizer
-        self.max_sen_length = max_length
+        self.max_sen_length = 300
 
     def __len__(self):
         return len(self.sentences)
@@ -230,17 +230,8 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
             model = self.create_bert_regression_model(chosen_model=self.transformer_chosen)
             model.to(device)
             model.train()
-            param_optimizer = list(model.named_parameters())
-            no_decay = ['bias', 'gamma', 'beta']
-            optimizer_grouped_parameters = [
-                {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
-                 'weight_decay_rate': 0.01},
-                {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
-                 'weight_decay_rate': 0.0}
-            ]
-
-            LR = 2e-5
-            optimizer = AdamW(optimizer_grouped_parameters, LR)  # AdamW optimizer
+            LR = 2e-5 #1e-3
+            optimizer = AdamW(model.parameters(), LR, betas=(0.99, 0.998), weight_decay=1e-2)
             if epochs:
                 pass
             else:
@@ -450,17 +441,8 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
 
                 model = self.create_bert_regression_model(chosen_model=self.transformer_chosen)
                 model.to(device)
-                param_optimizer = list(model.named_parameters())
-                no_decay = ['bias', 'gamma', 'beta']
-                optimizer_grouped_parameters = [
-                    {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
-                     'weight_decay_rate': 0.01},
-                    {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
-                     'weight_decay_rate': 0.0}
-                ]
-
-                LR = 2e-5
-                optimizer = AdamW(optimizer_grouped_parameters, LR)  # AdamW optimizer
+                LR = 2e-5 #1e-3
+                optimizer = AdamW(model.parameters(), LR, betas=(0.99, 0.999), weight_decay=1e-2)
                 train_steps = int(
                     len(X_train) / self.transformer_settings["train_batch_size"] * self.transformer_settings["epochs"])
                 num_steps = int(train_steps * 0.1)
@@ -510,6 +492,13 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
             del model, optimizer, scheduler
             _ = gc.collect()
 
+    def median_abs_error_eval(self, true_y, predicted):
+        try:
+            median_absolute_error_score = median_absolute_error(true_y, predicted)
+        except Exception:
+            median_absolute_error_score = 0
+        return median_absolute_error_score
+
     def transformer_predict(self):
         logging.info('Start NLP transformer prediction.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
@@ -519,10 +508,34 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         print(pthes)
         pred_dataloader = self.pred_dataloader()
         allpreds, mode_cols = self.predicting(pred_dataloader, model, pthes)
+
         if self.prediction_mode:
             self.dataframe["transformers_mean"] = self.dataframe[mode_cols].mean(axis=1)
             self.predicted_values['nlp_transformer'] = self.dataframe["transformers_mean"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_test["transformers_mean"] = X_test[mode_cols].mean(axis=1)[0]
+
+            # we check, if one savestate underperforms and delete him out
+            scorings = []
+            states = []
+            for state in mode_cols:
+                state_score = self.median_abs_error_eval(Y_test, X_test[state])
+                print(state_score)
+                scorings.append(state_score)
+                states.append(state)
+            scorings_arr = np.array(scorings)
+            scorings_mean = np.mean(scorings_arr)
+            scorings_std = np.std(scorings_arr)
+            print(scorings_std)
+            keep_state = scorings_arr < scorings_mean+scorings_std
+            for state in range(len(states)):
+                if keep_state.tolist()[state]:
+                    pass
+                else:
+                    print(state)
+                    states.remove(states[state])
+                    X_test.drop(states[state], axis=1)
+                    os.remove(f"model{state}.pth")
+
+            X_test["transformers_mean"] = X_test[mode_cols].mean(axis=1)
             self.predicted_values['nlp_transformer'] = X_test["transformers_mean"]

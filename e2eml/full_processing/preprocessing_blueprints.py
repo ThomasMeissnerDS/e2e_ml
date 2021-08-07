@@ -193,3 +193,21 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         self.sort_columns_alphabetically()
         self.check_max_sentence_length()
         self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)
+
+    def pp_bp12_nlp_preprocessing(self, df):
+        logging.info('Start blueprint.')
+        self.runtime_warnings(warn_about="future_architecture_change")
+        try:
+            if df.empty:
+                self.prediction_mode = False
+            else:
+                self.dataframe = df
+                self.prediction_mode = True
+        except AttributeError:
+            self.prediction_mode = False
+        self.train_test_split(how=self.train_split_type)
+        self.oversample_train_data()
+        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
+        self.sort_columns_alphabetically()
+        self.check_max_sentence_length()
+        self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)

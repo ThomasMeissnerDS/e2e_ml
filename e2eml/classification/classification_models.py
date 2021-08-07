@@ -1008,7 +1008,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                                          learning_rate=param["learning_rate"],
                                          random_state=42)
                     try:
-                        scores = cross_val_score(model, X_train, Y_train, cv=10, scoring='f1_weighted',
+                        scores = cross_val_score(model, X_train, Y_train, cv=5, scoring='f1_weighted',
                                                  fit_params={'X_val': X_test,
                                                              'Y_val': Y_test,
                                                              'sample_weight': classes_weights,
