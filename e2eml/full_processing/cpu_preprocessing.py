@@ -164,7 +164,7 @@ class PreProcessing:
                                      "test_batch_size": 16,
                                      "pred_batch_size": 16,
 
-                                     "num_workers": 4,
+                                     "num_workers": 8,
                                      "epochs": self.transformer_epochs, # TODO: Change to 20 again
                                      "transformer_model_path": self.transformer_model_load_from_path,
                                      "model_save_states_path": {self.transformer_model_save_states_path}}
@@ -1650,6 +1650,7 @@ class PreProcessing:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 X_train[self.target_variable] = Y_train
                 X_train = self.naive_oversampling(X_train, self.target_variable)
+                #X_train = X_train.sample(frac=0.50)
                 Y_train = X_train[self.target_variable]
                 X_train.drop(self.target_variable, axis=1)
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
