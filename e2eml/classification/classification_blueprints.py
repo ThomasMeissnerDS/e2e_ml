@@ -285,6 +285,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.pp_bp11_nlp_preprocessing(df=df)
         elif preprocess_bp == 'bp_nlp_12':
             self.pp_bp12_nlp_preprocessing(df=df)
+        elif preprocess_bp == 'bp_nlp_13':
+            self.pp_bp13_nlp_preprocessing(df=df)
         else:
             pass
         if self.prediction_mode:
@@ -383,7 +385,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'max_voting'
         mode_cols = ["lgbm_class",
                      "xgboost_class",
-                     "vowpal_wabbit"]
+                     "vowpal_wabbit_class"]
         if self.prediction_mode:
             self.dataframe["lgbm_class"] = self.predicted_classes[f"lgbm"]
             self.dataframe["xgboost_class"] = self.predicted_classes[f"xgboost"]

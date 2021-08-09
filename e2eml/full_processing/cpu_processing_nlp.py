@@ -6,6 +6,7 @@ import spacy
 import nltk
 import ssl
 from nltk.tokenize import word_tokenize
+from nltk.corpus import wordnet, stopwords
 from nltk import pos_tag
 from textblob import TextBlob
 import transformers
@@ -14,10 +15,12 @@ from transformers import get_linear_schedule_with_warmup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import naive_bayes
 from sklearn.linear_model import Ridge, ElasticNet
+from imblearn.over_sampling import SMOTE
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
 import lightgbm as lgb
 import pandas as pd
 import numpy as np
+import random
 import logging
 import psutil
 
@@ -31,6 +34,7 @@ nltk.download('punkt')
 nltk.download('averaged_perceptron_tagger')
 nltk.download('stopwords')
 nltk.download('wordnet')
+stop_words = set(stopwords.words('english'))
 
 # TODO: Continue on NLP
 """
@@ -678,6 +682,78 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                                             self.nlp_columns, mode='transform'
                                             )
             logging.info('Finished Vowpal Wabbit NLP prediction as a feature.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def tfidf_smote_text_columns(self):
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            tfids = TfidfVectorizer(strip_accents="unicode", max_features=20000)
+            tfids.fit(X_train[self.nlp_transformer_columns])
+            vectors = tfids.transform(X_train[self.nlp_transformer_columns])
+            vectors_df = pd.DataFrame(vectors.todense(), columns=tfids.get_feature_names())
+            smt = SMOTE(random_state=777, k_neighbors=1)
+            X_SMOTE, y_SMOTE = smt.fit_sample(vectors_df, Y_train)
+            X_train = pd.DataFrame(X_SMOTE.todense(), columns=tfids.get_feature_names())
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def get_synonyms(self, word):
+        """
+        Get synonyms of a word
+        """
+        synonyms = set()
+
+        for syn in wordnet.synsets(word):
+            for l in syn.lemmas():
+                synonym = l.name().replace("_", " ").replace("-", " ").lower()
+                synonym = "".join([char for char in synonym if char in ' qwertyuiopasdfghjklzxcvbnm'])
+                synonyms.add(synonym)
+
+        if word in synonyms:
+            synonyms.remove(word)
+
+        return list(synonyms)
+
+    def synonym_replacement(self, words, n):
+        words = words.split()
+        new_words = words.copy()
+        stop_words = nltk.corpus.stopwords.words("english")
+        random_word_list = list(set([word for word in words if word not in stop_words]))
+        random.shuffle(random_word_list)
+        num_replaced = 0
+
+        for random_word in random_word_list:
+            synonyms = self.get_synonyms(random_word)
+
+            if len(synonyms) >= 1:
+                synonym = random.choice(list(synonyms))
+                new_words = [synonym if word == random_word else word for word in new_words]
+                num_replaced += 1
+
+            if num_replaced >= n: #only replace up to n words
+                break
+        sentence = ' '.join(new_words)
+        return sentence
+
+    def replace_synonyms_to_df_copy(self, words_to_replace=3, mode ='auto'):
+        """
+        The function copies the original dataframe and randomly exchanges words by their synonyms. It concats the original to the
+        modified dataframe and returns the new training dataset.
+        :param words_to_replace:
+        :return:
+        """
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            if mode == 'auto':
+                sentence_length = X_train[self.nlp_transformer_columns].apply(lambda x: np.max([len(w) for w in x.split()]))
+                words_to_replace = int(sentence_length.max()/10) # exchange ten percent of the words
+            train_copy = X_train.copy()
+            train_copy[self.nlp_transformer_columns] = train_copy.apply(self.synonym_replacement(self.nlp_transformer_columns, words_to_replace), axis=1)
+            X_train = pd.concat([X_train, train_copy])
+            Y_train = Y_train.append(Y_train)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def create_bert_classification_model(self, chosen_model='bert-base-uncased'):
