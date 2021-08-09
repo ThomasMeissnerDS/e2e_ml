@@ -747,13 +747,16 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train[self.target_variable] = Y_train
             if mode == 'auto':
                 sentence_length = X_train[self.nlp_transformer_columns].apply(lambda x: np.max([len(w) for w in x.split()]))
                 words_to_replace = int(sentence_length.max()/10) # exchange ten percent of the words
             train_copy = X_train.copy()
-            train_copy[self.nlp_transformer_columns] = train_copy.apply(self.synonym_replacement(self.nlp_transformer_columns, words_to_replace), axis=1)
-            X_train = pd.concat([X_train, train_copy])
-            Y_train = Y_train.append(Y_train)
+            train_copy[self.nlp_transformer_columns] = train_copy[self.nlp_transformer_columns].apply(lambda x : self.synonym_replacement(x, words_to_replace))
+            X_train = pd.concat([X_train, train_copy], ignore_index=True)
+            X_train = X_train.reset_index(drop=True)
+            Y_train = X_train[self.target_variable]
+            X_train.drop(self.target_variable, axis=1)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def create_bert_classification_model(self, chosen_model='bert-base-uncased'):

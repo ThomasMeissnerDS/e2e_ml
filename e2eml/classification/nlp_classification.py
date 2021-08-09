@@ -145,7 +145,7 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         train_dataset = self.create_train_dataset()
         train_dataloader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=workers,
-                                      pin_memory=True)
+                                      pin_memory=True, drop_last=True)
         return train_dataloader
 
     def create_test_dataloader(self, test_batch_size=None, workers=None):
@@ -162,7 +162,7 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         test_dataset = self.create_test_dataset()
         test_dataloader = DataLoader(test_dataset, batch_size=test_batch_size, shuffle=False, num_workers=workers,
-                                     pin_memory=True)
+                                     pin_memory=True, drop_last=True)
         return test_dataloader
 
     def pred_dataloader(self, pred_batch_size=None, workers=None):
@@ -179,7 +179,7 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         pred_dataset = self.create_pred_dataset()
         pred_dataloader = DataLoader(pred_dataset, batch_size=pred_batch_size, shuffle=False, num_workers=workers,
-                                     pin_memory=True)
+                                     pin_memory=True, drop_last=True)
         return pred_dataloader
 
     def loss_fn(self, output, target):
