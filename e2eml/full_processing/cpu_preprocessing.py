@@ -138,9 +138,8 @@ class PreProcessing:
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
         self.rarity_cols = rarity_cols
-        if isinstance(nlp_columns, list):
-            print("Please provide nlp_columns parameter with a string.")
-            self.nlp_columns = nlp_columns
+        if not isinstance(nlp_columns, str):
+            raise ValueError('Please provide a string with a single column name.')
         else:
             self.nlp_columns = nlp_columns
         self.nlp_transformer_columns = nlp_transformer_columns
@@ -164,7 +163,7 @@ class PreProcessing:
                                      "test_batch_size": 16,
                                      "pred_batch_size": 16,
 
-                                     "num_workers": 16,
+                                     "num_workers": 4,
                                      "epochs": self.transformer_epochs, # TODO: Change to 20 again
                                      "transformer_model_path": self.transformer_model_load_from_path,
                                      "model_save_states_path": {self.transformer_model_save_states_path}}

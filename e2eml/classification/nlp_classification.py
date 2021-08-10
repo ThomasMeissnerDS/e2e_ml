@@ -179,7 +179,7 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         pred_dataset = self.create_pred_dataset()
         pred_dataloader = DataLoader(pred_dataset, batch_size=pred_batch_size, shuffle=False, num_workers=workers,
-                                     pin_memory=True, drop_last=True)
+                                     pin_memory=True)
         return pred_dataloader
 
     def loss_fn(self, output, target):
