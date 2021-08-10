@@ -138,8 +138,9 @@ class PreProcessing:
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
         self.rarity_cols = rarity_cols
-        if not isinstance(nlp_columns, str):
-            raise ValueError('Please provide a string with a single column name.')
+        if isinstance(nlp_columns, list):
+            print("Please provide nlp_columns parameter with a string.")
+            self.nlp_columns = nlp_columns
         else:
             self.nlp_columns = nlp_columns
         self.nlp_transformer_columns = nlp_transformer_columns
