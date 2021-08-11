@@ -184,7 +184,7 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         print("Start prediction on holdout dataset")
         titanic_auto_ml.ml_bp17_multiclass_full_processing_tabnet(val_df)
         # label encode targets
-        val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
+        #val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
         val_y_hat = titanic_auto_ml.predicted_classes['tabnet']
     else:
         pass
@@ -204,4 +204,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
 
 
 if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='tabnet', dataset='synthetic_multiclass') # corona_tweet
+    blueprint_binary_test_titanic(blueprint='tabnet', dataset='titanic') # corona_tweet
