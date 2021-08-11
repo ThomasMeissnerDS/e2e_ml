@@ -213,7 +213,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.ngboost_train(tune_mode=self.tune_mode)
-        self.ngboost_predict(feat_importance=False, importance_alg='permutation')
+        self.ngboost_predict(feat_importance=True, importance_alg='permutation')
         self.regression_eval('ngboost')
         self.prediction_mode = True
         logging.info('Finished blueprint.')
@@ -267,6 +267,36 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         self.transformer_predict()
         algorithm = 'nlp_transformer'
         self.regression_eval(algorithm)
+        self.prediction_mode = True
+        logging.info('Finished blueprint.')
+
+    def ml_bp17_regression_full_processing_tabnet_reg(self, df=None, preprocessing_type='full', preprocess_bp="bp_04"):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
+        :return: Updates class attributes by its predictions.
+        """
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
+        if self.prediction_mode:
+            pass
+        else:
+            self.tabnet_regression_train()
+        algorithm = 'tabnet'
+        self.tabnet_regression_predict()
+        self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 

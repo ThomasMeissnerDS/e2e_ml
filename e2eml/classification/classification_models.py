@@ -16,10 +16,13 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.tree import DecisionTreeRegressor
+from pytorch_tabnet.tab_model import TabNetClassifier
 from sklearn.metrics import matthews_corrcoef
 from sklearn.utils import class_weight
 from sklearn.model_selection import cross_val_score
 from sklearn.inspection import permutation_importance
+import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import warnings
 import logging
@@ -156,6 +159,93 @@ class ClassificationModels(postprocessing.FullPipeline):
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
             self.predicted_classes[f"{algorithm}"] = predicted_classes
+
+    def tabnet_train(self):
+        """
+        Trains a simple Linear regression classifier.
+        :return: Trained model.
+        """
+        self.get_current_timestamp(task='Train Tabnet classification model')
+        algorithm = 'tabnet'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+            Y_train = Y_train.values.reshape(-1)
+            Y_test = Y_test.values.reshape(-1)
+            X_train = X_train.to_numpy()
+            X_test = X_test.to_numpy()
+
+            tabnet_params = dict(
+                n_d=16,
+                n_a=16,
+                n_steps=3,
+                gamma=1.2,
+                lambda_sparse=1e-5,
+                optimizer_fn=optim.Adam,
+                optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
+                mask_type="entmax",
+                scheduler_params=dict(
+                    mode="min", patience=5, min_lr=1e-5, factor=0.9),
+                scheduler_fn=ReduceLROnPlateau,
+                seed=42,
+                verbose=1
+            )
+
+            model = TabNetClassifier(**tabnet_params)
+            model.fit(
+                X_train, Y_train,
+                eval_set=[(X_test, Y_test)],
+                eval_metric=['logloss'],
+                patience=50,
+                batch_size=16,
+                virtual_batch_size=16,
+                num_workers=4,
+                max_epochs=10000,
+                drop_last=True
+            )
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            return self.trained_models
+
+    def tabnet_predict(self):
+        """
+        Loads the pretrained model from the class itself and predicts on new data.
+        :param feat_importance: Set True, if feature importance shall be calculated.
+        :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
+        GPU acceleration). (Default: 'permutation')
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp(task='Predict with Tabnet classification')
+        algorithm = 'tabnet'
+        if self.prediction_mode:
+            model = self.trained_models[f"{algorithm}"]
+            partial_probs = model.predict_proba(self.dataframe.to_numpy())
+            if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+            else:
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            Y_train = Y_train.values.reshape(-1, 1)
+            Y_test = Y_test.values.reshape(-1, 1)
+            X_train = X_train.to_numpy()
+            X_test = X_test.to_numpy()
+            model = self.trained_models[f"{algorithm}"]
+            partial_probs = model.predict_proba(X_test)
+            if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                self.threshold_refiner(predicted_probs, Y_test)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+            else:
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+
+        self.predicted_probs[f"{algorithm}"] = predicted_probs
+        self.predicted_classes[f"{algorithm}"] = predicted_classes
 
     def vowpal_wabbit_train(self):
         """

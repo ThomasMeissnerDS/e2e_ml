@@ -299,6 +299,36 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
+    def ml_bp17_multiclass_full_processing_tabnet(self, df=None, preprocessing_type='full', preprocess_bp="bp_04"):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
+        :return: Updates class attributes by its predictions.
+        """
+        if preprocess_bp == 'bp_01':
+            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_02':
+            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_03':
+            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        else:
+            pass
+        if self.prediction_mode:
+            pass
+        else:
+            self.tabnet_train()
+        algorithm = 'tabnet'
+        self.tabnet_predict()
+        self.classification_eval(algorithm=algorithm)
+        self.prediction_mode = True
+        logging.info('Finished blueprint.')
+
     def ml_special_binary_full_processing_boosting_blender(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,

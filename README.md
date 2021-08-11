@@ -25,9 +25,12 @@ pip install e2eml[rapids]
 This will additionally install cupy and cython to prevent issues. Additionally it is needed to run:
 ```sh
 pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html
+
+# also spacy supports GPU acceleration
+pip install -U spacy[cuda112] #cuda112 depends on your actual cuda version, see: https://spacy.io/usage
 ```
 Otherwise Pytorch will fail trying to run on GPU.
-If e2eml shall e installed together with Jupyter core and ipython, please install with:
+If e2eml shall be installed together with Jupyter core and ipython, please install with:
 ```sh
 pip install e2eml[full]
 ```

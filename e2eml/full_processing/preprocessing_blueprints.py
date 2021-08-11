@@ -159,6 +159,47 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         else:
             pass
 
+    def pp_bp04_std_preprocessing(self, df=None, preprocessing_type='full'):
+        """
+        Our recommended blueprint for Tabnet testing.
+        Runs a preprocessing blueprint only. This is useful for building custom pipelines.
+        :param df: Accepts a dataframe to run ml preprocessing on it.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :return: Updates class attributes.
+        """
+        logging.info('Start blueprint.')
+        self.runtime_warnings(warn_about="future_architecture_change")
+        try:
+            if df.empty:
+                self.prediction_mode = False
+            else:
+                self.dataframe = df
+                self.prediction_mode = True
+        except AttributeError:
+            self.prediction_mode = False
+        self.train_test_split(how=self.train_split_type)
+        self.datetime_converter(datetime_handling='all')
+        self.onehot_pca()
+        self.category_encoding(algorithm='GLMM')
+        self.delete_high_null_cols(threshold=0.5)
+        self.fill_nulls(how='static')
+        self.outlier_care(method='isolation', how='append')
+        self.remove_collinearity(threshold=0.8)
+        try:
+            self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
+        except ValueError:
+            print("Clustering as a feature skipped due to ValueError.")
+        for nb_cluster in range(2, 10):
+            try:
+                self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
+            except ValueError:
+                print("Clustering as a feature skipped due to ValueError.")
+        if self.low_memory_mode:
+            self.reduce_memory_footprint()
+        self.sort_columns_alphabetically()
+        self.data_scaling()
+
     def pp_bp10_nlp_preprocessing(self, df):
         logging.info('Start blueprint.')
         self.runtime_warnings(warn_about="future_architecture_change")

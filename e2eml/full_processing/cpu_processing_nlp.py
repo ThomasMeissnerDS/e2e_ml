@@ -266,6 +266,11 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             from spacy.cli import download
             download('en')
             nlp = spacy.load('en_core_web_sm')
+            # https://spacy.io/universe/project/spacy-transformers
+            # https://spacy.io/models
+            #!python -m spacy download en_core_web_trf
+            #!pip install spacy-transformers
+            # nlp = spacy.load('en_core_web_trf')
         # nlp = spacy.load('en_core_web_lg')
         with nlp.disable_pipes():
             vectors = np.array([nlp(text).vector for text in df[text_column]])

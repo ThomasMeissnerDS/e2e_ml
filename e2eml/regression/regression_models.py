@@ -10,8 +10,10 @@ from sklearn.ensemble import StackingRegressor
 from sklearn.linear_model import RidgeCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import KFold
 from lightgbm import LGBMRegressor
 from ngboost import NGBRegressor
+from pytorch_tabnet.tab_model import TabNetRegressor
 from sklearn.tree import DecisionTreeRegressor
 from ngboost.distns import Exponential, Normal, LogNormal
 from sklearn.linear_model import SGDRegressor, BayesianRidge, ARDRegression
@@ -20,6 +22,8 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import cross_val_score
 from sklearn.linear_model import LinearRegression
 from sklearn.inspection import permutation_importance
+import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import warnings
 
@@ -108,6 +112,80 @@ class RegressionModels(postprocessing.FullPipeline):
                 plt.show()
             else:
                 pass
+        self.predicted_values[f"{algorithm}"] = {}
+        self.predicted_values[f"{algorithm}"] = predicted_probs
+
+    def tabnet_regression_train(self):
+        """
+        Trains a simple Linear regression classifier.
+        :return: Trained model.
+        """
+        self.get_current_timestamp(task='Train Tabnet regression model')
+        algorithm = 'tabnet'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+            Y_train = Y_train.values.reshape(-1, 1)
+            Y_test = Y_test.values.reshape(-1, 1)
+            X_train = X_train.to_numpy()
+            X_test = X_test.to_numpy()
+
+            tabnet_params = dict(
+                n_d=16,
+                n_a=16,
+                n_steps=3,
+                gamma=1.2,
+                lambda_sparse=1e-5,
+                optimizer_fn=optim.RMSprop,
+                optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
+                mask_type="entmax",
+                scheduler_params=dict(
+                    mode="min", patience=5, min_lr=1e-5, factor=0.9),
+                scheduler_fn=ReduceLROnPlateau,
+                seed=42,
+                verbose=1,
+            )
+
+            model = TabNetRegressor(**tabnet_params)
+            model.fit(
+                X_train, Y_train,
+                eval_set=[(X_test, Y_test)],
+                eval_metric=['mae'],
+                patience=50,
+                batch_size=16,
+                virtual_batch_size=16,
+                num_workers=4,
+                max_epochs=10000,
+                drop_last=True
+            )
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            return self.trained_models
+
+    def tabnet_regression_predict(self):
+        """
+        Loads the pretrained model from the class itself and predicts on new data.
+        :param feat_importance: Set True, if feature importance shall be calculated.
+        :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
+        GPU acceleration). (Default: 'permutation')
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp(task='Predict with Tabnet regression')
+        algorithm = 'tabnet'
+        if self.prediction_mode:
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.predict(self.dataframe.to_numpy())
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            Y_train = Y_train.values.reshape(-1, 1)
+            Y_test = Y_test.values.reshape(-1, 1)
+            X_train = X_train.to_numpy()
+            X_test = X_test.to_numpy()
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.predict(X_test)
+
         self.predicted_values[f"{algorithm}"] = {}
         self.predicted_values[f"{algorithm}"] = predicted_probs
 
@@ -380,9 +458,9 @@ class RegressionModels(postprocessing.FullPipeline):
                 else:
                     pruning_callback = optuna.integration.LightGBMPruningCallback(trial, "l1")
                     result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
-                                        stratified=False, callbacks=[pruning_callback],
-                                        early_stopping_rounds=10, seed=42,
-                                        verbose_eval=False)
+                                    stratified=False, callbacks=[pruning_callback],
+                                    early_stopping_rounds=10, seed=42,
+                                    verbose_eval=False)
                     avg_result = result['l1-mean'][-1]
                     return avg_result
 
