@@ -24,6 +24,7 @@ requirements = ["babel>=2.9.0",
                 "setuptools >= 51.1.0",
                 "shap>=0.39.0",
                 "spacy>=2.3.0",
+                "tabnet>=0.1.6",
                 "textblob>=0.15.3",
                 "torch >= 1.7.0",
                 "transformers>=4.0.0",
@@ -39,7 +40,7 @@ extras_require = {
 
 setup(
     name="e2eml",
-    version="1.6.6",
+    version="1.7.0",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",

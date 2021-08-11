@@ -128,6 +128,8 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 1.7.0
+  - Added Tabnet classifier and regressor
 * 1.6.5
   - improvements of NLP transformers
 * 1.5.8
