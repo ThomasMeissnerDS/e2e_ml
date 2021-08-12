@@ -17,6 +17,7 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, Gradien
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.tree import DecisionTreeRegressor
 from pytorch_tabnet.tab_model import TabNetClassifier
+from pytorch_tabnet.pretraining import TabNetPretrainer
 from sklearn.metrics import matthews_corrcoef
 from sklearn.utils import class_weight
 from sklearn.model_selection import cross_val_score
@@ -198,6 +199,17 @@ class ClassificationModels(postprocessing.FullPipeline):
                     seed=42,
                     verbose=1
                 )
+                pretrainer = TabNetPretrainer(**param)
+                pretrainer.fit(X_train,
+                               eval_set=[(X_test)],
+                               max_epochs=1000,
+                               patience=20,
+                               batch_size=16,
+                               virtual_batch_size=16,
+                               num_workers=0,
+                               drop_last=True,
+                               pretraining_ratio=0.8)
+
                 model = TabNetClassifier(**param)
                 model.fit(
                     X_train, Y_train,
@@ -208,7 +220,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                     virtual_batch_size=16,
                     num_workers=4,
                     max_epochs=10000,
-                    drop_last=True
+                    drop_last=True,
+                    from_unsupervised=pretrainer
                 )
                 partial_probs = model.predict_proba(X_test)
                 if self.class_problem == 'binary':
@@ -251,6 +264,17 @@ class ClassificationModels(postprocessing.FullPipeline):
                verbose=1
             )
 
+            pretrainer = TabNetPretrainer(**param)
+            pretrainer.fit(X_train,
+                           eval_set=[(X_test)],
+                           max_epochs=1000,
+                           patience=20,
+                           batch_size=16,
+                           virtual_batch_size=16,
+                           num_workers=0,
+                           drop_last=True,
+                           pretraining_ratio=0.8)
+
             model = TabNetClassifier(**param)
             model.fit(
                 X_train, Y_train,
@@ -261,7 +285,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                 virtual_batch_size=16,
                 num_workers=4,
                 max_epochs=10000,
-                drop_last=True
+                drop_last=True,
+                from_unsupervised=pretrainer
             )
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model

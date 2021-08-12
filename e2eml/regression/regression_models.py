@@ -14,6 +14,7 @@ from sklearn.model_selection import KFold
 from lightgbm import LGBMRegressor
 from ngboost import NGBRegressor
 from pytorch_tabnet.tab_model import TabNetRegressor
+from pytorch_tabnet.pretraining import TabNetPretrainer
 from sklearn.tree import DecisionTreeRegressor
 from ngboost.distns import Exponential, Normal, LogNormal
 from sklearn.linear_model import SGDRegressor, BayesianRidge, ARDRegression
@@ -133,6 +134,7 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train = X_train.to_numpy()
             X_test = X_test.to_numpy()
 
+
             def objective(trial):
                 depths = trial.suggest_int('depths', 16, 64)
                 factor = trial.suggest_uniform('factor', 0.1, 0.9)
@@ -151,6 +153,18 @@ class RegressionModels(postprocessing.FullPipeline):
                     seed=42,
                     verbose=1
                 )
+
+                pretrainer = TabNetPretrainer(**param)
+                pretrainer.fit(X_train,
+                               eval_set=[(X_test)],
+                               max_epochs=1000,
+                               patience=20,
+                               batch_size=16,
+                               virtual_batch_size=16,
+                               num_workers=0,
+                               drop_last=True,
+                               pretraining_ratio=0.8)
+
                 model = TabNetRegressor(**param)
                 model.fit(
                     X_train, Y_train,
@@ -160,10 +174,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     batch_size=16,
                     virtual_batch_size=16,
                     num_workers=4,
-                    max_epochs=10000,
-                    drop_last=True
+                    max_epochs=1000,
+                    drop_last=True,
+                    from_unsupervised=pretrainer
                 )
                 preds = model.predict(X_test)
+
                 mae = mean_absolute_error(Y_test, preds)
                 return mae
 
@@ -197,6 +213,16 @@ class RegressionModels(postprocessing.FullPipeline):
                 seed=42,
                 verbose=1
             )
+            pretrainer = TabNetPretrainer(**param)
+            pretrainer.fit(X_train,
+                           eval_set=[(X_test)],
+                           max_epochs=1000,
+                           patience=20,
+                           batch_size=16,
+                           virtual_batch_size=16,
+                           num_workers=0,
+                           drop_last=True,
+                           pretraining_ratio=0.8)
 
             model = TabNetRegressor(**param)
             model.fit(
@@ -208,7 +234,8 @@ class RegressionModels(postprocessing.FullPipeline):
                 virtual_batch_size=16,
                 num_workers=4,
                 max_epochs=10000,
-                drop_last=True
+                drop_last=True,
+                from_unsupervised=pretrainer
             )
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
