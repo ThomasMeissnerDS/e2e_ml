@@ -173,16 +173,16 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         titanic_auto_ml.ml_special_multiclass_auto_model_exploration(val_df, preprocessing_type='full')
         val_y_hat = titanic_auto_ml.predicted_classes[titanic_auto_ml.best_model]
     elif blueprint == 'nlp_transformer':
-        titanic_auto_ml.ml_bp_06_multiclass_full_processing_bert_transformer()
+        titanic_auto_ml.ml_bp06_multiclass_full_processing_bert_transformer()
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp_06_multiclass_full_processing_bert_transformer(val_df)
+        titanic_auto_ml.ml_bp06_multiclass_full_processing_bert_transformer(val_df)
         # label encode targets
         val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
         val_y_hat = titanic_auto_ml.predicted_classes['nlp_transformer']
     elif blueprint == 'tabnet':
-        titanic_auto_ml.ml_bp17_multiclass_full_processing_tabnet()
+        titanic_auto_ml.ml_bp07_multiclass_full_processing_tabnet()
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp17_multiclass_full_processing_tabnet(val_df)
+        titanic_auto_ml.ml_bp07_multiclass_full_processing_tabnet(val_df)
         # label encode targets
         #val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
         val_y_hat = titanic_auto_ml.predicted_classes['tabnet']

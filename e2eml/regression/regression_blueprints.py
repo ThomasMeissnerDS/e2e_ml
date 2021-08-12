@@ -80,6 +80,14 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.vowpal_wabbit_train()
             self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
             self.regression_eval(algorithm=algorithm)
+        elif algorithm == 'tabnet':
+            # train sklearn ensemble
+            if self.prediction_mode:
+                pass
+            else:
+                self.tabnet_regression_train()
+            self.tabnet_regression_predict()
+            self.regression_eval(algorithm=algorithm)
 
     def ml_bp10_train_test_regression_full_processing_linear_reg(self, df=None, preprocessing_type='full', preprocess_bp="bp_03"):
         """
@@ -246,7 +254,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_16_regressions_full_processing_bert_transformer(self, df=None, preprocess_bp='bp_nlp_10'):
+    def ml_bp16_regressions_full_processing_bert_transformer(self, df=None, preprocess_bp='bp_nlp_10'):
         """
         Runs an NLP transformer blue print specifically for text regression. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.

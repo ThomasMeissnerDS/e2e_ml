@@ -271,7 +271,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp_06_multiclass_full_processing_bert_transformer(self, df=None, preprocess_bp="bp_nlp_10"):
+    def ml_bp06_multiclass_full_processing_bert_transformer(self, df=None, preprocess_bp="bp_nlp_10"):
         """
         Runs an NLP transformer blue print specifically for text classification. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -299,7 +299,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp17_multiclass_full_processing_tabnet(self, df=None, preprocessing_type='full', preprocess_bp="bp_04"):
+    def ml_bp07_multiclass_full_processing_tabnet(self, df=None, preprocessing_type='full', preprocess_bp="bp_04"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -408,12 +408,15 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.lgbm_train(tune_mode=self.tune_mode)
             self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
             self.vowpal_wabbit_train()
+            self.tabnet_train()
         self.lgbm_predict(feat_importance=False)
         self.classification_eval('lgbm')
         self.xgboost_predict(feat_importance=True)
         self.classification_eval('xgboost')
         self.vowpal_wabbit_predict(feat_importance=True)
         self.classification_eval('vowpal_wabbit')
+        self.tabnet_predict()
+        self.classification_eval('tabnet')
         algorithm = 'max_voting'
         mode_cols = ["lgbm_class",
                      "xgboost_class",

@@ -245,7 +245,7 @@ class RegressionModels(postprocessing.FullPipeline):
         :return: Trained model.
         """
         # https://vowpalwabbit.org/docs/vowpal_wabbit/python/latest/reference/vowpalwabbit.sklearn.html
-        self.get_current_timestamp(task='Train logistic regression model')
+        self.get_current_timestamp(task='Train Vowpal Wabbit model')
         algorithm = 'vowpal_wabbit'
         if self.prediction_mode:
             pass
@@ -265,7 +265,7 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with Logistic regression')
+        self.get_current_timestamp(task='Predict with Vowpal Wabbit')
         algorithm = 'vowpal_wabbit'
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]

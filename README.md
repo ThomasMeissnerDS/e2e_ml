@@ -85,9 +85,11 @@ Multiclass blueprints can handle binary and multiclass tasks:
 - ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble()
 - ml_bp04_multiclass_full_processing_ngboost()
 - ml_bp05_multiclass_full_processing_vowpal_wabbit
-- ml_bp_06_multiclass_full_processing_bert_transformer() # for NLP specifically
+- ml_bp06_multiclass_full_processing_bert_transformer() # for NLP specifically
+- ml_bp07_multiclass_full_processing_tabnet()
 - ml_special_binary_full_processing_boosting_blender()
 - ml_special_multiclass_auto_model_exploration()
+- ml_special_multiclass_full_processing_multimodel_max_voting()
 
 There are regression blueprints as well (in regression module):
 - ml_bp10_train_test_regression_full_processing_linear_reg()
@@ -96,7 +98,8 @@ There are regression blueprints as well (in regression module):
 - ml_bp13_regression_full_processing_sklearn_stacking_ensemble()
 - ml_bp14_regressions_full_processing_ngboost()
 - ml_bp15_regression_full_processing_vowpal_wabbit_reg()
-- ml_16_regressions_full_processing_bert_transformer()
+- ml_bp16_regressions_full_processing_bert_transformer()
+- ml_bp17_regression_full_processing_tabnet_reg()
 - ml_special_regression_full_processing_boosting_blender()
 - ml_special_regression_auto_model_exploration()
 
@@ -129,7 +132,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 
 ## Release History
 * 1.7.0
-  - Added Tabnet classifier and regressor
+  - Added TabNet classifier and regressor with automated hyperparameter optimization
 * 1.6.5
   - improvements of NLP transformers
 * 1.5.8
