@@ -25,6 +25,7 @@ from sklearn.inspection import permutation_importance
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
+import logging
 import warnings
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
@@ -132,23 +133,72 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train = X_train.to_numpy()
             X_test = X_test.to_numpy()
 
-            tabnet_params = dict(
-                n_d=16,
-                n_a=16,
-                n_steps=3,
-                gamma=1.2,
-                lambda_sparse=1e-5,
-                optimizer_fn=optim.RMSprop,
+            def objective(trial):
+                depths = trial.suggest_int('depths', 16, 64)
+                factor = trial.suggest_uniform('factor', 0.1, 0.9)
+                mode = trial.suggest_categorical('mode', ["max", "min"])
+                param = dict(
+                    gamma=trial.suggest_loguniform('gamma', 1e-5, 1e-3),
+                    lambda_sparse=trial.suggest_loguniform('lambda_sparse', 0.3, 1.5),
+                    n_d=depths,
+                    n_a=depths,
+                    n_steps=trial.suggest_int('n_steps', 1, 5),
+                    optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
+                    mask_type="entmax",
+                    scheduler_params=dict(
+                        mode=mode, patience=10, min_lr=1e-5, factor=factor),
+                    scheduler_fn=ReduceLROnPlateau,
+                    seed=42,
+                    verbose=1
+                )
+                model = TabNetRegressor(**param)
+                model.fit(
+                    X_train, Y_train,
+                    eval_set=[(X_test, Y_test)],
+                    eval_metric=['mae'],
+                    patience=20,
+                    batch_size=16,
+                    virtual_batch_size=16,
+                    num_workers=4,
+                    max_epochs=10000,
+                    drop_last=True
+                )
+                preds = model.predict(X_test)
+                mae = mean_absolute_error(Y_test, preds)
+                return mae
+
+            study = optuna.create_study(direction='minimize')
+
+            logging.info(f'Start Tabnet validation.')
+
+            study.optimize(objective, n_trials=20)
+            self.optuna_studies[f"{algorithm}"] = {}
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            optuna.visualization.plot_optimization_history(study)  # .show()
+            optuna.visualization.plot_param_importances(study)  # .show()
+            self.optuna_studies[
+                f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(
+                study)
+
+            tabnet_best_param = study.best_trial.params
+            param = dict(
+                gamma=tabnet_best_param['gamma'],
+                lambda_sparse=tabnet_best_param['lambda_sparse'],
+                n_d=tabnet_best_param['depths'],
+                n_a=tabnet_best_param['depths'],
+                n_steps=tabnet_best_param['n_steps'],
                 optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
                 mask_type="entmax",
                 scheduler_params=dict(
-                    mode="min", patience=5, min_lr=1e-5, factor=0.9),
+                    mode=tabnet_best_param["mode"], patience=5, min_lr=1e-5, factor=tabnet_best_param["factor"]),
                 scheduler_fn=ReduceLROnPlateau,
                 seed=42,
-                verbose=1,
+                verbose=1
             )
 
-            model = TabNetRegressor(**tabnet_params)
+            model = TabNetRegressor(**param)
             model.fit(
                 X_train, Y_train,
                 eval_set=[(X_test, Y_test)],

@@ -360,6 +360,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if not self.prediction_mode:
@@ -367,6 +369,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.train_pred_selected_model(algorithm='xgboost')
             self.train_pred_selected_model(algorithm='ngboost')
             self.train_pred_selected_model(algorithm='vowpal_wabbit')
+            self.train_pred_selected_model(algorithm='tabnet')
 
             # select best model
             min_mae = 10000000

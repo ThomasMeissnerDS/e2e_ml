@@ -398,6 +398,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -415,11 +417,13 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'max_voting'
         mode_cols = ["lgbm_class",
                      "xgboost_class",
-                     "vowpal_wabbit_class"]
+                     "vowpal_wabbit_class",
+                     "tabnet"]
         if self.prediction_mode:
             self.dataframe["lgbm_class"] = self.predicted_classes[f"lgbm"]
             self.dataframe["xgboost_class"] = self.predicted_classes[f"xgboost"]
             self.dataframe["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
+            self.dataframe["tabnet"] = self.predicted_classes[f"tabnet"]
             self.dataframe["max_voting_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
             self.predicted_classes[f"max_voting"] = self.dataframe["max_voting_class"]
         else:
@@ -427,6 +431,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             X_test["lgbm_class"] = self.predicted_classes[f"lgbm"]
             X_test["xgboost_class"] = self.predicted_classes[f"xgboost"]
             X_test["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
+            X_test["tabnet"] = self.predicted_classes[f"tabnet"]
             X_test["max_voting_class"] = X_test[mode_cols].mode(axis=1)[0]
             self.predicted_classes[f"max_voting"] = X_test["max_voting_class"]
         self.classification_eval('max_voting')
@@ -449,6 +454,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if not self.prediction_mode:
@@ -456,6 +463,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.train_pred_selected_model(algorithm='xgboost')
             self.train_pred_selected_model(algorithm='ngboost')
             self.train_pred_selected_model(algorithm="vowpal_wabbit")
+            self.train_pred_selected_model(algorithm="tabnet")
 
             # select best model
             max_matthews = 0

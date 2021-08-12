@@ -26,6 +26,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import warnings
 import logging
+
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 
@@ -57,6 +58,7 @@ class ClassificationModels(postprocessing.FullPipeline):
     model performance. Will be extended by further memory savings features in future releases.
     However we highly recommend GPU usage to heavily decrease model training times.
     """
+
     def threshold_refiner(self, probs, targets):
         """
         Loops through predicted class probabilities in binary contexts and measures performance with
@@ -140,7 +142,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
                 except Exception:
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
             elif feat_importance and importance_alg == 'permutation':
@@ -177,23 +180,78 @@ class ClassificationModels(postprocessing.FullPipeline):
             X_train = X_train.to_numpy()
             X_test = X_test.to_numpy()
 
-            tabnet_params = dict(
-                n_d=16,
-                n_a=16,
-                n_steps=3,
-                gamma=1.2,
-                lambda_sparse=1e-5,
-                optimizer_fn=optim.Adam,
-                optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
-                mask_type="entmax",
-                scheduler_params=dict(
-                    mode="min", patience=5, min_lr=1e-5, factor=0.9),
-                scheduler_fn=ReduceLROnPlateau,
-                seed=42,
-                verbose=1
+            def objective(trial):
+                depths = trial.suggest_int('depths', 16, 64)
+                factor = trial.suggest_uniform('factor', 0.1, 0.9)
+                mode = trial.suggest_categorical('mode', ["max", "min"])
+                param = dict(
+                    gamma=trial.suggest_loguniform('gamma', 1e-5, 1e-3),
+                    lambda_sparse=trial.suggest_loguniform('lambda_sparse', 0.3, 1.5),
+                    n_d=depths,
+                    n_a=depths,
+                    n_steps=trial.suggest_int('n_steps', 1, 5),
+                    optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
+                    mask_type="entmax",
+                    scheduler_params=dict(
+                        mode=mode, patience=10, min_lr=1e-5, factor=factor),
+                    scheduler_fn=ReduceLROnPlateau,
+                    seed=42,
+                    verbose=1
+                )
+                model = TabNetClassifier(**param)
+                model.fit(
+                    X_train, Y_train,
+                    eval_set=[(X_test, Y_test)],
+                    eval_metric=['logloss'],
+                    patience=20,
+                    batch_size=16,
+                    virtual_batch_size=16,
+                    num_workers=4,
+                    max_epochs=10000,
+                    drop_last=True
+                )
+                partial_probs = model.predict_proba(X_test)
+                if self.class_problem == 'binary':
+                    predicted_probs = np.asarray([line[1] for line in partial_probs])
+                    self.threshold_refiner(predicted_probs, Y_test)
+                    predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                else:
+                    predicted_probs = partial_probs
+                    predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+                matthew = matthews_corrcoef(Y_test, predicted_classes)
+                return matthew
+
+            study = optuna.create_study(direction='maximize')
+            logging.info(f'Start Tabnet validation.')
+
+            study.optimize(objective, n_trials=20)
+            self.optuna_studies[f"{algorithm}"] = {}
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            optuna.visualization.plot_optimization_history(study)  # .show()
+            optuna.visualization.plot_param_importances(study)  # .show()
+            self.optuna_studies[
+                f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(
+                study)
+
+            tabnet_best_param = study.best_trial.params
+            param = dict(
+               gamma=tabnet_best_param['gamma'],
+               lambda_sparse=tabnet_best_param['lambda_sparse'],
+               n_d=tabnet_best_param['depths'],
+               n_a=tabnet_best_param['depths'],
+               n_steps=tabnet_best_param['n_steps'],
+               optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
+               mask_type="entmax",
+               scheduler_params=dict(
+                   mode=tabnet_best_param["mode"], patience=5, min_lr=1e-5, factor=tabnet_best_param["factor"]),
+               scheduler_fn=ReduceLROnPlateau,
+               seed=42,
+               verbose=1
             )
 
-            model = TabNetClassifier(**tabnet_params)
+            model = TabNetClassifier(**param)
             model.fit(
                 X_train, Y_train,
                 eval_set=[(X_test, Y_test)],
@@ -301,7 +359,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
                 except Exception:
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
             elif feat_importance and importance_alg == 'permutation':
@@ -358,9 +417,10 @@ class ClassificationModels(postprocessing.FullPipeline):
                             'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                             'eval_metric': 'mlogloss',
                             'verbose': 0,
-                            'tree_method': train_on, #use GPU for training
+                            'tree_method': train_on,  # use GPU for training
                             'num_class': Y_train.nunique(),
-                            'max_depth': trial.suggest_int('max_depth', 2, 10),  #maximum depth of the decision trees being trained
+                            'max_depth': trial.suggest_int('max_depth', 2, 10),
+                            # maximum depth of the decision trees being trained
                             'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
                             'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
                             'num_leaves': trial.suggest_int('num_leaves', 2, 256),
@@ -383,7 +443,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                             result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'],
                                             early_stopping_rounds=10, nfold=10,
                                             as_pandas=True, seed=42, callbacks=[pruning_callback])
-                            #avg_result = (result['train-mlogloss-mean'].mean() + result['test-mlogloss-mean'].mean())/2
+                            # avg_result = (result['train-mlogloss-mean'].mean() + result['test-mlogloss-mean'].mean())/2
                             return result['test-mlogloss-mean'].mean()
 
                     algorithm = 'xgboost'
@@ -395,21 +455,23 @@ class ClassificationModels(postprocessing.FullPipeline):
                         logging.info(f'Start Xgboost advanced validation.')
                     study.optimize(objective, n_trials=40)
                     self.optuna_studies[f"{algorithm}"] = {}
-                    #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
-                    #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-                    optuna.visualization.plot_optimization_history(study)#.show()
-                    optuna.visualization.plot_param_importances(study)#.show()
-                    self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
-                    self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+                    # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+                    # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+                    optuna.visualization.plot_optimization_history(study)  # .show()
+                    optuna.visualization.plot_param_importances(study)  # .show()
+                    self.optuna_studies[
+                        f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+                    self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(
+                        study)
 
                     lgbm_best_param = study.best_trial.params
                     param = {
                         'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                         'eval_metric': 'mlogloss',
                         'verbose': 0,
-                        'tree_method': train_on, #use GPU for training
+                        'tree_method': train_on,  # use GPU for training
                         'num_class': Y_train.nunique(),
-                        'max_depth': lgbm_best_param["max_depth"],  #maximum depth of the decision trees being trained
+                        'max_depth': lgbm_best_param["max_depth"],  # maximum depth of the decision trees being trained
                         'alpha': lgbm_best_param["alpha"],
                         'lambda': lgbm_best_param["lambda"],
                         'num_leaves': lgbm_best_param["num_leaves"],
@@ -433,15 +495,16 @@ class ClassificationModels(postprocessing.FullPipeline):
                             'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                             'eval_metric': 'mlogloss',
                             'verbose': 0,
-                            'tree_method': train_on, #use GPU for training
+                            'tree_method': train_on,  # use GPU for training
                             'num_class': Y_train.nunique(),
-                            'max_depth': trial.suggest_int('max_depth', 2, 10),  #maximum depth of the decision trees being trained
+                            'max_depth': trial.suggest_int('max_depth', 2, 10),
+                            # maximum depth of the decision trees being trained
                             'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
                             'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
                             'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                             'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
                             'min_child_samples': trial.suggest_int('min_child_samples', 5, 1000),
-                            'eta': trial.suggest_loguniform('eta', 1e-3, 0.3), #0.001
+                            'eta': trial.suggest_loguniform('eta', 1e-3, 0.3),  # 0.001
                             'steps': trial.suggest_int('steps', 2, 70000),
                             'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 5)
                         }
@@ -458,7 +521,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                             result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'],
                                             early_stopping_rounds=10, nfold=10,
                                             as_pandas=True, seed=42, callbacks=[pruning_callback])
-                            #avg_result = (result['train-mlogloss-mean'].mean() + result['test-mlogloss-mean'].mean())/2
+                            # avg_result = (result['train-mlogloss-mean'].mean() + result['test-mlogloss-mean'].mean())/2
                             return result['test-mlogloss-mean'].mean()
 
                     algorithm = 'xgboost'
@@ -470,21 +533,23 @@ class ClassificationModels(postprocessing.FullPipeline):
                         study = optuna.create_study(direction='minimize')
                     study.optimize(objective, n_trials=30)
                     self.optuna_studies[f"{algorithm}"] = {}
-                    #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
-                    #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+                    # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+                    # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
                     optuna.visualization.plot_optimization_history(study)
                     optuna.visualization.plot_param_importances(study)
-                    self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
-                    self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+                    self.optuna_studies[
+                        f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+                    self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(
+                        study)
 
                     lgbm_best_param = study.best_trial.params
                     param = {
                         'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                         'eval_metric': 'mlogloss',
                         'verbose': 0,
-                        'tree_method': train_on, #use GPU for training
+                        'tree_method': train_on,  # use GPU for training
                         'num_class': Y_train.nunique(),
-                        'max_depth': lgbm_best_param["max_depth"],  #maximum depth of the decision trees being trained
+                        'max_depth': lgbm_best_param["max_depth"],  # maximum depth of the decision trees being trained
                         'alpha': lgbm_best_param["alpha"],
                         'lambda': lgbm_best_param["lambda"],
                         'num_leaves': lgbm_best_param["num_leaves"],
@@ -511,20 +576,23 @@ class ClassificationModels(postprocessing.FullPipeline):
                 algorithm = 'xgboost'
                 if not param:
                     param = {
-                        'eta': 0.001, #learning rate,
-                        'scale_pos_weight' : 1, #A typical value to consider: sum(negative instances) / sum(positive instances) (default = 1)
-                        #'gamma': 5, #Minimum loss reduction required to make a further partition on a leaf node of the tree. The larger gamma is, the more conservative the algorithm will be.
-                        'verbosity': 0, #0 (silent), 1 (warning), 2 (info), 3 (debug)
-                        'alpha' : 1, #L1 regularization term on weights. Increasing this value will make model more conservative. (default = 0)
-                        'lambda': 1, #L2 regularization term on weights. Increasing this value will make model more conservative. (default = 1)
+                        'eta': 0.001,  # learning rate,
+                        'scale_pos_weight': 1,
+                        # A typical value to consider: sum(negative instances) / sum(positive instances) (default = 1)
+                        # 'gamma': 5, #Minimum loss reduction required to make a further partition on a leaf node of the tree. The larger gamma is, the more conservative the algorithm will be.
+                        'verbosity': 0,  # 0 (silent), 1 (warning), 2 (info), 3 (debug)
+                        'alpha': 1,
+                        # L1 regularization term on weights. Increasing this value will make model more conservative. (default = 0)
+                        'lambda': 1,
+                        # L2 regularization term on weights. Increasing this value will make model more conservative. (default = 1)
                         'subsample': 0.8,
-                        'eval_metric' : "mlogloss", #'mlogloss','auc','rmsle'
-                        #'colsample_bytree': 0.3,
-                        'max_depth': 2, #maximum depth of the decision trees being trained
-                        'tree_method': train_on, #use GPU for training
-                        'objective':'multi:softprob',  # OR  'binary:logistic' #the loss function being used
-                        'steps' : 50000,
-                        'num_class': self.num_classes} #the number of classes in the dataset
+                        'eval_metric': "mlogloss",  # 'mlogloss','auc','rmsle'
+                        # 'colsample_bytree': 0.3,
+                        'max_depth': 2,  # maximum depth of the decision trees being trained
+                        'tree_method': train_on,  # use GPU for training
+                        'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
+                        'steps': 50000,
+                        'num_class': self.num_classes}  # the number of classes in the dataset
                 else:
                     param = param
 
@@ -633,13 +701,14 @@ class ClassificationModels(postprocessing.FullPipeline):
 
             if self.class_problem == 'binary':
                 weights_for_lgb = self.calc_scale_pos_weight()
+
                 def objective(trial):
                     dtrain = lgb.Dataset(X_train, label=Y_train)
                     param = {
                         # TODO: Move to additional folder with pyfile "constants" (use OS absolute path)
                         'objective': 'binary',
                         'metric': 'binary_logloss',
-                        #'scale_pos_weight': trial.suggest_loguniform('scale_pos_weight', 1e-3, 1e3),
+                        # 'scale_pos_weight': trial.suggest_loguniform('scale_pos_weight', 1e-3, 1e3),
                         'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
                         'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                         'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
@@ -662,7 +731,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                         return matthew
                     else:
                         result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
-                                        early_stopping_rounds=10, callbacks=[pruning_callback], seed=42, verbose_eval=False)
+                                        early_stopping_rounds=10, callbacks=[pruning_callback], seed=42,
+                                        verbose_eval=False)
                         avg_result = np.mean(np.array(result["binary_logloss-mean"]))
                         return avg_result
 
@@ -673,19 +743,20 @@ class ClassificationModels(postprocessing.FullPipeline):
                     study = optuna.create_study(direction='minimize')
                 study.optimize(objective, n_trials=40)
                 self.optuna_studies[f"{algorithm}"] = {}
-                #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
-                #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+                # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+                # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
                 optuna.visualization.plot_optimization_history(study)
                 optuna.visualization.plot_param_importances(study)
-                self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
-                self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
-
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(
+                    study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(
+                    study)
 
                 lgbm_best_param = study.best_trial.params
                 param = {
                     'objective': 'binary',
                     'metric': 'binary_logloss',
-                    #'scale_pos_weight': lgbm_best_param["scale_pos_weight"],
+                    # 'scale_pos_weight': lgbm_best_param["scale_pos_weight"],
                     'num_boost_round': lgbm_best_param["num_boost_round"],
                     'lambda_l1': lgbm_best_param["lambda_l1"],
                     'lambda_l2': lgbm_best_param["lambda_l2"],
@@ -708,6 +779,7 @@ class ClassificationModels(postprocessing.FullPipeline):
 
             else:
                 nb_classes = self.num_classes
+
                 def objective(trial):
                     dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
                     param = {
@@ -738,9 +810,10 @@ class ClassificationModels(postprocessing.FullPipeline):
                     else:
                         try:
                             result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
-                                        early_stopping_rounds=10, callbacks=[pruning_callback], seed=42, verbose_eval=False)
-                        #fobj=lgb_matth_score)
-                            avg_result = np.mean(np.array(result["multi_logloss-mean"])) # Planned: matthew-mean
+                                            early_stopping_rounds=10, callbacks=[pruning_callback], seed=42,
+                                            verbose_eval=False)
+                            # fobj=lgb_matth_score)
+                            avg_result = np.mean(np.array(result["multi_logloss-mean"]))  # Planned: matthew-mean
                         except Exception:
                             avg_result = 100
                         return avg_result
@@ -752,12 +825,14 @@ class ClassificationModels(postprocessing.FullPipeline):
                     study = optuna.create_study(direction='minimize')
                 study.optimize(objective, n_trials=40)
                 self.optuna_studies[f"{algorithm}"] = {}
-                #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
-                #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+                # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+                # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
                 optuna.visualization.plot_optimization_history(study)
                 optuna.visualization.plot_param_importances(study)
-                self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
-                self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(
+                    study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(
+                    study)
 
                 lgbm_best_param = study.best_trial.params
                 param = {
@@ -834,7 +909,8 @@ class ClassificationModels(postprocessing.FullPipeline):
 
             if feat_importance:
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns)
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
                 except Exception:
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
             else:
@@ -879,7 +955,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 elif ensemble_variation == 'trees_forest':
                     level0 = list()
                     level0.append(('cart', DecisionTreeClassifier(max_depth=3)))
-                    level0.append(('rdf',  RandomForestClassifier(max_depth=3)))
+                    level0.append(('rdf', RandomForestClassifier(max_depth=3)))
                     level1 = GradientBoostingClassifier()
                     model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
                 elif ensemble_variation == 'reversed_boosters':
@@ -899,7 +975,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
                     level0.append(('abc', AdaBoostClassifier(n_estimators=100)))
                     level0.append(('qda', QuadraticDiscriminantAnalysis()))
-                    level0.append(('rdf',  RandomForestClassifier(max_depth=5)))
+                    level0.append(('rdf', RandomForestClassifier(max_depth=5)))
                     # define meta learner model
                     level1 = GradientBoostingClassifier(n_estimators=5000)
                     # define the stacking ensemble
@@ -934,7 +1010,7 @@ class ClassificationModels(postprocessing.FullPipeline):
             elif best_variant == 'trees_forest':
                 level0 = list()
                 level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
-                level0.append(('rdf',  RandomForestClassifier(max_depth=5)))
+                level0.append(('rdf', RandomForestClassifier(max_depth=5)))
                 level1 = GradientBoostingClassifier()
                 model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
             elif best_variant == 'reversed_boosters':
@@ -954,7 +1030,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
                 level0.append(('abc', AdaBoostClassifier()))
                 level0.append(('qda', QuadraticDiscriminantAnalysis()))
-                level0.append(('rdf',  RandomForestClassifier(max_depth=5)))
+                level0.append(('rdf', RandomForestClassifier(max_depth=5)))
                 # define meta learner model
                 level1 = GradientBoostingClassifier()
                 # define the stacking ensemble
@@ -1002,7 +1078,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer='kernel')
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns, explainer='kernel')
                 except Exception:
                     self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer='kernel')
             elif feat_importance and importance_alg == 'permutation':
@@ -1047,10 +1124,10 @@ class ClassificationModels(postprocessing.FullPipeline):
 
             def objective(trial):
                 base_learner_choice = trial.suggest_categorical("base_learner", ["DecTree_depth2",
-                                                                                    "DecTree_depth5",
-                                                                                    "DecTree_depthNone",
-                                                                                    "GradientBoost_depth2",
-                                                                                    "GradientBoost_depth5"])
+                                                                                 "DecTree_depth5",
+                                                                                 "DecTree_depthNone",
+                                                                                 "GradientBoost_depth2",
+                                                                                 "GradientBoost_depth5"])
                 if base_learner_choice == "DecTree_depth2":
                     base_learner_choice = DecisionTreeRegressor(max_depth=2)
                 elif base_learner_choice == "DecTree_depth5":
@@ -1059,14 +1136,14 @@ class ClassificationModels(postprocessing.FullPipeline):
                     base_learner_choice = DecisionTreeRegressor(max_depth=None)
                 elif base_learner_choice == "GradientBoost_depth2":
                     base_learner_choice = GradientBoostingRegressor(max_depth=2,
-                                                              n_estimators=1000,
-                                                              n_iter_no_change=10,
-                                                              random_state=42)
+                                                                    n_estimators=1000,
+                                                                    n_iter_no_change=10,
+                                                                    random_state=42)
                 elif base_learner_choice == "GradientBoost_depth5":
                     base_learner_choice = GradientBoostingRegressor(max_depth=5,
-                                                              n_estimators=10000,
-                                                              n_iter_no_change=10,
-                                                              random_state=42)
+                                                                    n_estimators=10000,
+                                                                    n_iter_no_change=10,
+                                                                    random_state=42)
 
                 param = {
                     'n_estimators': trial.suggest_int('n_estimators', 2, 50000),
@@ -1075,15 +1152,15 @@ class ClassificationModels(postprocessing.FullPipeline):
                 }
                 if tune_mode == 'simple':
                     model = NGBClassifier(n_estimators=param["n_estimators"],
-                                         minibatch_frac=param["minibatch_frac"],
-                                         Dist=nb_classes,
-                                         Base=base_learner_choice,
-                                         learning_rate=param["learning_rate"]).fit(X_train,
-                                                                                   Y_train,
-                                                                                   X_val=X_test,
-                                                                                   Y_val=Y_test,
-                                                                                   sample_weight=classes_weights,
-                                                                                   early_stopping_rounds=10)
+                                          minibatch_frac=param["minibatch_frac"],
+                                          Dist=nb_classes,
+                                          Base=base_learner_choice,
+                                          learning_rate=param["learning_rate"]).fit(X_train,
+                                                                                    Y_train,
+                                                                                    X_val=X_test,
+                                                                                    Y_val=Y_test,
+                                                                                    sample_weight=classes_weights,
+                                                                                    early_stopping_rounds=10)
                     pred_labels = model.predict(X_test)
                     try:
                         matthew = matthews_corrcoef(Y_test, pred_labels)
@@ -1092,11 +1169,11 @@ class ClassificationModels(postprocessing.FullPipeline):
                     return matthew
                 else:
                     model = NGBClassifier(n_estimators=param["n_estimators"],
-                                         minibatch_frac=param["minibatch_frac"],
-                                         Dist=nb_classes,
+                                          minibatch_frac=param["minibatch_frac"],
+                                          Dist=nb_classes,
                                           Base=base_learner_choice,
-                                         learning_rate=param["learning_rate"],
-                                         random_state=42)
+                                          learning_rate=param["learning_rate"],
+                                          random_state=42)
                     try:
                         scores = cross_val_score(model, X_train, Y_train, cv=5, scoring='f1_weighted',
                                                  fit_params={'X_val': X_test,
@@ -1107,6 +1184,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     except Exception:
                         mae = 0
                     return mae
+
             algorithm = 'ngboost'
             if tune_mode == 'simple':
                 study = optuna.create_study(direction='maximize')
@@ -1114,11 +1192,12 @@ class ClassificationModels(postprocessing.FullPipeline):
                 study = optuna.create_study(direction='maximize')
             study.optimize(objective, n_trials=15)
             self.optuna_studies[f"{algorithm}"] = {}
-            #optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
-            #optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
             optuna.visualization.plot_optimization_history(study)
             optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(
+                study)
             self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
             lgbm_best_param = study.best_trial.params
 
@@ -1145,16 +1224,16 @@ class ClassificationModels(postprocessing.FullPipeline):
                 'learning_rate': lgbm_best_param["learning_rate"]
             }
             model = NGBClassifier(n_estimators=param["n_estimators"],
-                                 minibatch_frac=param["minibatch_frac"],
-                                 Dist=nb_classes,
+                                  minibatch_frac=param["minibatch_frac"],
+                                  Dist=nb_classes,
                                   Base=base_learner_choice,
-                                 learning_rate=param["learning_rate"],
-                                 random_state=42).fit(X_train,
-                                                      Y_train,
-                                                      X_val=X_test,
-                                                      Y_val=Y_test,
-                                                      sample_weight=classes_weights,
-                                                      early_stopping_rounds=10)
+                                  learning_rate=param["learning_rate"],
+                                  random_state=42).fit(X_train,
+                                                       Y_train,
+                                                       X_val=X_test,
+                                                       Y_val=Y_test,
+                                                       sample_weight=classes_weights,
+                                                       early_stopping_rounds=10)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             return self.trained_models
@@ -1193,9 +1272,10 @@ class ClassificationModels(postprocessing.FullPipeline):
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42), cols=X_test.columns, explainer="kernel")
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns, explainer="kernel")
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns,  explainer="kernel")
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer="kernel")
             elif feat_importance and importance_alg == 'permutation':
                 result = permutation_importance(
                     model, X_test, Y_test.astype(int), n_repeats=10, random_state=42, n_jobs=-1)
