@@ -5,6 +5,7 @@ import pandas as pd
 import optuna
 import xgboost as xgb
 import lightgbm as lgb
+import torch
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
 from sklearn.ensemble import StackingRegressor
 from sklearn.linear_model import RidgeCV
@@ -30,6 +31,7 @@ import logging
 import warnings
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class RegressionModels(postprocessing.FullPipeline):
@@ -138,17 +140,34 @@ class RegressionModels(postprocessing.FullPipeline):
 
             def objective(trial):
                 depths = trial.suggest_int('depths', 16, 64)
-                factor = trial.suggest_uniform('factor', 0.7, 0.9)
+                factor = trial.suggest_uniform('factor', 0.1, 0.9)
                 pretrain_difficulty = trial.suggest_uniform('pretrain_difficulty', 0.7, 0.9)
                 mode = trial.suggest_categorical('mode', ["max", "min"])
+                if optimization_rounds >= 50:
+                    gamma = trial.suggest_loguniform('gamma', 1e-5, 2.0)
+                    lambda_sparse = trial.suggest_loguniform('lambda_sparse', 1e-6, 1e-3)
+                    mask_type = trial.suggest_categorical('mask_type', ["sparsemax", "entmax"])
+                    n_shared = trial.suggest_int('n_shared', 1, 5)
+                    n_independent = trial.suggest_int('n_independent', 1, 5)
+                else:
+                    gamma = 1.3
+                    lambda_sparse = 1e-3
+                    mask_type = "entmax"
+                    n_shared = 2
+                    n_independent = 2
+                #loss_func = trial.suggest_categorical('loss_func', ['rmsle', 'mae', 'rmse', 'mse'])
+                # ['auc', 'accuracy', 'balanced_accuracy', 'logloss', 'mae', 'mse', 'rmsle', 'unsup_loss', 'rmse']"
+
                 param = dict(
-                    gamma=trial.suggest_loguniform('gamma', 1e-5, 1e-3),
-                    lambda_sparse=trial.suggest_loguniform('lambda_sparse', 0.3, 1.5),
+                    gamma=gamma,
+                    lambda_sparse=lambda_sparse,
                     n_d=depths,
                     n_a=depths,
+                    n_shared=n_shared,
+                    n_independent=n_independent,
                     n_steps=trial.suggest_int('n_steps', 1, 5),
                     optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
-                    mask_type="entmax",
+                    mask_type=mask_type,
                     scheduler_params=dict(
                         mode=mode, patience=10, min_lr=1e-5, factor=factor),
                     scheduler_fn=ReduceLROnPlateau,
@@ -156,7 +175,6 @@ class RegressionModels(postprocessing.FullPipeline):
                     verbose=1
                 )
                 mean_abs_errors = []
-                from sklearn.model_selection import KFold
                 skf = KFold(n_splits=5, random_state=42, shuffle=True)
 
                 for train_index, test_index in skf.split(X_train):
@@ -231,9 +249,11 @@ class RegressionModels(postprocessing.FullPipeline):
                 lambda_sparse=tabnet_best_param['lambda_sparse'],
                 n_d=tabnet_best_param['depths'],
                 n_a=tabnet_best_param['depths'],
+                #n_shared=tabnet_best_param["n_shared"],
+                #n_independent=tabnet_best_param["n_independent"],
                 n_steps=tabnet_best_param['n_steps'],
                 optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
-                mask_type="entmax",
+                mask_type=tabnet_best_param["mask_type"],
                 scheduler_params=dict(
                     mode=tabnet_best_param["mode"], patience=5, min_lr=1e-5, factor=tabnet_best_param["factor"]),
                 scheduler_fn=ReduceLROnPlateau,
@@ -252,6 +272,7 @@ class RegressionModels(postprocessing.FullPipeline):
                            pretraining_ratio=tabnet_best_param["pretrain_difficulty"])
 
             model = TabNetRegressor(**param)
+
             model.fit(
                 X_train, Y_train,
                 eval_set=[(X_test, Y_test)],

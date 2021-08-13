@@ -168,11 +168,30 @@ class PreProcessing:
                                      "epochs": self.transformer_epochs, # TODO: Change to 20 again
                                      "transformer_model_path": self.transformer_model_load_from_path,
                                      "model_save_states_path": {self.transformer_model_save_states_path}}
-        self.tabnet_settings = {f"batch_size": 16,
-                                "virtual_batch_size": 16,
+
+        # automatically determine batch sizes for Tabnet
+        if not prediction_mode:
+            rec_batch_size = (len(self.dataframe.index)*0.8)/20
+            if int(rec_batch_size) % 2 == 0:
+                rec_batch_size = int(rec_batch_size)
+            else:
+                rec_batch_size = int(rec_batch_size)+1
+
+            if rec_batch_size > 1024:
+                rec_batch_size = 1024
+                virtual_batch_size = 128
+            else:
+                virtual_batch_size = int(rec_batch_size/4)
+        else:
+            rec_batch_size = 1024
+            virtual_batch_size = 128
+
+        self.tabnet_settings = {f"batch_size": rec_batch_size,
+                                "virtual_batch_size": virtual_batch_size,
+                                # pred batch size?
                                 "num_workers": 0,
                                 "max_epochs": 1000,
-                                'optimization_rounds': 20}
+                                'optimization_rounds': 50}
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model

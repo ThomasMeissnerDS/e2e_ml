@@ -188,14 +188,29 @@ class ClassificationModels(postprocessing.FullPipeline):
                 factor = trial.suggest_uniform('factor', 0.1, 0.9)
                 pretrain_difficulty = trial.suggest_uniform('pretrain_difficulty', 0.7, 0.9)
                 mode = trial.suggest_categorical('mode', ["max", "min"])
+                if optimization_rounds >= 50:
+                    gamma = trial.suggest_loguniform('gamma', 1e-5, 2.0)
+                    lambda_sparse = trial.suggest_loguniform('lambda_sparse', 1e-6, 1e-3)
+                    mask_type = trial.suggest_categorical('mask_type', ["sparsemax", "entmax"])
+                    n_shared = trial.suggest_int('n_shared', 1, 5)
+                    n_independent = trial.suggest_int('n_independent', 1, 5)
+                else:
+                    gamma = 1.3
+                    lambda_sparse = 1e-3
+                    mask_type = "entmax"
+                    n_shared = 2
+                    n_independent = 2
+
                 param = dict(
-                    gamma=trial.suggest_loguniform('gamma', 1e-5, 1e-3),
-                    lambda_sparse=trial.suggest_loguniform('lambda_sparse', 0.3, 1.5),
+                    gamma=gamma,
+                    lambda_sparse=lambda_sparse,
                     n_d=depths,
                     n_a=depths,
+                    n_shared=n_shared,
+                    n_independent=n_independent,
                     n_steps=trial.suggest_int('n_steps', 1, 5),
                     optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
-                    mask_type="entmax",
+                    mask_type=mask_type,
                     scheduler_params=dict(
                         mode=mode, patience=10, min_lr=1e-5, factor=factor),
                     scheduler_fn=ReduceLROnPlateau,
@@ -236,7 +251,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                         x_train, y_train,
                         eval_set=[(x_test, y_test)],
                         eval_metric=['logloss'],
-                        patience=20,
+                        patience=25,
                         batch_size=batch_size,
                         virtual_batch_size=virtual_batch_size,
                         num_workers=num_workers,
@@ -283,8 +298,10 @@ class ClassificationModels(postprocessing.FullPipeline):
                n_d=tabnet_best_param['depths'],
                n_a=tabnet_best_param['depths'],
                n_steps=tabnet_best_param['n_steps'],
+               n_shared=tabnet_best_param["n_shared"],
+               n_independent=tabnet_best_param["n_independent"],
                optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
-               mask_type="entmax",
+               mask_type=tabnet_best_param["mask_type"],
                scheduler_params=dict(
                    mode=tabnet_best_param["mode"], patience=5, min_lr=1e-5, factor=tabnet_best_param["factor"]),
                scheduler_fn=ReduceLROnPlateau,
@@ -296,7 +313,7 @@ class ClassificationModels(postprocessing.FullPipeline):
             pretrainer.fit(X_train,
                            eval_set=[(X_test)],
                            max_epochs=max_epochs,
-                           patience=20,
+                           patience=25,
                            batch_size=batch_size,
                            virtual_batch_size=virtual_batch_size,
                            num_workers=num_workers,
