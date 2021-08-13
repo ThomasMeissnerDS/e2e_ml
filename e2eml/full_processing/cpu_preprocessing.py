@@ -171,7 +171,8 @@ class PreProcessing:
         self.tabnet_settings = {f"batch_size": 16,
                                 "virtual_batch_size": 16,
                                 "num_workers": 0,
-                                "max_epochs": 1000}
+                                "max_epochs": 1000,
+                                'optimization_rounds': 20}
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model

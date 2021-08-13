@@ -134,6 +134,7 @@ class RegressionModels(postprocessing.FullPipeline):
             virtual_batch_size = self.tabnet_settings["virtual_batch_size"]
             num_workers = self.tabnet_settings["num_workers"]
             max_epochs = self.tabnet_settings["max_epochs"]
+            optimization_rounds = self.tabnet_settings["optimization_rounds"]
 
             def objective(trial):
                 depths = trial.suggest_int('depths', 16, 64)
@@ -207,7 +208,7 @@ class RegressionModels(postprocessing.FullPipeline):
 
             logging.info(f'Start Tabnet validation.')
 
-            study.optimize(objective, n_trials=20)
+            study.optimize(objective, n_trials=optimization_rounds)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
