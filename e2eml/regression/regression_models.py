@@ -128,16 +128,14 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-
-            Y_train = Y_train.values.reshape(-1, 1)
-            Y_test = Y_test.values.reshape(-1, 1)
-            X_train = X_train.to_numpy()
-            X_test = X_test.to_numpy()
-
+            print("Nb train cols")
+            print(len(X_train.columns))
+            print(X_train.info())
 
             def objective(trial):
                 depths = trial.suggest_int('depths', 16, 64)
-                factor = trial.suggest_uniform('factor', 0.1, 0.9)
+                factor = trial.suggest_uniform('factor', 0.7, 0.9)
+                pretrain_difficulty = trial.suggest_uniform('pretrain_difficulty', 0.7, 0.9)
                 mode = trial.suggest_categorical('mode', ["max", "min"])
                 param = dict(
                     gamma=trial.suggest_loguniform('gamma', 1e-5, 1e-3),
@@ -153,35 +151,54 @@ class RegressionModels(postprocessing.FullPipeline):
                     seed=42,
                     verbose=1
                 )
+                mean_abs_errors = []
+                from sklearn.model_selection import KFold
+                skf = KFold(n_splits=5, random_state=42, shuffle=True)
 
-                pretrainer = TabNetPretrainer(**param)
-                pretrainer.fit(X_train,
-                               eval_set=[(X_test)],
-                               max_epochs=1000,
-                               patience=20,
-                               batch_size=16,
-                               virtual_batch_size=16,
-                               num_workers=0,
-                               drop_last=True,
-                               pretraining_ratio=0.8)
+                for train_index, test_index in skf.split(X_train):
+                    x_train, x_test = X_train.iloc[train_index], X_train.iloc[test_index]
+                    y_train, y_test = Y_train.iloc[train_index], Y_train.iloc[test_index]
+                    # numpy conversion
+                    y_train = y_train.values.reshape(-1, 1)
+                    y_test = y_test.values.reshape(-1, 1)
+                    x_train = x_train.to_numpy()
+                    x_test = x_test.to_numpy()
 
-                model = TabNetRegressor(**param)
-                model.fit(
-                    X_train, Y_train,
-                    eval_set=[(X_test, Y_test)],
-                    eval_metric=['mae'],
-                    patience=20,
-                    batch_size=16,
-                    virtual_batch_size=16,
-                    num_workers=4,
-                    max_epochs=1000,
-                    drop_last=True,
-                    from_unsupervised=pretrainer
-                )
-                preds = model.predict(X_test)
+                    Y_train_num = Y_train.values.reshape(-1, 1)
+                    Y_test_num = Y_test.values.reshape(-1, 1)
+                    X_train_num = X_train.to_numpy()
+                    X_test_num = X_test.to_numpy()
 
-                mae = mean_absolute_error(Y_test, preds)
-                return mae
+                    pretrainer = TabNetPretrainer(**param)
+                    pretrainer.fit(x_train,
+                                   eval_set=[(x_test)],
+                                   max_epochs=1000,
+                                   patience=20,
+                                   batch_size=16,
+                                   virtual_batch_size=16,
+                                   num_workers=0,
+                                   drop_last=True,
+                                   pretraining_ratio=pretrain_difficulty)
+
+                    model = TabNetRegressor(**param)
+                    model.fit(
+                        x_train, y_train,
+                        eval_set=[(x_test, y_test)],
+                        eval_metric=['mae'],
+                        patience=20,
+                        batch_size=16,
+                        virtual_batch_size=16,
+                        num_workers=0,
+                        max_epochs=1000,
+                        drop_last=True,
+                        from_unsupervised=pretrainer
+                    )
+                    preds = model.predict(X_test_num)
+
+                    mae = mean_absolute_error(Y_test_num, preds)
+                    mean_abs_errors.append(mae)
+                cv_mae = np.mean(mean_abs_errors)
+                return cv_mae
 
             study = optuna.create_study(direction='minimize')
 
@@ -197,6 +214,12 @@ class RegressionModels(postprocessing.FullPipeline):
                 f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
             self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(
                 study)
+
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            Y_train = Y_train.values.reshape(-1, 1)
+            Y_test = Y_test.values.reshape(-1, 1)
+            X_train = X_train.to_numpy()
+            X_test = X_test.to_numpy()
 
             tabnet_best_param = study.best_trial.params
             param = dict(
@@ -222,7 +245,7 @@ class RegressionModels(postprocessing.FullPipeline):
                            virtual_batch_size=16,
                            num_workers=0,
                            drop_last=True,
-                           pretraining_ratio=0.8)
+                           pretraining_ratio=tabnet_best_param["pretrain_difficulty"])
 
             model = TabNetRegressor(**param)
             model.fit(
@@ -232,7 +255,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 patience=50,
                 batch_size=16,
                 virtual_batch_size=16,
-                num_workers=4,
+                num_workers=0,
                 max_epochs=10000,
                 drop_last=True,
                 from_unsupervised=pretrainer
@@ -252,7 +275,11 @@ class RegressionModels(postprocessing.FullPipeline):
         self.get_current_timestamp(task='Predict with Tabnet regression')
         algorithm = 'tabnet'
         if self.prediction_mode:
+            self.reset_test_train_index()
             model = self.trained_models[f"{algorithm}"]
+            print("Nb pred cols")
+            print(len(self.dataframe.columns))
+            print(self.dataframe.info())
             predicted_probs = model.predict(self.dataframe.to_numpy())
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()

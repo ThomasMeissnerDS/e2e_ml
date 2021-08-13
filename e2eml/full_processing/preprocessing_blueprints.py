@@ -180,6 +180,14 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        self.pos_tagging_pca(pca_pos_tags=True)
+        if preprocessing_type == 'nlp':
+            self.append_text_sentiment_score()
+            self.pos_tagging_pca(pca_pos_tags=False)
+            self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
+            self.tfidf_naive_bayes_proba(analyzer="char_wb", ngram_range=(1, 2))
+            self.tfidf_naive_bayes_proba(analyzer="word", ngram_range=(1, 1))
+        self.cardinality_remover(threshold=100)
         self.onehot_pca()
         self.category_encoding(algorithm='GLMM')
         self.delete_high_null_cols(threshold=0.5)
@@ -197,6 +205,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
                 print("Clustering as a feature skipped due to ValueError.")
         if self.low_memory_mode:
             self.reduce_memory_footprint()
+        #self.automated_feature_selection()
         self.sort_columns_alphabetically()
         self.data_scaling()
 

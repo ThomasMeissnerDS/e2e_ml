@@ -176,14 +176,10 @@ class ClassificationModels(postprocessing.FullPipeline):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
-            Y_train = Y_train.values.reshape(-1)
-            Y_test = Y_test.values.reshape(-1)
-            X_train = X_train.to_numpy()
-            X_test = X_test.to_numpy()
-
             def objective(trial):
                 depths = trial.suggest_int('depths', 16, 64)
                 factor = trial.suggest_uniform('factor', 0.1, 0.9)
+                pretrain_difficulty = trial.suggest_uniform('pretrain_difficulty', 0.7, 0.9)
                 mode = trial.suggest_categorical('mode', ["max", "min"])
                 param = dict(
                     gamma=trial.suggest_loguniform('gamma', 1e-5, 1e-3),
@@ -199,40 +195,60 @@ class ClassificationModels(postprocessing.FullPipeline):
                     seed=42,
                     verbose=1
                 )
-                pretrainer = TabNetPretrainer(**param)
-                pretrainer.fit(X_train,
-                               eval_set=[(X_test)],
-                               max_epochs=1000,
-                               patience=20,
-                               batch_size=16,
-                               virtual_batch_size=16,
-                               num_workers=0,
-                               drop_last=True,
-                               pretraining_ratio=0.8)
+                mean_matthew_corr = []
+                from sklearn.model_selection import StratifiedKFold
+                skf = StratifiedKFold(n_splits=5, random_state=42, shuffle=True)
 
-                model = TabNetClassifier(**param)
-                model.fit(
-                    X_train, Y_train,
-                    eval_set=[(X_test, Y_test)],
-                    eval_metric=['logloss'],
-                    patience=20,
-                    batch_size=16,
-                    virtual_batch_size=16,
-                    num_workers=4,
-                    max_epochs=10000,
-                    drop_last=True,
-                    from_unsupervised=pretrainer
-                )
-                partial_probs = model.predict_proba(X_test)
-                if self.class_problem == 'binary':
-                    predicted_probs = np.asarray([line[1] for line in partial_probs])
-                    self.threshold_refiner(predicted_probs, Y_test)
-                    predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
-                else:
-                    predicted_probs = partial_probs
-                    predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
-                matthew = matthews_corrcoef(Y_test, predicted_classes)
-                return matthew
+                for train_index, test_index in skf.split(X_train, Y_train):
+                    x_train, x_test = X_train.iloc[train_index], X_train.iloc[test_index]
+                    y_train, y_test = Y_train.iloc[train_index], Y_train.iloc[test_index]
+                    # numpy conversion
+                    y_train = y_train.values.reshape(-1)
+                    y_test = y_test.values.reshape(-1)
+                    x_train = x_train.to_numpy()
+                    x_test = x_test.to_numpy()
+
+                    Y_train_num = Y_train.values.reshape(-1)
+                    Y_test_num = Y_test.values.reshape(-1)
+                    X_train_num = X_train.to_numpy()
+                    X_test_num = X_test.to_numpy()
+
+                    pretrainer = TabNetPretrainer(**param)
+                    pretrainer.fit(x_train,
+                                   eval_set=[(x_test)],
+                                   max_epochs=1000,
+                                   patience=20,
+                                   batch_size=16,
+                                   virtual_batch_size=16,
+                                   num_workers=0,
+                                   drop_last=True,
+                                   pretraining_ratio=pretrain_difficulty)
+
+                    model = TabNetClassifier(**param)
+                    model.fit(
+                        x_train, y_train,
+                        eval_set=[(x_test, y_test)],
+                        eval_metric=['logloss'],
+                        patience=20,
+                        batch_size=16,
+                        virtual_batch_size=16,
+                        num_workers=0,
+                        max_epochs=10000,
+                        drop_last=True,
+                        from_unsupervised=pretrainer
+                    )
+                    partial_probs = model.predict_proba(X_test_num)
+                    if self.class_problem == 'binary':
+                        predicted_probs = np.asarray([line[1] for line in partial_probs])
+                        self.threshold_refiner(predicted_probs, Y_test_num)
+                        predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                    else:
+                        predicted_probs = partial_probs
+                        predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+                    matthew = matthews_corrcoef(Y_test_num, predicted_classes)
+                    mean_matthew_corr.append(matthew)
+                cv_matthew = np.mean(mean_matthew_corr)
+                return cv_matthew
 
             study = optuna.create_study(direction='maximize')
             logging.info(f'Start Tabnet validation.')
@@ -247,6 +263,11 @@ class ClassificationModels(postprocessing.FullPipeline):
                 f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
             self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(
                 study)
+
+            Y_train = Y_train.values.reshape(-1)
+            Y_test = Y_test.values.reshape(-1)
+            X_train = X_train.to_numpy()
+            X_test = X_test.to_numpy()
 
             tabnet_best_param = study.best_trial.params
             param = dict(
@@ -273,7 +294,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                            virtual_batch_size=16,
                            num_workers=0,
                            drop_last=True,
-                           pretraining_ratio=0.8)
+                           pretraining_ratio=tabnet_best_param["pretrain_difficulty"])
 
             model = TabNetClassifier(**param)
             model.fit(
@@ -283,7 +304,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                 patience=50,
                 batch_size=16,
                 virtual_batch_size=16,
-                num_workers=4,
+                num_workers=0,
                 max_epochs=10000,
                 drop_last=True,
                 from_unsupervised=pretrainer
@@ -313,10 +334,11 @@ class ClassificationModels(postprocessing.FullPipeline):
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            Y_train = Y_train.values.reshape(-1, 1)
-            Y_test = Y_test.values.reshape(-1, 1)
+            Y_train = Y_train.values.reshape(-1)
+            Y_test = Y_test.values.reshape(-1)
             X_train = X_train.to_numpy()
             X_test = X_test.to_numpy()
+
             model = self.trained_models[f"{algorithm}"]
             partial_probs = model.predict_proba(X_test)
             if self.class_problem == 'binary':

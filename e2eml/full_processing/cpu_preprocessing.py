@@ -698,7 +698,7 @@ class PreProcessing:
                 # return dataframe with folds
             return data
 
-    def reset_test_train_index(self):
+    def reset_test_train_index(self, drop_target=False):
         if self.prediction_mode:
             self.dataframe = self.dataframe.reset_index(drop=True)
         else:
@@ -714,6 +714,11 @@ class PreProcessing:
             Y_test = X_test[self.target_variable]
             X_train.drop("kfold", axis=1)
             X_test.drop("kfold", axis=1)
+            if drop_target:
+                X_train.drop(self.target_variable, axis=1)
+                X_test.drop(self.target_variable, axis=1)
+            else:
+                pass
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.80):
