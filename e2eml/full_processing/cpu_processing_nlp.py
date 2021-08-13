@@ -371,7 +371,6 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             # get unique original column names
             unique_nlp_cols = list(set(nlp_columns))
             self.nlp_columns = unique_nlp_cols
-            print(df.info())
         return df
 
     def pos_tagging_pca(self, pca_pos_tags=True):
@@ -458,7 +457,6 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             # get unique original column names
             unique_nlp_cols = list(set(nlp_columns))
             self.nlp_columns = unique_nlp_cols
-            print(df.info())
         return df
 
     def tfidf_vectorizer_to_pca(self, pca_pos_tags=True, ngram_range=(1, 2)):
@@ -584,7 +582,6 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             # get unique original column names
             unique_nlp_cols = list(set(nlp_columns))
             self.nlp_columns = unique_nlp_cols
-            print(df.info())
         return df
 
     def tfidf_naive_bayes_proba(self, pca_pos_tags=True, analyzer="char_wb", ngram_range=(1, 2)):
@@ -658,7 +655,6 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             # get unique original column names
             unique_nlp_cols = list(set(nlp_columns))
             self.nlp_columns = unique_nlp_cols
-            print(df.info())
         return df
 
     def add_vowpal_wabbit_preds_for_nlp_as_feature(self, pca_pos_tags=True):

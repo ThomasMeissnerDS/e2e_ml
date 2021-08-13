@@ -176,6 +176,12 @@ class ClassificationModels(postprocessing.FullPipeline):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
+            # load settings
+            batch_size = self.tabnet_settings["batch_size"]
+            virtual_batch_size = self.tabnet_settings["virtual_batch_size"]
+            num_workers = self.tabnet_settings["num_workers"]
+            max_epochs = self.tabnet_settings["max_epochs"]
+
             def objective(trial):
                 depths = trial.suggest_int('depths', 16, 64)
                 factor = trial.suggest_uniform('factor', 0.1, 0.9)
@@ -216,11 +222,11 @@ class ClassificationModels(postprocessing.FullPipeline):
                     pretrainer = TabNetPretrainer(**param)
                     pretrainer.fit(x_train,
                                    eval_set=[(x_test)],
-                                   max_epochs=1000,
+                                   max_epochs=max_epochs,
                                    patience=20,
-                                   batch_size=16,
-                                   virtual_batch_size=16,
-                                   num_workers=0,
+                                   batch_size=batch_size,
+                                   virtual_batch_size=virtual_batch_size,
+                                   num_workers=num_workers,
                                    drop_last=True,
                                    pretraining_ratio=pretrain_difficulty)
 
@@ -230,10 +236,10 @@ class ClassificationModels(postprocessing.FullPipeline):
                         eval_set=[(x_test, y_test)],
                         eval_metric=['logloss'],
                         patience=20,
-                        batch_size=16,
-                        virtual_batch_size=16,
-                        num_workers=0,
-                        max_epochs=10000,
+                        batch_size=batch_size,
+                        virtual_batch_size=virtual_batch_size,
+                        num_workers=num_workers,
+                        max_epochs=max_epochs,
                         drop_last=True,
                         from_unsupervised=pretrainer
                     )
@@ -288,11 +294,11 @@ class ClassificationModels(postprocessing.FullPipeline):
             pretrainer = TabNetPretrainer(**param)
             pretrainer.fit(X_train,
                            eval_set=[(X_test)],
-                           max_epochs=1000,
+                           max_epochs=max_epochs,
                            patience=20,
-                           batch_size=16,
-                           virtual_batch_size=16,
-                           num_workers=0,
+                           batch_size=batch_size,
+                           virtual_batch_size=virtual_batch_size,
+                           num_workers=num_workers,
                            drop_last=True,
                            pretraining_ratio=tabnet_best_param["pretrain_difficulty"])
 
@@ -302,10 +308,10 @@ class ClassificationModels(postprocessing.FullPipeline):
                 eval_set=[(X_test, Y_test)],
                 eval_metric=['logloss'],
                 patience=50,
-                batch_size=16,
-                virtual_batch_size=16,
-                num_workers=0,
-                max_epochs=10000,
+                batch_size=batch_size,
+                virtual_batch_size=virtual_batch_size,
+                num_workers=num_workers,
+                max_epochs=max_epochs,
                 drop_last=True,
                 from_unsupervised=pretrainer
             )

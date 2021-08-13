@@ -168,6 +168,10 @@ class PreProcessing:
                                      "epochs": self.transformer_epochs, # TODO: Change to 20 again
                                      "transformer_model_path": self.transformer_model_load_from_path,
                                      "model_save_states_path": {self.transformer_model_save_states_path}}
+        self.tabnet_settings = {f"batch_size": 16,
+                                "virtual_batch_size": 16,
+                                "num_workers": 0,
+                                "max_epochs": 1000}
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
