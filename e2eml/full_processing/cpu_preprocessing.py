@@ -191,7 +191,7 @@ class PreProcessing:
                                 # pred batch size?
                                 "num_workers": 0,
                                 "max_epochs": 1000,
-                                'optimization_rounds': 50}
+                                'optimization_rounds': 20}
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model

@@ -143,7 +143,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 factor = trial.suggest_uniform('factor', 0.1, 0.9)
                 pretrain_difficulty = trial.suggest_uniform('pretrain_difficulty', 0.7, 0.9)
                 mode = trial.suggest_categorical('mode', ["max", "min"])
-                if optimization_rounds >= 50:
+                if optimization_rounds >= 20:
                     gamma = trial.suggest_loguniform('gamma', 1e-5, 2.0)
                     lambda_sparse = trial.suggest_loguniform('lambda_sparse', 1e-6, 1e-3)
                     mask_type = trial.suggest_categorical('mask_type', ["sparsemax", "entmax"])
@@ -249,8 +249,8 @@ class RegressionModels(postprocessing.FullPipeline):
                 lambda_sparse=tabnet_best_param['lambda_sparse'],
                 n_d=tabnet_best_param['depths'],
                 n_a=tabnet_best_param['depths'],
-                #n_shared=tabnet_best_param["n_shared"],
-                #n_independent=tabnet_best_param["n_independent"],
+                n_shared=tabnet_best_param["n_shared"],
+                n_independent=tabnet_best_param["n_independent"],
                 n_steps=tabnet_best_param['n_steps'],
                 optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
                 mask_type=tabnet_best_param["mask_type"],
