@@ -177,21 +177,21 @@ class PreProcessing:
             else:
                 rec_batch_size = int(rec_batch_size)+1
 
-            if rec_batch_size > 1024:
-                rec_batch_size = 1024
-                virtual_batch_size = 128
+            if rec_batch_size > 8192:
+                rec_batch_size = 8192
+                virtual_batch_size = 1024
             else:
                 virtual_batch_size = int(rec_batch_size/4)
         else:
-            rec_batch_size = 1024
-            virtual_batch_size = 128
+            rec_batch_size = 8192
+            virtual_batch_size = 1024
 
         self.tabnet_settings = {f"batch_size": rec_batch_size,
                                 "virtual_batch_size": virtual_batch_size,
                                 # pred batch size?
                                 "num_workers": 0,
                                 "max_epochs": 1000,
-                                'optimization_rounds': 20}
+                                'optimization_rounds': 25}
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -1404,18 +1404,21 @@ class PreProcessing:
                 pass
 
         elif datetime_handling == 'cyclic':
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train = cos_sin_transformation(X_train)
             X_test = cos_sin_transformation(X_test)
         elif datetime_handling == 'categorical':
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train = date_converter(X_train)
             X_test = date_converter(X_test)
         elif datetime_handling == 'all':
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train = date_converter(X_train)
             X_train = cos_sin_transformation(X_train)
             X_test = date_converter(X_test)
             X_test = cos_sin_transformation(X_test)
         else:
-            pass
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
         if self.prediction_mode:
             # drop initial date columns
@@ -1448,11 +1451,11 @@ class PreProcessing:
             if len(self.cat_columns_encoded) > 0:
                 df_branch = self.dataframe[self.cat_columns_encoded].copy()
                 enc = self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"]
+                pca = self.preprocess_decisions[f"onehot_pca"]["pca_encoder"]
                 df_branch = enc.transform(df_branch[self.cat_columns_encoded])
                 df_branch.fillna(0, inplace=True)
                 onehot_cols = df_branch.columns
-                pca = PCA(n_components=2)
-                pred_comps = pca.fit_transform(df_branch[onehot_cols])
+                pred_comps = pca.transform(df_branch[onehot_cols]) # TODO: CHECK if fit_transform or fit works better
                 df_branch = pd.DataFrame(pred_comps, columns=['PC-1', 'PC-2'])
                 for col in df_branch.columns:
                     self.dataframe[f"{col}_pca"] = df_branch[col]
@@ -1478,6 +1481,7 @@ class PreProcessing:
                 X_train_branch.fillna(0, inplace=True)
                 X_test_branch.fillna(0, inplace=True)
                 pca = PCA(n_components=2)
+                #pac = pacmap.PaCMAP(n_dims=2)
                 train_comps = pca.fit_transform(X_train_branch[onehot_cols])
                 X_train_branch = pd.DataFrame(train_comps, columns=['PC-1', 'PC-2'])
                 test_comps = pca.transform(X_test_branch[onehot_cols])
@@ -1489,6 +1493,7 @@ class PreProcessing:
                     pca_cols.append(f"{col}_pca")
                 self.preprocess_decisions[f"onehot_pca"]["pca_cols"] = pca_cols
                 self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"] = enc
+                self.preprocess_decisions[f"onehot_pca"]["pca_encoder"] = pca
                 del X_train_branch
                 del X_test_branch
                 del pca

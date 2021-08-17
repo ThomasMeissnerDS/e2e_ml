@@ -226,7 +226,7 @@ class RegressionModels(postprocessing.FullPipeline):
 
             logging.info(f'Start Tabnet validation.')
 
-            study.optimize(objective, n_trials=optimization_rounds)
+            study.optimize(objective, n_trials=optimization_rounds, timeout=60*60*10)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')

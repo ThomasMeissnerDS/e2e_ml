@@ -175,6 +175,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train[X_train.columns.to_list()] = X_train[X_train.columns.to_list()].astype(float)
+            X_test[X_test.columns.to_list()] = X_test[X_test.columns.to_list()].astype(float)
 
             # load settings
             batch_size = self.tabnet_settings["batch_size"]
@@ -275,7 +277,7 @@ class ClassificationModels(postprocessing.FullPipeline):
             study = optuna.create_study(direction='maximize')
             logging.info(f'Start Tabnet validation.')
 
-            study.optimize(objective, n_trials=optimization_rounds)
+            study.optimize(objective, n_trials=optimization_rounds, timeout=60*60*15)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -348,6 +350,7 @@ class ClassificationModels(postprocessing.FullPipeline):
         self.get_current_timestamp(task='Predict with Tabnet classification')
         algorithm = 'tabnet'
         if self.prediction_mode:
+            self.dataframe[self.dataframe.columns.to_list()] = self.dataframe[self.dataframe.columns.to_list()].astype(float)
             model = self.trained_models[f"{algorithm}"]
             partial_probs = model.predict_proba(self.dataframe.to_numpy())
             if self.class_problem == 'binary':
