@@ -1096,7 +1096,8 @@ class PreProcessing:
         return dataframe_final
 
     def static_filling(self, dataframe, columns=None, fill_with=0):
-        dataframe[columns] = dataframe[columns].fillna(fill_with, inplace=False)
+        for col in columns:
+            dataframe[col] = dataframe[col].fillna(fill_with, inplace=False)
         return dataframe
 
     # TODO: Check if parameters can be used via **kwargs argument
@@ -1451,11 +1452,12 @@ class PreProcessing:
             if len(self.cat_columns_encoded) > 0:
                 df_branch = self.dataframe[self.cat_columns_encoded].copy()
                 enc = self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"]
-                pca = self.preprocess_decisions[f"onehot_pca"]["pca_encoder"]
                 df_branch = enc.transform(df_branch[self.cat_columns_encoded])
                 df_branch.fillna(0, inplace=True)
                 onehot_cols = df_branch.columns
-                pred_comps = pca.transform(df_branch[onehot_cols]) # TODO: CHECK if fit_transform or fit works better
+                # pca = self.preprocess_decisions[f"onehot_pca"]["pca_encoder"]
+                pca = PCA(n_components=2)
+                pred_comps = pca.fit_transform(df_branch[onehot_cols]) # TODO: CHECK if fit_transform or fit works better
                 df_branch = pd.DataFrame(pred_comps, columns=['PC-1', 'PC-2'])
                 for col in df_branch.columns:
                     self.dataframe[f"{col}_pca"] = df_branch[col]
