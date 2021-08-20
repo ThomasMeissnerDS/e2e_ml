@@ -97,6 +97,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -125,6 +127,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -152,6 +156,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -231,6 +237,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -259,6 +267,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -345,6 +355,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:

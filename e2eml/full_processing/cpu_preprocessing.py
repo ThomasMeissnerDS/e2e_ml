@@ -148,6 +148,7 @@ class PreProcessing:
         self.transformer_chosen = transformer_chosen
         self.transformer_epochs = transformer_epochs
         self.cat_columns_encoded = None
+        self.num_columns_encoded = None
         self.unique_identifier = unique_identifier
         self.target_variable = target_variable
         self.labels_encoded = False
@@ -163,11 +164,11 @@ class PreProcessing:
         self.transformer_settings = {f"train_batch_size": 16,
                                      "test_batch_size": 16,
                                      "pred_batch_size": 16,
-
                                      "num_workers": 4,
                                      "epochs": self.transformer_epochs, # TODO: Change to 20 again
                                      "transformer_model_path": self.transformer_model_load_from_path,
-                                     "model_save_states_path": {self.transformer_model_save_states_path}}
+                                     "model_save_states_path": {self.transformer_model_save_states_path},
+                                     "keep_best_model_only": False}
 
         # automatically determine batch sizes for Tabnet
         if not prediction_mode:
@@ -661,7 +662,7 @@ class PreProcessing:
             logging.info('Started skewness removal.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             for col in self.preprocess_decisions["skewed_columns"]:
-                log_array = np.log(self.dataframe[col])
+                log_array = np.log1p(self.dataframe[col])
                 log_array[np.isfinite(log_array) == False] = 0
                 self.dataframe[col] = log_array
             logging.info('Finished skewness removal.')
@@ -672,14 +673,14 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             skewness = X_train.skew(axis=0, skipna=True)
-            left_skewed = skewness[skewness < -0.5].index.to_list()
-            right_skewed = skewness[skewness > 0.5].index.to_list()
+            left_skewed = skewness[skewness < -0.75].index.to_list()
+            right_skewed = skewness[skewness > 0.75].index.to_list()
             skewed = left_skewed+right_skewed
             for col in X_train[skewed].columns:
-                log_array = np.log(X_train[col])
+                log_array = np.log1p(X_train[col])
                 log_array[np.isfinite(log_array) == False] = 0
                 X_train[col] = log_array
-                log_array = np.log(X_test[col])
+                log_array = np.log1p(X_test[col])
                 log_array[np.isfinite(log_array) == False] = 0
                 X_test[col] = log_array
             logging.info('Finished skewness removal.')
@@ -983,7 +984,7 @@ class PreProcessing:
             dataframe_red = dataframe.loc[:, dataframe.columns.isin(self.num_columns)].copy()
             db = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=n_jobs).fit(dataframe_red)
             labels = db.labels_
-            dataframe['dbscan_cluster'] = labels
+            dataframe[f'dbscan_cluster_{eps}'] = labels
             del db
             del labels
             _ = gc.collect()
@@ -993,17 +994,17 @@ class PreProcessing:
             gaussian = GaussianMixture(n_components=n_components)
             gaussian.fit(dataframe)
             gaussian_clusters = gaussian.predict(dataframe)
-            dataframe["gaussian_clusters"] = gaussian_clusters
+            dataframe[f"gaussian_clusters_{n_components}"] = gaussian_clusters
             del gaussian
             del gaussian_clusters
             _ = gc.collect()
             return dataframe
 
         def add_kmeans_clusters(dataframe, n_components=nb_clusters):
-            kmeans = KMeans(n_clusters=n_components)
+            kmeans = KMeans(n_clusters=n_components, random_state=42, n_init=20, max_iter=500)
             kmeans.fit(dataframe)
             kmeans_clusters = kmeans.predict(dataframe)
-            dataframe[f"kmeans_clusters{n_components}"] = kmeans_clusters
+            dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
             del kmeans
             del kmeans_clusters
             _ = gc.collect()
@@ -1457,10 +1458,13 @@ class PreProcessing:
                 onehot_cols = df_branch.columns
                 # pca = self.preprocess_decisions[f"onehot_pca"]["pca_encoder"]
                 pca = PCA(n_components=2)
-                pred_comps = pca.fit_transform(df_branch[onehot_cols]) # TODO: CHECK if fit_transform or fit works better
+                pred_comps = pca.fit_transform(df_branch[onehot_cols])
                 df_branch = pd.DataFrame(pred_comps, columns=['PC-1', 'PC-2'])
                 for col in df_branch.columns:
                     self.dataframe[f"{col}_pca"] = df_branch[col]
+                del df_branch
+                del pca
+                _ = gc.collect()
             else:
                 pass
             return self.dataframe
@@ -1502,6 +1506,77 @@ class PreProcessing:
                 _ = gc.collect()
             else:
                 pass
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def numeric_binarizer_pca(self):
+        self.get_current_timestamp(task='Binarize numeric columns + PCA binarized features')
+        if self.prediction_mode:
+            if len(self.num_columns_encoded) > 0:
+                num_cols_binarized_created = []
+                for num_col in self.num_columns_encoded:
+                    self.dataframe[num_col+"binarized"] = self.dataframe[num_col].apply(lambda x: 1 if x > 0 else 0)
+                    num_cols_binarized_created.append(num_col+"binarized")
+                pca = PCA(n_components=2)
+                df_branch = self.dataframe.copy()
+                pred_comps = pca.fit_transform(df_branch[num_cols_binarized_created])
+                df_branch = pd.DataFrame(pred_comps, columns=['Num_PC-1', 'Num_PC-2'])
+                for col in df_branch.columns:
+                    self.dataframe[f"{col}_num_pca"] = df_branch[col]
+                del df_branch
+                del pca
+                _ = gc.collect()
+            else:
+                pass
+            return self.dataframe
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            self.preprocess_decisions[f"numeric_binarizer_pca"] = {}
+
+            encoded_num_cols = []
+            for vartype in self.num_dtypes:
+                filtered_columns = X_train.select_dtypes(include=[vartype]).columns.to_list()
+                print(filtered_columns)
+                for pcas in filtered_columns:
+                    try:
+                        filtered_columns.remove("Num_PC-1_num_pca")
+                        filtered_columns.remove("Num_PC-2_num_pca")
+                    except Exception:
+                        pass
+                for i in filtered_columns:
+                    try:
+                        encoded_num_cols.remove(i)
+                    except Exception:
+                        pass
+                print(filtered_columns)
+
+                if len(filtered_columns) > 0:
+                    num_cols_binarized_created = []
+                    for num_col in filtered_columns:
+                        X_train[num_col+"binarized"] = X_train[num_col].apply(lambda x: 1 if x > 0 else 0)
+                        X_test[num_col+"binarized"] = X_test[num_col].apply(lambda x: 1 if x > 0 else 0)
+                        num_cols_binarized_created.append(num_col+"binarized")
+                        encoded_num_cols.append(num_col)
+                    pca = PCA(n_components=2)
+                    X_train_branch = X_train.copy()
+                    X_test_branch = X_test.copy()
+                    train_comps = pca.fit_transform(X_train_branch[num_cols_binarized_created])
+                    test_comps = pca.fit_transform(X_test_branch[num_cols_binarized_created])
+                    X_train_branch = pd.DataFrame(train_comps, columns=['Num_PC-1', 'Num_PC-2'])
+                    X_test_branch = pd.DataFrame(test_comps, columns=['Num_PC-1', 'Num_PC-2'])
+                    pca_cols = []
+                    for col in X_train_branch.columns:
+                        X_train[f"{col}_num_pca"] = X_train_branch[col]
+                        X_test[f"{col}_num_pca"] = X_test_branch[col]
+                        pca_cols.append(f"{col}_num_pca")
+                    self.preprocess_decisions[f"numeric_binarizer_pca"][f"pca_cols_{vartype}"] = pca_cols
+                    del X_train_branch
+                    del X_test_branch
+                    del pca
+                    _ = gc.collect()
+                else:
+                    pass
+            self.num_columns_encoded = encoded_num_cols
+            print(self.num_columns_encoded)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def category_encoding(self, algorithm='target'):

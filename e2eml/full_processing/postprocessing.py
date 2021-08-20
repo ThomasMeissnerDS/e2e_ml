@@ -1,9 +1,12 @@
+import pandas as pd
+
 from e2eml.full_processing import cpu_preprocessing
 from sklearn.metrics import matthews_corrcoef, roc_auc_score, f1_score
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, median_absolute_error, accuracy_score, recall_score
 from sklearn.metrics import confusion_matrix, classification_report
 import shap
 import matplotlib.pyplot as plt
+import plotly.express as px
 import numpy as np
 import warnings
 import logging
@@ -89,6 +92,47 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             plt.show()
         logging.info('Finished creating SHAP values.')
 
+    def visualize_probability_distribution(self, probabilities, threshold=0.5):
+        """
+        Vizualize the predicted probabilities in binary classification taks.
+        :param probabilities: Numpy array or list of predicted probabilities.
+        :param threshold: The threshold from where a probability shall counted towards the target class.
+        :return: Displays a plotly line graph.
+        """
+        classes = [1 if prob > threshold else 0 for prob in probabilities]
+        pred_dict = {"probabilities": probabilities,
+                     "classes": classes}
+        pred_df = pd.DataFrame(pred_dict)
+        pred_df["dummy_counter"] = 1
+        pred_df = pred_df.round({"probabilities": 2})
+        pred_df_gr = pred_df.groupby(by=["classes", "probabilities"]).agg({"dummy_counter": "count"}).reset_index()
+        pred_df_gr = pred_df_gr.rename(columns={"dummy_counter": "nb_predictions"})
+        fig = px.line(pred_df_gr, x="probabilities", y="nb_predictions", color='classes',
+                      title='Distribution of predicted probabailities and classes.')
+        fig.show()
+
+    def target_size_estimator(self, probabilities, precision=0.50, recall=0.50):
+        # TODO: Calculate Recall & Precision per class!!!!
+
+        correct_found = []
+        audience_sizes = []
+        loop_spots = np.linspace(0, 1, 100, endpoint=False)
+        for threshold in loop_spots:
+            classes = [1 if prob > threshold else 0 for prob in probabilities]
+            pred_dict = {"probabilities": probabilities,
+                         "classes": classes}
+            pred_df = pd.DataFrame(pred_dict)
+            pred_df["dummy_counter"] = 1
+
+            pos_class_df = pred_df[(pred_df["classes"] == 1)].copy()
+            total_pos = len(pos_class_df.index)
+            estimated_pos_classes_found = total_pos*recall
+            audience_size_needed = estimated_pos_classes_found/precision
+
+            correct_found.append(estimated_pos_classes_found)
+            audience_sizes.append(audience_size_needed)
+
+
     def classification_eval(self, algorithm, pred_probs=None, pred_class=None):
         """
         Takes in the algorithm name. This is needed to grab saved predictions and to store cvlassification scores
@@ -139,6 +183,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             #y_hat = y_hat.astype(int)
             #Y_test = Y_test.astype(int)
 
+
             if self.class_problem == 'binary':
                 def get_preds(threshold, probabilities):
                     return [1 if prob > threshold else 0 for prob in probabilities]
@@ -165,6 +210,9 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                         plt.show()
                         roc_auc = roc_auc_score(Y_test, y_hat_probs)
                         print(f"The ROC_AUC score is {roc_auc}")
+
+                        # plot predicted probabilities
+                        self.visualize_probability_distribution(y_hat_probs, threshold=0.5)
                 except ValueError:
                     if y_hat_probs.any():
                         roc_values = []
@@ -188,6 +236,9 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                         plt.show()
                         roc_auc = roc_auc_score(Y_test, y_hat_probs)
                         print(f"The ROC_AUC score is {roc_auc}")
+
+                        # plot predicted probabilities
+                        self.visualize_probability_distribution(y_hat_probs, threshold=0.5)
                 else:
                     roc_auc = None
             else:

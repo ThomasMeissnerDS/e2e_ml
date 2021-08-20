@@ -510,32 +510,37 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         allpreds, mode_cols = self.predicting(pred_dataloader, model, pthes)
 
         if self.prediction_mode:
+            self.dataframe["transformers_median"] = self.dataframe[mode_cols].median(axis=1)
             self.dataframe["transformers_mean"] = self.dataframe[mode_cols].mean(axis=1)
             self.predicted_values['nlp_transformer'] = self.dataframe["transformers_mean"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
-            # we check, if one savestate underperforms and delete him out
-            scorings = []
-            states = []
-            for state in mode_cols:
-                state_score = self.median_abs_error_eval(Y_test, X_test[state])
-                print(state_score)
-                scorings.append(state_score)
-                states.append(state)
-            scorings_arr = np.array(scorings)
-            scorings_mean = np.mean(scorings_arr)
-            scorings_std = np.std(scorings_arr)
-            print(scorings_std)
-            keep_state = scorings_arr < scorings_mean+scorings_std
-            for state in range(len(states)):
-                if keep_state.tolist()[state]:
-                    pass
-                else:
-                    print(state)
-                    states.remove(states[state])
-                    X_test.drop(states[state], axis=1)
-                    os.remove(f"model{state}.pth")
+            if self.transformer_settings["keep_best_model_only"]:
+                # we check, if one savestate underperforms and delete him out
+                scorings = []
+                states = []
+                for state in mode_cols:
+                    state_score = self.median_abs_error_eval(Y_test, X_test[state])
+                    #print(state_score)
+                    scorings.append(state_score)
+                    states.append(state)
+                scorings_arr = np.array(scorings)
+                scorings_mean = np.mean(scorings_arr)
+                scorings_std = np.std(scorings_arr)
+                #print(scorings_std)
+                keep_state = scorings_arr < scorings_mean+scorings_std
+                for index, state in enumerate(states):
+                    os_string = state[-6:]
+                    if keep_state.tolist()[index]:
+                        pass
+                    else:
+                        states.remove(state)
+                        X_test.drop(state, axis=1)
+                        os.remove(f"{os_string}.pth")
+            else:
+                pass
 
+            X_test["transformers_median"] = X_test[mode_cols].median(axis=1)
             X_test["transformers_mean"] = X_test[mode_cols].mean(axis=1)
-            self.predicted_values['nlp_transformer'] = X_test["transformers_mean"]
+            self.predicted_values['nlp_transformer'] = X_test["transformers_median"]

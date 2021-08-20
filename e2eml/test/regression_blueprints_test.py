@@ -68,9 +68,9 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         val_y_hat = titanic_auto_ml.predicted_values['linear_regression']
         mae = mean_absolute_error(val_df_target, val_y_hat)
     elif blueprint == 'vowpal_wabbit':
-        titanic_auto_ml.ml_bp15_regression_full_processing_vowpal_wabbit_reg(preprocessing_type='nlp')
+        titanic_auto_ml.ml_bp15_regression_full_processing_vowpal_wabbit_reg(preprocess_bp = 'bp_04')
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp15_regression_full_processing_vowpal_wabbit_reg(val_df, preprocessing_type='nlp')
+        titanic_auto_ml.ml_bp15_regression_full_processing_vowpal_wabbit_reg(val_df, preprocess_bp = 'bp_04')
         val_y_hat = titanic_auto_ml.predicted_values['vowpal_wabbit']
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
@@ -82,9 +82,9 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
     elif blueprint == 'avg_booster':
-        titanic_auto_ml.ml_special_regression_full_processing_boosting_blender()
+        titanic_auto_ml.ml_special_regression_multiclass_full_processing_multimodel_avg_blender()
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_special_regression_full_processing_boosting_blender(val_df, preprocessing_type='nlp')
+        titanic_auto_ml.ml_special_regression_multiclass_full_processing_multimodel_avg_blender(val_df)
         val_y_hat = titanic_auto_ml.predicted_values['blended_preds']
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
@@ -100,4 +100,4 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
 
 
 if __name__ == "__main__":
-    blueprint_regression_test_housingprices(blueprint='tabnet')
+    blueprint_regression_test_housingprices(blueprint='linear_regression')

@@ -189,25 +189,33 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.tfidf_naive_bayes_proba(analyzer="word", ngram_range=(1, 1))
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
-        self.category_encoding(algorithm='GLMM')
+        self.numeric_binarizer_pca()
+        self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(how='static')
+        self.data_binning(nb_bins=10)
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
+        self.skewness_removal()
         try:
             self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
         except ValueError:
             print("Clustering as a feature skipped due to ValueError.")
-        for nb_cluster in range(2, 10):
+        for nb_cluster in [3, 5, 7, 9]:
             try:
                 self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
             except ValueError:
                 print("Clustering as a feature skipped due to ValueError.")
+        for nb_cluster in [2, 4, 6, 8, 10]:
+            try:
+                self.clustering_as_a_feature(algorithm='gaussian', nb_clusters=nb_cluster)
+            except ValueError:
+                print("Clustering as a feature skipped due to ValueError.")
         if self.low_memory_mode:
             self.reduce_memory_footprint()
-        #self.automated_feature_selection()
+        self.automated_feature_selection()
         self.sort_columns_alphabetically()
-        self.data_scaling()
+
 
     def pp_bp10_nlp_preprocessing(self, df):
         logging.info('Start blueprint.')

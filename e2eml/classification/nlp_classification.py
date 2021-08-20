@@ -509,24 +509,32 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
-            # we check, if one savestate underperforms and delete him out
-            scorings = []
-            states = []
-            for state in mode_cols:
-                state_score = self.matthews_eval(Y_test, X_test[state])
-                scorings.append(state_score)
-                states.append(state)
-            scorings_arr = np.array(scorings)
-            scorings_mean = np.mean(scorings_arr)
-            scorings_std = np.std(scorings_arr)
-            keep_state = scorings_arr > scorings_mean-scorings_std
-            for state in range(len(states)):
-                if keep_state.tolist()[state]:
-                    pass
-                else:
-                    states.remove(states[state])
-                    X_test.drop(states[state], axis=1)
-                    os.remove(f"model{state}.pth")
+            if self.transformer_settings["keep_best_model_only"]:
+                # we check, if one savestate underperforms and delete him out
+                scorings = []
+                states = []
+                for state in mode_cols:
+                    state_score = self.matthews_eval(Y_test, X_test[state])
+                    #print(f"{state} score: {state_score}")
+                    scorings.append(state_score)
+                    states.append(state)
+                scorings_arr = np.array(scorings)
+                scorings_mean = np.mean(scorings_arr)
+                scorings_std = np.std(scorings_arr)
+                keep_state = scorings_arr > scorings_mean-scorings_std
+                #print(f"keep {keep_state}")
+                for index, state in enumerate(states):
+                    os_string = state[-6:]
+                    if keep_state.tolist()[index]:
+                        pass
+                    else:
+                        states.remove(state)
+                        X_test.drop(state, axis=1)
+                        os.remove(f"{os_string}.pth")
+
+                #print(f"states left:  {states}")
+            else:
+                pass
 
             X_test["majority_class"] = X_test[mode_cols].mode(axis=1)[0]
             self.predicted_classes['nlp_transformer'] = X_test["majority_class"]

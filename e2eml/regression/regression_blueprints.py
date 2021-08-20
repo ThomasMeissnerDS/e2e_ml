@@ -105,6 +105,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -133,6 +135,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -160,6 +164,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -187,6 +193,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -215,6 +223,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -242,6 +252,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -266,6 +278,10 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.pp_bp10_nlp_preprocessing(df=df)
         elif preprocess_bp == 'bp_nlp_11':
             self.pp_bp11_nlp_preprocessing(df=df)
+        elif preprocess_bp == 'bp_nlp_12':
+            self.pp_bp12_nlp_preprocessing(df=df)
+        elif preprocess_bp == 'bp_nlp_13':
+            self.pp_bp13_nlp_preprocessing(df=df)
         else:
             pass
         if self.prediction_mode:
@@ -308,7 +324,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_special_regression_full_processing_boosting_blender(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+    def ml_special_regression_multiclass_full_processing_multimodel_avg_blender(self, df=None, preprocessing_type='full', preprocess_bp="bp_04"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -324,6 +340,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         elif preprocess_bp == 'bp_03':
             self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
+        elif preprocess_bp == 'bp_04':
+            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
         else:
             pass
         if self.prediction_mode:
@@ -331,22 +349,26 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         else:
             self.ngboost_train(tune_mode=self.tune_mode)
             self.lgbm_train(tune_mode=self.tune_mode)
-            self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
+            self.vowpal_wabbit_train()
+            self.tabnet_regression_train()
         self.ngboost_predict(feat_importance=True)
         self.lgbm_predict(feat_importance=True)
-        self.xgboost_predict(feat_importance=True)
+        self.vowpal_wabbit_predict(feat_importance=True)
+        self.tabnet_regression_predict()
         if self.prediction_mode:
             self.dataframe["lgbm_preds"] = self.predicted_values[f"lgbm"]
             self.dataframe["ngboost_preds"] = self.predicted_values[f"ngboost"]
-            self.dataframe["xgboost_preds"] = self.predicted_values[f"xgboost"]
-            self.dataframe["blended_preds"] = (self.dataframe["lgbm_preds"] + self.dataframe["ngboost_preds"] + self.dataframe["xgboost_preds"])/3
+            self.dataframe["vowpal_wabbit"] = self.predicted_values[f"vowpal_wabbit"]
+            self.dataframe["tabnet"] = self.predicted_values[f"tabnet"]
+            self.dataframe["blended_preds"] = (self.dataframe["lgbm_preds"] + self.dataframe["ngboost_preds"] + self.dataframe["vowpal_wabbit_preds"] + self.dataframe["tabnet"])/4
             self.predicted_values[f"blended_preds"] = self.dataframe["blended_preds"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_test["lgbm_preds"] = self.predicted_values[f"lgbm"]
             X_test["ngboost_preds"] = self.predicted_values[f"ngboost"]
-            X_test["xgboost_preds"] = self.predicted_values[f"xgboost"]
-            X_test["blended_preds"] = (X_test["lgbm_preds"] + X_test["ngboost_preds"] + X_test["xgboost_preds"])/3
+            X_test["vowpal_wabbit_preds"] = self.predicted_values[f"vowpal_wabbit"]
+            X_test["tabnet_preds"] = self.predicted_values[f"tabnet"]
+            X_test["blended_preds"] = (X_test["lgbm_preds"] + X_test["ngboost_preds"] + X_test["vowpal_wabbit_preds"] + X_test["tabnet_preds"])/4
             self.predicted_values[f"blended_preds"] = X_test["blended_preds"]
         self.regression_eval('blended_preds')
         self.prediction_mode = True
