@@ -1449,6 +1449,7 @@ class PreProcessing:
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task='Onehot + PCA categorical features')
+        logging.info('Started Onehot + PCA categorical features.')
         if self.prediction_mode:
             if len(self.cat_columns_encoded) > 0:
                 df_branch = self.dataframe[self.cat_columns_encoded].copy()
@@ -1464,9 +1465,12 @@ class PreProcessing:
                     self.dataframe[f"{col}_pca"] = df_branch[col]
                 del df_branch
                 del pca
+                del pred_comps
+                del enc
                 _ = gc.collect()
             else:
                 pass
+            logging.info('Finished Onehot + PCA categorical features.')
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -1503,19 +1507,23 @@ class PreProcessing:
                 del X_train_branch
                 del X_test_branch
                 del pca
+                del train_comps
+                del test_comps
                 _ = gc.collect()
             else:
                 pass
+            logging.info('Finished Onehot + PCA categorical features.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def numeric_binarizer_pca(self):
         self.get_current_timestamp(task='Binarize numeric columns + PCA binarized features')
+        logging.info('Started to binarize numeric columns + PCA binarized features.')
         if self.prediction_mode:
             if len(self.num_columns_encoded) > 0:
                 num_cols_binarized_created = []
                 for num_col in self.num_columns_encoded:
-                    self.dataframe[num_col+"binarized"] = self.dataframe[num_col].apply(lambda x: 1 if x > 0 else 0)
-                    num_cols_binarized_created.append(num_col+"binarized")
+                    self.dataframe[num_col+"_binarized"] = self.dataframe[num_col].apply(lambda x: 1 if x > 0 else 0)
+                    num_cols_binarized_created.append(num_col+"_binarized")
                 pca = PCA(n_components=2)
                 df_branch = self.dataframe.copy()
                 pred_comps = pca.fit_transform(df_branch[num_cols_binarized_created])
@@ -1523,10 +1531,12 @@ class PreProcessing:
                 for col in df_branch.columns:
                     self.dataframe[f"{col}_num_pca"] = df_branch[col]
                 del df_branch
+                del pred_comps
                 del pca
                 _ = gc.collect()
             else:
                 pass
+            logging.info('Finished to binarize numeric columns + PCA binarized features.')
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -1535,7 +1545,6 @@ class PreProcessing:
             encoded_num_cols = []
             for vartype in self.num_dtypes:
                 filtered_columns = X_train.select_dtypes(include=[vartype]).columns.to_list()
-                print(filtered_columns)
                 for pcas in filtered_columns:
                     try:
                         filtered_columns.remove("Num_PC-1_num_pca")
@@ -1547,14 +1556,13 @@ class PreProcessing:
                         encoded_num_cols.remove(i)
                     except Exception:
                         pass
-                print(filtered_columns)
 
                 if len(filtered_columns) > 0:
                     num_cols_binarized_created = []
                     for num_col in filtered_columns:
-                        X_train[num_col+"binarized"] = X_train[num_col].apply(lambda x: 1 if x > 0 else 0)
-                        X_test[num_col+"binarized"] = X_test[num_col].apply(lambda x: 1 if x > 0 else 0)
-                        num_cols_binarized_created.append(num_col+"binarized")
+                        X_train[num_col+"_binarized"] = X_train[num_col].apply(lambda x: 1 if x > 0 else 0)
+                        X_test[num_col+"_binarized"] = X_test[num_col].apply(lambda x: 1 if x > 0 else 0)
+                        num_cols_binarized_created.append(num_col+"_binarized")
                         encoded_num_cols.append(num_col)
                     pca = PCA(n_components=2)
                     X_train_branch = X_train.copy()
@@ -1571,12 +1579,14 @@ class PreProcessing:
                     self.preprocess_decisions[f"numeric_binarizer_pca"][f"pca_cols_{vartype}"] = pca_cols
                     del X_train_branch
                     del X_test_branch
+                    del train_comps
+                    del test_comps
                     del pca
                     _ = gc.collect()
                 else:
                     pass
             self.num_columns_encoded = encoded_num_cols
-            print(self.num_columns_encoded)
+            logging.info('Finished to binarize numeric columns + PCA binarized features.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def category_encoding(self, algorithm='target'):

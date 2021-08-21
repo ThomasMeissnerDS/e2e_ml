@@ -29,6 +29,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import logging
 import warnings
+import gc
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -77,6 +78,8 @@ class RegressionModels(postprocessing.FullPipeline):
             model = LinearRegression().fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
             return self.trained_models
 
     def linear_regression_predict(self, feat_importance=True, importance_alg='permutation'):
@@ -118,6 +121,8 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
         self.predicted_values[f"{algorithm}"] = {}
         self.predicted_values[f"{algorithm}"] = predicted_probs
+        del model
+        _ = gc.collect()
 
     def tabnet_regression_train(self):
         """
@@ -287,6 +292,8 @@ class RegressionModels(postprocessing.FullPipeline):
             )
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
             return self.trained_models
 
     def tabnet_regression_predict(self):
@@ -317,6 +324,8 @@ class RegressionModels(postprocessing.FullPipeline):
 
         self.predicted_values[f"{algorithm}"] = {}
         self.predicted_values[f"{algorithm}"] = predicted_probs
+        del model
+        _ = gc.collect()
 
     def vowpal_wabbit_train(self):
         """
@@ -334,6 +343,8 @@ class RegressionModels(postprocessing.FullPipeline):
             model.fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
             return self.trained_models
 
     def vowpal_wabbit_predict(self, feat_importance=True, importance_alg='permutation'):
@@ -375,6 +386,8 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
         self.predicted_values[f"{algorithm}"] = {}
         self.predicted_values[f"{algorithm}"] = predicted_probs
+        del model
+        _ = gc.collect()
 
     def xg_boost_train(self, param=None, autotune=True, tune_mode='accurate'):
         """
@@ -468,6 +481,8 @@ class RegressionModels(postprocessing.FullPipeline):
                                   evals=eval_set)
                 self.trained_models[f"{algorithm}"] = {}
                 self.trained_models[f"{algorithm}"] = model
+                del model
+                _ = gc.collect()
                 return self.trained_models
 
             else:
@@ -500,6 +515,8 @@ class RegressionModels(postprocessing.FullPipeline):
                                   evals=eval_set)
                 self.trained_models[f"{algorithm}"] = {}
                 self.trained_models[f"{algorithm}"] = model
+                del model
+                _ = gc.collect()
                 return self.trained_models
 
     def xgboost_predict(self, feat_importance=True, importance_alg='auto'):
@@ -542,6 +559,8 @@ class RegressionModels(postprocessing.FullPipeline):
                 plt.show()
             else:
                 pass
+            del model
+            _ = gc.collect()
 
     def lgbm_train(self, tune_mode='accurate', gpu_use_dp=True):
         self.get_current_timestamp()
@@ -565,13 +584,14 @@ class RegressionModels(postprocessing.FullPipeline):
                 param = {
                     # TODO: Move to additional folder with pyfile "constants" (use OS absolute path)
                     'objective': 'regression',
-                    'metric': 'mean_absolute_error',
-                    'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
+                    'metric': 'gamma',
+                    'num_boost_round': trial.suggest_int('num_boost_round', 100, 70000),
                     'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                     'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
-                    'num_leaves': trial.suggest_int('num_leaves', 2, 256),
-                    'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
-                    'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
+                    'linear_lambda': trial.suggest_loguniform('linear_lambda', 1, 1e6),
+                    'num_leaves': trial.suggest_int('num_leaves', 2, 512),
+                    'feature_fraction': trial.suggest_uniform('feature_fraction', 0.3, 1.0),
+                    'bagging_fraction': trial.suggest_uniform('bagging_fraction', 0.1, 1),
                     'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
                     'min_gain_to_split': trial.suggest_uniform('min_gain_to_split', 0, 1),
                     'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 0.1),
@@ -585,17 +605,17 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = mean_absolute_error(Y_test, preds)
                     return mae
                 else:
-                    pruning_callback = optuna.integration.LightGBMPruningCallback(trial, "l1")
+                    pruning_callback = optuna.integration.LightGBMPruningCallback(trial, "gamma")
                     result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
                                     stratified=False, callbacks=[pruning_callback],
                                     early_stopping_rounds=10, seed=42,
                                     verbose_eval=False)
-                    avg_result = result['l1-mean'][-1]
+                    avg_result = result['gamma-mean'][-1]
                     return avg_result
 
             algorithm = 'lgbm'
             study = optuna.create_study(direction='minimize')
-            study.optimize(objective, n_trials=40)
+            study.optimize(objective, n_trials=50)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -607,13 +627,14 @@ class RegressionModels(postprocessing.FullPipeline):
             lgbm_best_param = study.best_trial.params
             param = {
                 'objective': 'regression',
-                'metric': 'mean_absolute_error',
+                'metric': 'gamma',
                 'num_boost_round': lgbm_best_param["num_boost_round"],
                 'lambda_l1': lgbm_best_param["lambda_l1"],
                 'lambda_l2': lgbm_best_param["lambda_l2"],
+                'linear_lambda': lgbm_best_param["linear_lambda"],
                 'num_leaves': lgbm_best_param["num_leaves"],
                 'feature_fraction': lgbm_best_param["feature_fraction"],
-                'bagging_freq': lgbm_best_param["bagging_freq"],
+                'bagging_fraction': lgbm_best_param["bagging_fraction"],
                 'min_child_samples': lgbm_best_param["min_child_samples"],
                 'min_gain_to_split': lgbm_best_param["min_gain_to_split"],
                 'learning_rate': lgbm_best_param["learning_rate"],
@@ -627,6 +648,8 @@ class RegressionModels(postprocessing.FullPipeline):
                               early_stopping_rounds=10)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
             return self.trained_models
 
     def lgbm_predict(self, feat_importance=True, importance_alg='auto'):
@@ -664,6 +687,8 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted_probs
+        del model
+        _ = gc.collect()
         return self.predicted_probs
 
     def sklearn_ensemble_train(self):
@@ -765,6 +790,8 @@ class RegressionModels(postprocessing.FullPipeline):
             model.fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
             return self.trained_models
 
     def sklearn_ensemble_predict(self, feat_importance=True, importance_alg='permutation'):
@@ -808,6 +835,8 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted
+        del model
+        _ = gc.collect()
         return self.predicted_probs
 
     def ngboost_train(self, tune_mode='accurate'):
@@ -934,6 +963,8 @@ class RegressionModels(postprocessing.FullPipeline):
                                                                            early_stopping_rounds=10)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
             return self.trained_models
 
     def ngboost_predict(self, feat_importance=True, importance_alg='permutation'):
@@ -977,4 +1008,6 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted
+        del model
+        _ = gc.collect()
         return self.predicted_values

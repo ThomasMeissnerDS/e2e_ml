@@ -6,7 +6,7 @@ import logging
 class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
     def pp_bp01_std_preprocessing(self, df=None, preprocessing_type='full'):
         """
-        Our recommended blueprint for model testing.
+        Our recommended blueprint for Tabnet testing.
         Runs a preprocessing blueprint only. This is useful for building custom pipelines.
         :param df: Accepts a dataframe to run ml preprocessing on it.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
@@ -32,23 +32,28 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
             self.tfidf_naive_bayes_proba(analyzer="char_wb", ngram_range=(1, 2))
             self.tfidf_naive_bayes_proba(analyzer="word", ngram_range=(1, 1))
-        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
+        self.numeric_binarizer_pca()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(how='static')
         self.data_binning(nb_bins=10)
-        #self.skewness_removal()
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
+        self.skewness_removal()
         try:
             self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
         except ValueError:
             print("Clustering as a feature skipped due to ValueError.")
-        for nb_cluster in range(2, 10):
+        for nb_cluster in [3, 5, 7, 9]:
             try:
                 self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
+            except ValueError:
+                print("Clustering as a feature skipped due to ValueError.")
+        for nb_cluster in [2, 4, 6, 8, 10]:
+            try:
+                self.clustering_as_a_feature(algorithm='gaussian', nb_clusters=nb_cluster)
             except ValueError:
                 print("Clustering as a feature skipped due to ValueError.")
         if self.low_memory_mode:
@@ -161,7 +166,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
 
     def pp_bp04_std_preprocessing(self, df=None, preprocessing_type='full'):
         """
-        Our recommended blueprint for Tabnet testing.
+        Our recommended blueprint for model testing.
         Runs a preprocessing blueprint only. This is useful for building custom pipelines.
         :param df: Accepts a dataframe to run ml preprocessing on it.
         :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
@@ -187,28 +192,23 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
             self.tfidf_naive_bayes_proba(analyzer="char_wb", ngram_range=(1, 2))
             self.tfidf_naive_bayes_proba(analyzer="word", ngram_range=(1, 1))
+        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
         self.cardinality_remover(threshold=100)
         self.onehot_pca()
-        self.numeric_binarizer_pca()
         self.category_encoding(algorithm='target')
         self.delete_high_null_cols(threshold=0.5)
         self.fill_nulls(how='static')
         self.data_binning(nb_bins=10)
+        #self.skewness_removal()
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
-        self.skewness_removal()
         try:
             self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
         except ValueError:
             print("Clustering as a feature skipped due to ValueError.")
-        for nb_cluster in [3, 5, 7, 9]:
+        for nb_cluster in range(2, 10):
             try:
                 self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
-            except ValueError:
-                print("Clustering as a feature skipped due to ValueError.")
-        for nb_cluster in [2, 4, 6, 8, 10]:
-            try:
-                self.clustering_as_a_feature(algorithm='gaussian', nb_clusters=nb_cluster)
             except ValueError:
                 print("Clustering as a feature skipped due to ValueError.")
         if self.low_memory_mode:

@@ -27,6 +27,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import warnings
 import logging
+import gc
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
@@ -103,6 +104,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             model = LogisticRegression(random_state=0).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
             return self.trained_models
 
     def logistic_regression_predict(self, feat_importance=True, importance_alg='permutation'):
@@ -163,6 +166,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
             self.predicted_classes[f"{algorithm}"] = predicted_classes
+            del model
+            _ = gc.collect()
 
     def tabnet_train(self):
         """
@@ -337,6 +342,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             )
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
             return self.trained_models
 
     def tabnet_predict(self):
@@ -378,6 +385,8 @@ class ClassificationModels(postprocessing.FullPipeline):
 
         self.predicted_probs[f"{algorithm}"] = predicted_probs
         self.predicted_classes[f"{algorithm}"] = predicted_classes
+        del model
+        _ = gc.collect()
 
     def vowpal_wabbit_train(self):
         """
@@ -393,6 +402,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             model = VWClassifier().fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
             return self.trained_models
 
     def vowpal_wabbit_predict(self, feat_importance=True, importance_alg='permutation'):
@@ -453,6 +464,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
             self.predicted_classes[f"{algorithm}"] = predicted_classes
+            del model
+            _ = gc.collect()
 
     def xg_boost_train(self, param=None, steps=None, autotune=True, tune_mode='accurate'):
         """
@@ -639,6 +652,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                                       evals=eval_set)
                     self.trained_models[f"{algorithm}"] = {}
                     self.trained_models[f"{algorithm}"] = model
+                    del model
+                    _ = gc.collect()
                     return self.trained_models
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -680,6 +695,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                                   evals=eval_set)
                 self.trained_models[f"{algorithm}"] = {}
                 self.trained_models[f"{algorithm}"] = model
+                del model
+                _ = gc.collect()
                 return self.trained_models
 
     def xgboost_predict(self, feat_importance=True, importance_alg='auto'):
@@ -741,6 +758,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                 self.predicted_classes[f"{algorithm}"] = {}
                 self.predicted_probs[f"{algorithm}"] = predicted_probs
                 self.predicted_classes[f"{algorithm}"] = predicted_classes
+                del model
+                _ = gc.collect()
                 return self.predicted_probs
             elif self.xgboost_objective == 'regression':
                 self.xg_boost_regression = model.predict(D_test)
@@ -849,6 +868,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                                   early_stopping_rounds=10)
                 self.trained_models[f"{algorithm}"] = {}
                 self.trained_models[f"{algorithm}"] = model
+                del model
+                _ = gc.collect()
                 return self.trained_models
 
             else:
@@ -933,6 +954,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                                   early_stopping_rounds=10)
                 self.trained_models[f"{algorithm}"] = {}
                 self.trained_models[f"{algorithm}"] = model
+                del model
+                _ = gc.collect()
                 return self.trained_models
 
     def lgbm_predict(self, feat_importance=True, importance_alg='auto'):
@@ -993,6 +1016,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
             self.predicted_classes[f"{algorithm}"] = predicted_classes
+        del model
+        _ = gc.collect()
         return self.predicted_probs
 
     def sklearn_ensemble_train(self):
@@ -1112,6 +1137,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             model.fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
             return self.trained_models
 
     def sklearn_ensemble_predict(self, feat_importance=True, importance_alg='permutation'):
@@ -1172,6 +1199,8 @@ class ClassificationModels(postprocessing.FullPipeline):
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
             self.predicted_classes[f"{algorithm}"] = predicted_classes
+        del model
+        _ = gc.collect()
         return self.predicted_probs
 
     def ngboost_train(self, tune_mode='accurate'):
@@ -1310,6 +1339,8 @@ class ClassificationModels(postprocessing.FullPipeline):
                                                        early_stopping_rounds=10)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
             return self.trained_models
 
     def ngboost_predict(self, feat_importance=True, importance_alg='SHAP'):
@@ -1366,4 +1397,6 @@ class ClassificationModels(postprocessing.FullPipeline):
         self.predicted_classes[f"{algorithm}"] = {}
         self.predicted_probs[f"{algorithm}"] = predicted_probs
         self.predicted_classes[f"{algorithm}"] = predicted_classes
+        del model
+        _ = gc.collect()
         return self.predicted_probs

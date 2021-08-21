@@ -358,17 +358,15 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         if self.prediction_mode:
             self.dataframe["lgbm_preds"] = self.predicted_values[f"lgbm"]
             self.dataframe["ngboost_preds"] = self.predicted_values[f"ngboost"]
-            self.dataframe["vowpal_wabbit"] = self.predicted_values[f"vowpal_wabbit"]
             self.dataframe["tabnet"] = self.predicted_values[f"tabnet"]
-            self.dataframe["blended_preds"] = (self.dataframe["lgbm_preds"] + self.dataframe["ngboost_preds"] + self.dataframe["vowpal_wabbit_preds"] + self.dataframe["tabnet"])/4
+            self.dataframe["blended_preds"] = (self.dataframe["lgbm_preds"] + self.dataframe["ngboost_preds"] + self.dataframe["tabnet"])/3
             self.predicted_values[f"blended_preds"] = self.dataframe["blended_preds"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_test["lgbm_preds"] = self.predicted_values[f"lgbm"]
             X_test["ngboost_preds"] = self.predicted_values[f"ngboost"]
-            X_test["vowpal_wabbit_preds"] = self.predicted_values[f"vowpal_wabbit"]
             X_test["tabnet_preds"] = self.predicted_values[f"tabnet"]
-            X_test["blended_preds"] = (X_test["lgbm_preds"] + X_test["ngboost_preds"] + X_test["vowpal_wabbit_preds"] + X_test["tabnet_preds"])/4
+            X_test["blended_preds"] = (X_test["lgbm_preds"] + X_test["ngboost_preds"] + X_test["tabnet_preds"])/3
             self.predicted_values[f"blended_preds"] = X_test["blended_preds"]
         self.regression_eval('blended_preds')
         self.prediction_mode = True
