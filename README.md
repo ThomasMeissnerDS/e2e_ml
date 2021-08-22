@@ -131,12 +131,11 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 1.7.2
+* 1.7.3
   - Improved preprocessing
   - Improved regression performance
   - Deprecated regression boosting blender and replaced my multi model/architecture blender
   - Transformers can optionally discard worst models, but will keep all 5 by default
-  - removed scipy as dependency
   - e2eml should be installable on Amazon Sagemaker now
 * 1.7.0
   - Added TabNet classifier and regressor with automated hyperparameter optimization

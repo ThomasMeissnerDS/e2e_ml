@@ -9,7 +9,7 @@ requirements = ["babel>=2.9.0",
                 "dill>=0.3.3",
                 "imblearn>=0.0",
                 "lightgbm==3.1.0",
-                "matplotlib>==3.1.3", # pinned due to cannot import _png error
+                "matplotlib==3.1.3", # pinned due to cannot import _png error
                 "ngboost>=0.3.1",
                 "nltk>=3.2.4",
                 "numpy>=1.19.4",
@@ -39,7 +39,7 @@ extras_require = {
 
 setup(
     name="e2eml",
-    version="1.7.2",
+    version="1.7.3",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",
