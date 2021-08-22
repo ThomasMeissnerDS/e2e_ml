@@ -417,7 +417,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 def objective(trial):
                     param = {
                         'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
-                        'eval_metric': 'rmsle',
+                        'eval_metric': 'gamma-nloglik',
                         'verbose': 0,
                         'tree_method': train_on,  # use GPU for training
                         'max_depth': trial.suggest_int('max_depth', 2, 10),
@@ -431,7 +431,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         'steps': trial.suggest_int('steps', 2, 70000),
                         'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 5)
                     }
-                    pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-rmsle")
+                    pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-gamma-nloglik")
                     if tune_mode == 'simple':
                         eval_set = [(D_train, 'train'), (D_test, 'test')]
                         model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
@@ -443,7 +443,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'],
                                         early_stopping_rounds=10,
                                         as_pandas=True, seed=42, callbacks=[pruning_callback], nfold=5)
-                        return result['test-rmsle-mean'].mean()
+                        return result['test-gamma-nloglik-mean'].mean()
 
                 algorithm = 'xgboost'
                 if tune_mode == 'simple':
@@ -463,7 +463,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 lgbm_best_param = study.best_trial.params
                 param = {
                     'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
-                    'eval_metric': 'rmsle',
+                    'eval_metric': 'gamma-nloglik',
                     'verbose': 0,
                     'tree_method': train_on,  # use GPU for training
                     'max_depth': lgbm_best_param["max_depth"],  # maximum depth of the decision trees being trained
@@ -501,7 +501,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         # L2 regularization term on weights. Increasing this value will make model more conservative. (default = 1)
                         'subsample': 0.8,
                         'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
-                        'eval_metric': 'rmsle',
+                        'eval_metric': 'gamma-nloglik',
                         # 'colsample_bytree': 0.3,
                         'max_depth': 2,  # maximum depth of the decision trees being trained
                         'tree_method': 'gpu_hist',  # use GPU for training

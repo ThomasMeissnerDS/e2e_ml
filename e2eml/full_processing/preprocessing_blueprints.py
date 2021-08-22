@@ -25,7 +25,6 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
-        self.fill_nulls(how='static') # can only be here when "static"
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.append_text_sentiment_score()
@@ -83,7 +82,6 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
-        self.fill_nulls(how='static') # can only be here when "static"
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.pos_tagging_pca(pca_pos_tags=False)
@@ -132,7 +130,6 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
-        self.fill_nulls(how='static') # can only be here when "static"
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.pos_tagging_pca(pca_pos_tags=False)
@@ -188,7 +185,6 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
-        self.fill_nulls(how='static') # can only be here when "static"
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.append_text_sentiment_score()
