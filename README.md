@@ -100,7 +100,7 @@ There are regression blueprints as well (in regression module):
 - ml_bp15_regression_full_processing_vowpal_wabbit_reg()
 - ml_bp16_regressions_full_processing_bert_transformer()
 - ml_bp17_regression_full_processing_tabnet_reg()
-- ml_special_regression_full_processing_boosting_blender()
+- ml_special_regression_multiclass_full_processing_multimodel_avg_blender()
 - ml_special_regression_auto_model_exploration()
 
 The preproccesing_type has 2 modes as of now:
@@ -131,6 +131,11 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 1.7.1
+  - Improved preprocessing
+  - Improved regression performance
+  - Deprecated regression boosting blender and replaced my multi model/architecture blender
+  - Transformers can optionally discard worst models, but will keep all 5 by default
 * 1.7.0
   - Added TabNet classifier and regressor with automated hyperparameter optimization
 * 1.6.5

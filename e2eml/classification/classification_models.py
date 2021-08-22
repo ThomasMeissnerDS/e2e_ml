@@ -18,6 +18,7 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.tree import DecisionTreeRegressor
 from pytorch_tabnet.tab_model import TabNetClassifier
 from pytorch_tabnet.pretraining import TabNetPretrainer
+from pytorch_tabnet.metrics import Metric
 from sklearn.metrics import matthews_corrcoef
 from sklearn.utils import class_weight
 from sklearn.model_selection import cross_val_score
@@ -32,7 +33,26 @@ import gc
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 
-class ClassificationModels(postprocessing.FullPipeline):
+class Matthews(Metric):
+    def __init__(self):
+        self._name = "matthews"
+        self._maximize = True
+
+    def __call__(self, y_true, y_score):
+        try:
+            predicted_probs = np.asarray([line[1] for line in y_score])
+            predicted_classes = predicted_probs > 0.5
+        except Exception:
+            predicted_classes = np.asarray([np.argmax(line) for line in y_score])
+
+        try:
+            matthews = matthews_corrcoef(y_true, predicted_classes)
+        except Exception:
+            matthews = 0
+        return matthews
+
+
+class ClassificationModels(postprocessing.FullPipeline, Matthews):
     """
     This class stores all model training and prediction methods for classification tasks.
     This class stores all pipeline relevant information (inherited from cpu preprocessing).
@@ -195,18 +215,11 @@ class ClassificationModels(postprocessing.FullPipeline):
                 factor = trial.suggest_uniform('factor', 0.1, 0.9)
                 pretrain_difficulty = trial.suggest_uniform('pretrain_difficulty', 0.7, 0.9)
                 mode = trial.suggest_categorical('mode', ["max", "min"])
-                if optimization_rounds >= 20:
-                    gamma = trial.suggest_loguniform('gamma', 1e-5, 2.0)
-                    lambda_sparse = trial.suggest_loguniform('lambda_sparse', 1e-6, 1e-3)
-                    mask_type = trial.suggest_categorical('mask_type', ["sparsemax", "entmax"])
-                    n_shared = trial.suggest_int('n_shared', 1, 5)
-                    n_independent = trial.suggest_int('n_independent', 1, 5)
-                else:
-                    gamma = 1.3
-                    lambda_sparse = 1e-3
-                    mask_type = "entmax"
-                    n_shared = 2
-                    n_independent = 2
+                gamma = trial.suggest_loguniform('gamma', 1e-5, 2.0)
+                lambda_sparse = trial.suggest_loguniform('lambda_sparse', 1e-6, 1e-3)
+                mask_type = trial.suggest_categorical('mask_type', ["sparsemax", "entmax"])
+                n_shared = trial.suggest_int('n_shared', 1, 5)
+                n_independent = trial.suggest_int('n_independent', 1, 5)
 
                 param = dict(
                     gamma=gamma,
@@ -257,7 +270,7 @@ class ClassificationModels(postprocessing.FullPipeline):
                     model.fit(
                         x_train, y_train,
                         eval_set=[(x_test, y_test)],
-                        eval_metric=['logloss'],
+                        eval_metric=[Matthews],
                         patience=25,
                         batch_size=batch_size,
                         virtual_batch_size=virtual_batch_size,
@@ -331,7 +344,7 @@ class ClassificationModels(postprocessing.FullPipeline):
             model.fit(
                 X_train, Y_train,
                 eval_set=[(X_test, Y_test)],
-                eval_metric=['logloss'],
+                eval_metric=[Matthews],
                 patience=50,
                 batch_size=batch_size,
                 virtual_batch_size=virtual_batch_size,

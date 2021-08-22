@@ -309,7 +309,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp07_multiclass_full_processing_tabnet(self, df=None, preprocessing_type='full', preprocess_bp="bp_04"):
+    def ml_bp07_multiclass_full_processing_tabnet(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
