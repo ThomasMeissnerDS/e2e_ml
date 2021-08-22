@@ -21,7 +21,7 @@ requirements = ["babel>=2.9.0",
                 "pytorch_tabnet>=3.1.1",
                 "seaborn>=0.11.1",
                 "scikit-learn==0.22.2",
-                # "scipy>=1.5.4",  # 1.6.3 before
+                "scipy>=1.5.4",  # 1.6.3 before
                 "setuptools >= 51.1.0",
                 "shap>=0.39.0",
                 "spacy>=2.3.0",
@@ -39,7 +39,7 @@ extras_require = {
 
 setup(
     name="e2eml",
-    version="1.7.1",
+    version="1.7.2",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",

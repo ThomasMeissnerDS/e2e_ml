@@ -131,7 +131,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 1.7.1
+* 1.7.2
   - Improved preprocessing
   - Improved regression performance
   - Deprecated regression boosting blender and replaced my multi model/architecture blender
