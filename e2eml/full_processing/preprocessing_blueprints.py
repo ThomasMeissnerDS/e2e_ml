@@ -25,6 +25,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        self.fill_nulls(how='static') # can only be here when "static"
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.append_text_sentiment_score()
@@ -33,11 +34,11 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.tfidf_naive_bayes_proba(analyzer="char_wb", ngram_range=(1, 2))
             self.tfidf_naive_bayes_proba(analyzer="word", ngram_range=(1, 1))
         self.cardinality_remover(threshold=100)
+        self.delete_high_null_cols(threshold=0.5)
         self.onehot_pca()
         self.numeric_binarizer_pca()
         self.category_encoding(algorithm='target')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
+        self.fill_nulls(how='static') # can only be here when "static"
         self.data_binning(nb_bins=10)
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
@@ -82,6 +83,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        self.fill_nulls(how='static') # can only be here when "static"
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.pos_tagging_pca(pca_pos_tags=False)
@@ -130,6 +132,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        self.fill_nulls(how='static') # can only be here when "static"
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.pos_tagging_pca(pca_pos_tags=False)
@@ -185,6 +188,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.datetime_converter(datetime_handling='all')
+        self.fill_nulls(how='static') # can only be here when "static"
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.append_text_sentiment_score()

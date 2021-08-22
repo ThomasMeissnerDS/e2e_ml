@@ -1096,19 +1096,34 @@ class PreProcessing:
         _ = gc.collect()
         return dataframe_final
 
-    def static_filling(self, dataframe, columns=None, fill_with=0):
-        for col in columns:
-            dataframe[col] = dataframe[col].fillna(fill_with, inplace=False)
+    def static_filling(self, dataframe, fill_with=0, fill_cat_col_with='None'):
+        """
+        Loop through dataframe and fill categorical and numeric columns seperately with predefined values.
+        :param dataframe: Pandas Dataframe
+        :param fill_with: Numeric value to fill with
+        :param fill_cat_col_with: String to fill categorical NULLs.
+        :return:
+        """
+        cat_columns = dataframe.select_dtypes(include=['object']).columns.to_list()
+        for col in cat_columns:
+            dataframe[col] = dataframe[col].fillna(fill_cat_col_with, inplace=False)
+
+        for vartype in self.num_dtypes:
+            try:
+                filtered_columns = dataframe.select_dtypes(include=[vartype]).columns.to_list()
+                for col in filtered_columns:
+                    dataframe[col] = dataframe[col].fillna(fill_with, inplace=False)
+            except ValueError:
+                pass
         return dataframe
 
     # TODO: Check if parameters can be used via **kwargs argument
-    def fill_nulls(self, how='iterative_imputation', selected_cols=None, fill_with=0):
+    def fill_nulls(self, how='iterative_imputation', fill_with=0, fill_cat_col_with='None'):
         """
         Takes in a dataframe and fills all NULLs with chosen value.
         :param fill_with: Define value to replace NULLs with.
         :param how: Chose 'static' to define static fill values, 'iterative_imputation' for the sklearns iterative
         imputer.
-        :param selected_cols: Provide list of columns to define where to replace NULLs
         :return: Returns modified dataframe
         """
         self.get_current_timestamp('Fill nulls')
@@ -1122,18 +1137,13 @@ class PreProcessing:
             pass
 
         if self.prediction_mode:
-            if not selected_cols:
-                cols = self.dataframe.columns.to_list()
-            else:
-                cols = selected_cols
-
             if not how:
                 how = self.preprocess_decisions[f"fill_nulls_how"]
             else:
                 pass
 
             if how == 'static':
-                self.dataframe = self.static_filling(self.dataframe, cols, fill_with=fill_with)
+                self.dataframe = self.static_filling(self.dataframe, fill_with=fill_with, fill_cat_col_with=fill_cat_col_with)
             elif how == 'iterative_imputation':
                 self.dataframe = self.iterative_imputation(self.dataframe, imputer=self.preprocess_decisions[f"fill_nulls_imputer"])
             logging.info('Finished filling NULLs.')
@@ -1141,22 +1151,16 @@ class PreProcessing:
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            if not selected_cols:
-                cols = X_train.columns.to_list()
-            else:
-                cols = selected_cols
 
             if how == 'static':
-                X_train = self.static_filling(X_train, cols, fill_with=fill_with)
-                X_test = self.static_filling(X_test, cols, fill_with=fill_with)
+                X_train = self.static_filling(X_train, fill_with=fill_with, fill_cat_col_with=fill_cat_col_with)
+                X_test = self.static_filling(X_test, fill_with=fill_with, fill_cat_col_with=fill_cat_col_with)
                 self.preprocess_decisions[f"fill_nulls_how"] = how
-                self.preprocess_decisions[f"fill_nulls_params"] = cols
             elif how == 'iterative_imputation':
                 # TODO: Test, if it woks + revert LGBM + test model ensemble
                 X_train = self.iterative_imputation(X_train)
                 X_test = self.iterative_imputation(X_test, imputer=self.preprocess_decisions[f"fill_nulls_imputer"])
                 self.preprocess_decisions[f"fill_nulls_how"] = how
-                self.preprocess_decisions[f"fill_nulls_cols"] = cols
             logging.info('Finished filling NULLs.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -1544,46 +1548,49 @@ class PreProcessing:
 
             encoded_num_cols = []
             for vartype in self.num_dtypes:
-                filtered_columns = X_train.select_dtypes(include=[vartype]).columns.to_list()
-                for pcas in filtered_columns:
-                    try:
-                        filtered_columns.remove("Num_PC-1_num_pca")
-                        filtered_columns.remove("Num_PC-2_num_pca")
-                    except Exception:
-                        pass
-                for i in filtered_columns:
-                    try:
-                        encoded_num_cols.remove(i)
-                    except Exception:
-                        pass
+                try:
+                    filtered_columns = X_train.select_dtypes(include=[vartype]).columns.to_list()
+                    for pcas in filtered_columns:
+                        try:
+                            filtered_columns.remove("Num_PC-1_num_pca")
+                            filtered_columns.remove("Num_PC-2_num_pca")
+                        except Exception:
+                            pass
+                    for i in filtered_columns:
+                        try:
+                            encoded_num_cols.remove(i)
+                        except Exception:
+                            pass
 
-                if len(filtered_columns) > 0:
-                    num_cols_binarized_created = []
-                    for num_col in filtered_columns:
-                        X_train[num_col+"_binarized"] = X_train[num_col].apply(lambda x: 1 if x > 0 else 0)
-                        X_test[num_col+"_binarized"] = X_test[num_col].apply(lambda x: 1 if x > 0 else 0)
-                        num_cols_binarized_created.append(num_col+"_binarized")
-                        encoded_num_cols.append(num_col)
-                    pca = PCA(n_components=2)
-                    X_train_branch = X_train.copy()
-                    X_test_branch = X_test.copy()
-                    train_comps = pca.fit_transform(X_train_branch[num_cols_binarized_created])
-                    test_comps = pca.fit_transform(X_test_branch[num_cols_binarized_created])
-                    X_train_branch = pd.DataFrame(train_comps, columns=['Num_PC-1', 'Num_PC-2'])
-                    X_test_branch = pd.DataFrame(test_comps, columns=['Num_PC-1', 'Num_PC-2'])
-                    pca_cols = []
-                    for col in X_train_branch.columns:
-                        X_train[f"{col}_num_pca"] = X_train_branch[col]
-                        X_test[f"{col}_num_pca"] = X_test_branch[col]
-                        pca_cols.append(f"{col}_num_pca")
-                    self.preprocess_decisions[f"numeric_binarizer_pca"][f"pca_cols_{vartype}"] = pca_cols
-                    del X_train_branch
-                    del X_test_branch
-                    del train_comps
-                    del test_comps
-                    del pca
-                    _ = gc.collect()
-                else:
+                    if len(filtered_columns) > 0:
+                        num_cols_binarized_created = []
+                        for num_col in filtered_columns:
+                            X_train[num_col+"_binarized"] = X_train[num_col].apply(lambda x: 1 if x > 0 else 0)
+                            X_test[num_col+"_binarized"] = X_test[num_col].apply(lambda x: 1 if x > 0 else 0)
+                            num_cols_binarized_created.append(num_col+"_binarized")
+                            encoded_num_cols.append(num_col)
+                        pca = PCA(n_components=2)
+                        X_train_branch = X_train.copy()
+                        X_test_branch = X_test.copy()
+                        train_comps = pca.fit_transform(X_train_branch[num_cols_binarized_created])
+                        test_comps = pca.fit_transform(X_test_branch[num_cols_binarized_created])
+                        X_train_branch = pd.DataFrame(train_comps, columns=['Num_PC-1', 'Num_PC-2'])
+                        X_test_branch = pd.DataFrame(test_comps, columns=['Num_PC-1', 'Num_PC-2'])
+                        pca_cols = []
+                        for col in X_train_branch.columns:
+                            X_train[f"{col}_num_pca"] = X_train_branch[col]
+                            X_test[f"{col}_num_pca"] = X_test_branch[col]
+                            pca_cols.append(f"{col}_num_pca")
+                        self.preprocess_decisions[f"numeric_binarizer_pca"][f"pca_cols_{vartype}"] = pca_cols
+                        del X_train_branch
+                        del X_test_branch
+                        del train_comps
+                        del test_comps
+                        del pca
+                        _ = gc.collect()
+                    else:
+                        pass
+                except ValueError:
                     pass
             self.num_columns_encoded = encoded_num_cols
             logging.info('Finished to binarize numeric columns + PCA binarized features.')
