@@ -162,10 +162,10 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         # label encode targets
         #val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
         val_y_hat = titanic_auto_ml.predicted_classes['vowpal_wabbit']
-    elif blueprint == 'avg_booster':
-        titanic_auto_ml.ml_special_binary_full_processing_boosting_blender(preprocessing_type='nlp')
+    elif blueprint == 'max_voting':
+        titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_special_binary_full_processing_boosting_blender(val_df, preprocessing_type='nlp')
+        titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting(val_df)
         val_y_hat = titanic_auto_ml.predicted_classes['blended_preds']
     elif blueprint == 'autoselect':
         titanic_auto_ml.ml_special_multiclass_auto_model_exploration(preprocessing_type='full')
@@ -204,4 +204,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
 
 
 if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='tabnet', dataset='synthetic_multiclass') # corona_tweet
+    blueprint_binary_test_titanic(blueprint='max_voting', dataset='titanic') # corona_tweet

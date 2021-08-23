@@ -339,61 +339,6 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_special_binary_full_processing_boosting_blender(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
-        """
-        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
-        if the predict_mode attribute is True.
-        :param df: Accepts a dataframe to make predictions on new data.
-        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
-        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
-        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
-        :return: Updates class attributes by its predictions.
-        """
-        if preprocess_bp == 'bp_01':
-            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_02':
-            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_03':
-            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_04':
-            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        else:
-            pass
-        if self.prediction_mode:
-            pass
-        else:
-            self.ngboost_train(tune_mode=self.tune_mode)
-            self.lgbm_train(tune_mode=self.tune_mode)
-            self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
-        self.ngboost_predict(feat_importance=False, importance_alg='SHAP')
-        self.classification_eval('ngboost')
-        self.lgbm_predict(feat_importance=False)
-        self.classification_eval('lgbm')
-        self.xgboost_predict(feat_importance=True)
-        self.classification_eval('xgboost')
-        algorithm = 'blended_preds'
-        if self.prediction_mode:
-            self.dataframe["lgbm_preds"] = self.predicted_probs[f"lgbm"]
-            self.dataframe["ngboost_preds"] = self.predicted_probs[f"ngboost"]
-            self.dataframe["xgboost_preds"] = self.predicted_probs[f"xgboost"]
-            self.dataframe["blended_preds"] = (self.dataframe["lgbm_preds"] + self.dataframe["ngboost_preds"] + self.dataframe["xgboost_preds"])/3
-            self.predicted_probs[f"blended_preds"] = self.dataframe["blended_preds"]
-            predicted_classes = self.predicted_probs[f"blended_preds"] > self.preprocess_decisions[f"probability_threshold"]
-            self.predicted_classes[f"blended_preds"] = predicted_classes
-        else:
-            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_test["lgbm_preds"] = self.predicted_probs[f"lgbm"]
-            X_test["ngboost_preds"] = self.predicted_probs[f"ngboost"]
-            X_test["xgboost_preds"] = self.predicted_probs[f"xgboost"]
-            X_test["blended_preds"] = (X_test["lgbm_preds"] + X_test["ngboost_preds"] + X_test["xgboost_preds"])/3
-            self.predicted_probs[f"blended_preds"] = X_test["blended_preds"]
-            self.threshold_refiner(self.predicted_probs[f"blended_preds"], Y_test)
-            predicted_classes = self.predicted_probs[f"blended_preds"] > self.preprocess_decisions[f"probability_threshold"]
-            self.predicted_classes[f"blended_preds"] = predicted_classes
-        self.classification_eval('blended_preds')
-        self.prediction_mode = True
-        logging.info('Finished blueprint.')
-
     def ml_special_multiclass_full_processing_multimodel_max_voting(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,

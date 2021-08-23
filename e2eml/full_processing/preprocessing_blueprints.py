@@ -28,7 +28,6 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.append_text_sentiment_score()
-            self.pos_tagging_pca(pca_pos_tags=False)
             self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
             self.tfidf_naive_bayes_proba(analyzer="char_wb", ngram_range=(1, 2))
             self.tfidf_naive_bayes_proba(analyzer="word", ngram_range=(1, 1))

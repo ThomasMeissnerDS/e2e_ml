@@ -81,7 +81,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
     However we highly recommend GPU usage to heavily decrease model training times.
     """
 
-    def threshold_refiner(self, probs, targets):
+    def threshold_refiner(self, probs, targets, algorithm):
         """
         Loops through predicted class probabilities in binary contexts and measures performance with
         Matthew correlation.
@@ -90,6 +90,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
         :return: Stores the best threshold as class attribute.
         """
         self.get_current_timestamp()
+        if "probability_threshold" in self.preprocess_decisions:
+            pass
+        else:
+            self.preprocess_decisions[f"probability_threshold"] = {}
+
         loop_spots = np.linspace(0, 1, 100, endpoint=False)
         max_matthew = 0
         best_threshold = 0
@@ -107,8 +112,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             if matthews > max_matthew:
                 max_matthew = matthews
                 best_threshold = iteration
-        self.preprocess_decisions[f"probability_threshold"] = best_threshold
-        return self.preprocess_decisions[f"probability_threshold"]
+        self.preprocess_decisions[f"probability_threshold"][algorithm] = best_threshold
+        return self.preprocess_decisions[f"probability_threshold"][algorithm]
 
     def logistic_regression_train(self):
         """
@@ -143,7 +148,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             partial_probs = model.predict_proba(self.dataframe)
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
@@ -157,8 +162,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             partial_probs = model.predict_proba(X_test)
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
-                self.threshold_refiner(predicted_probs, Y_test)
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
@@ -282,8 +287,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     partial_probs = model.predict_proba(X_test_num)
                     if self.class_problem == 'binary':
                         predicted_probs = np.asarray([line[1] for line in partial_probs])
-                        self.threshold_refiner(predicted_probs, Y_test_num)
-                        predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                        self.threshold_refiner(predicted_probs, Y_test_num, algorithm)
+                        predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
                     else:
                         predicted_probs = partial_probs
                         predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
@@ -375,7 +380,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             partial_probs = model.predict_proba(self.dataframe.to_numpy())
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
@@ -390,8 +395,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             partial_probs = model.predict_proba(X_test)
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
-                self.threshold_refiner(predicted_probs, Y_test)
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
@@ -434,7 +439,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             partial_probs = model.predict_proba(self.dataframe)
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
@@ -448,8 +453,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             partial_probs = model.predict_proba(X_test)
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
-                self.threshold_refiner(predicted_probs, Y_test)
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
@@ -487,7 +492,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
         :param steps: Integer higher than 0. Defines maximum training steps, iuf not in autotune mode.
         :param autotune: Set "True" for automatic hyperparameter optimization. (Default: true)
         :param tune_mode: 'Simple' for simple 80-20 split validation. 'Accurate': Each hyperparameter set will be validated
-        with 10-fold crossvalidation. Longer runtimes, but higher performance. (Default: 'Accurate')
+        with 5-fold crossvalidation. Longer runtimes, but higher performance. (Default: 'Accurate')
         """
         self.get_current_timestamp(task='Train Xgboost')
         self.check_gpu_support(algorithm='xgboost')
@@ -726,7 +731,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             partial_probs = model.predict(D_test)
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
@@ -746,8 +751,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 partial_probs = model.predict(D_test)
                 if self.class_problem == 'binary':
                     predicted_probs = np.asarray([line[1] for line in partial_probs])
-                    self.threshold_refiner(predicted_probs, Y_test)
-                    predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                    self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                    predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
                 else:
                     predicted_probs = partial_probs
                     predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
@@ -985,7 +990,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             predicted_probs = model.predict(X_test)
             if self.class_problem == 'binary':
                 partial_probs = predicted_probs
-                predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
+                predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
             self.predicted_probs[f"{algorithm}"] = {}
@@ -996,8 +1001,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             predicted_probs = model.predict(X_test)
             if self.class_problem == 'binary':
-                self.threshold_refiner(predicted_probs, Y_test)
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
 
@@ -1097,9 +1102,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 model.fit(X_train, Y_train)
                 predicted_probs = model.predict_proba(X_test)
                 if self.class_problem == 'binary':
-                    self.threshold_refiner(predicted_probs, Y_test)
+                    self.threshold_refiner(predicted_probs, Y_test, algorithm)
                     partial_probs = np.asarray([line[1] for line in predicted_probs])
-                    predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"]
+                    predicted_classes = partial_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
                 else:
                     predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
                 matthews = matthews_corrcoef(Y_test, predicted_classes)
@@ -1170,7 +1175,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             partial_probs = model.predict_proba(X_test)
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
@@ -1183,8 +1188,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             partial_probs = model.predict_proba(X_test)
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
-                self.threshold_refiner(predicted_probs, Y_test)
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_probs = partial_probs
                 predicted_classes = np.asarray([np.argmax(line) for line in partial_probs])
@@ -1372,7 +1377,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             partial_probs = model.predict_proba(X_test)
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
                 predicted_classes = predicted_classes.astype(int)
             else:
                 predicted_probs = partial_probs
@@ -1382,8 +1387,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             partial_probs = model.predict_proba(X_test)
             predicted_probs = np.asarray([line[1] for line in partial_probs])
             if self.class_problem == 'binary':
-                self.threshold_refiner(predicted_probs, Y_test)
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"]
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
 
