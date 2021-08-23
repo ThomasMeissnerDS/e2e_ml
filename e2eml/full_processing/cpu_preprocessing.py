@@ -856,7 +856,7 @@ class PreProcessing:
         def binning_on_data(dataframe, cols_to_bin=None):
             num_columns = cols_to_bin.select_dtypes(include=[vartype]).columns
             for col in num_columns:
-                dataframe[str(col) + '_binned'] = pd.cut(dataframe[col], bins=nb_bins, labels=False)
+                dataframe[str(col) + '_binned'] = pd.cut(dataframe[col].replace(np.inf, np.nan).dropna(), bins=nb_bins, labels=False)
                 self.new_sin_cos_col_names.append(str(col) + '_binned')
             del num_columns
             _ = gc.collect()
@@ -867,7 +867,7 @@ class PreProcessing:
         if self.prediction_mode:
             for vartype in self.num_dtypes:
                 filtered_columns = self.dataframe.loc[:, ~self.dataframe.columns.isin(self.new_sin_cos_col_names)]
-            self.dataframe = binning_on_data(self.dataframe, cols_to_bin=filtered_columns)
+                self.dataframe = binning_on_data(self.dataframe, cols_to_bin=filtered_columns)
             logging.info('Finished numerical binning.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
@@ -877,8 +877,8 @@ class PreProcessing:
             for vartype in self.num_dtypes:
                 filtered_columns = X_train.loc[:, ~X_train.columns.isin(self.new_sin_cos_col_names)]
 
-            X_train = binning_on_data(X_train, cols_to_bin=filtered_columns)
-            X_test = binning_on_data(X_test, cols_to_bin=filtered_columns)
+                X_train = binning_on_data(X_train, cols_to_bin=filtered_columns)
+                X_test = binning_on_data(X_test, cols_to_bin=filtered_columns)
             logging.info('Finished numerical binning.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
