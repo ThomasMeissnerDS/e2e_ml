@@ -35,8 +35,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.tfidf_naive_bayes_proba(analyzer="word", ngram_range=(1, 1))
         self.cardinality_remover(threshold=100)
         self.delete_high_null_cols(threshold=0.5)
-        self.onehot_pca()
         self.numeric_binarizer_pca()
+        self.onehot_pca()
         self.category_encoding(algorithm='target')
         self.fill_nulls(how='static') # can only be here when "static"
         self.data_binning(nb_bins=10)

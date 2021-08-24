@@ -1626,6 +1626,11 @@ class PreProcessing:
                         except Exception:
                             pass
 
+                    #filtered_columns = [ x for x in filtered_columns if "POS PC-" not in x]
+                    #filtered_columns = [ x for x in filtered_columns if "textblob_sentiment_score" not in x]
+                    #filtered_columns = [ x for x in filtered_columns if "TFIDF PC" not in x]
+                    #filtered_columns = [ x for x in filtered_columns if "tfid_bayes_" not in x]
+
                     if len(filtered_columns) > 0:
                         num_cols_binarized_created = []
                         for num_col in filtered_columns:

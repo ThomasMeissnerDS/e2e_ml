@@ -304,6 +304,12 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             pass
         else:
             pos_columns = set([])
+
+        if self.nlp_columns:
+            text_cols = self.nlp_columns
+        else:
+            pass
+
         target_columns = ["CC", "CD", "DT", "EX", "FW", "IN", "JJ", "JJR", "JJS", "LS",
                           "MD",
                           "NN", "NNS", "NNP", "NNPS", "PDT", "POS", "PRP", "RB", "RBR",
@@ -330,13 +336,14 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 else:
                     df = pd.merge(df, pos_df, left_index=True, right_index=True, how='left')
         elif mode == 'fit':
+
             # if self.nlp_columns
             nlp_columns = []
             for text_col in text_cols:
                 try:
                     # do we have at least 3 words?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
-                    if df[f'nof_words_{text_col}'].max() >= 3:
+                    if df[f'nof_words_{text_col}'].max() >= 1:
                         temp_target_columns = [x + text_col for x in target_columns]
                         df[text_col].fillna('None', inplace=True)
                         spacy_df = pd.DataFrame(self.spacy_features(df, text_col), columns=self.get_spacy_col_names())
@@ -368,9 +375,13 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 # get unique pos tag columns
                 unique_pos_cols = list(set(pos_columns))
                 self.preprocess_decisions[f"spacy_pos"]["pos_tagger_cols"] = unique_pos_cols
-            # get unique original column names
-            unique_nlp_cols = list(set(nlp_columns))
-            self.nlp_columns = unique_nlp_cols
+
+            if self.nlp_columns:
+                pass
+            else:
+                # get unique original column names
+                unique_nlp_cols = list(set(nlp_columns))
+                self.nlp_columns = unique_nlp_cols
         return df
 
     def pos_tagging_pca(self, pca_pos_tags=True):
@@ -404,8 +415,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def tfidf_pca(self, df, text_cols, mode='fit', pca_pos_tags=True, ngram_range=(1, 2)):
-        if mode == 'transform':
-            pass
+        if self.nlp_columns:
+            text_cols = self.nlp_columns
         else:
             pass
         if mode == 'transform':
@@ -425,13 +436,17 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 else:
                     pass
         elif mode == 'fit':
+            if self.nlp_columns:
+                text_cols = self.nlp_columns
+            else:
+                pass
             # if self.nlp_columns
             nlp_columns = []
             for text_col in text_cols:
                 try:
-                    # do we have at least 3 words?
+                    # do we have at least 1 word?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
-                    if df[f'nof_words_{text_col}'].max() >= 3:
+                    if df[f'nof_words_{text_col}'].max() >= 1:
                         df[text_col].fillna('None', inplace=True)
                         tfids = TfidfVectorizer(ngram_range=ngram_range, strip_accents="unicode", max_features=10000)
                         vector = list(tfids.fit_transform(df[text_col]).toarray())
@@ -454,9 +469,12 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     df.drop(f'nof_words_{text_col}', axis=1, inplace=True)
                 except AttributeError:
                     pass
-            # get unique original column names
-            unique_nlp_cols = list(set(nlp_columns))
-            self.nlp_columns = unique_nlp_cols
+            if self.nlp_columns:
+                pass
+            else:
+                # get unique original column names
+                unique_nlp_cols = list(set(nlp_columns))
+                self.nlp_columns = unique_nlp_cols
         return df
 
     def tfidf_vectorizer_to_pca(self, pca_pos_tags=True, ngram_range=(1, 2)):
@@ -497,6 +515,10 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         else:
             pass
         if mode == 'transform':
+            if self.nlp_columns:
+                text_cols = self.nlp_columns
+            else:
+                pass
             for text_col in text_cols:
                 lst_stopwords = nltk.corpus.stopwords.words("english")
                 df[text_col] = df[text_col].apply(lambda x:
@@ -523,13 +545,16 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     df[f"tfid_vowpal_pred_{text_col}"] = y_hat_vowpal
 
         elif mode == 'fit':
-            # if self.nlp_columns
+            if self.nlp_columns:
+                text_cols = self.nlp_columns
+            else:
+                pass
             nlp_columns = []
             for text_col in text_cols:
                 try:
-                    # do we have at least 3 words?
+                    # do we have at least 1 word?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
-                    if df[f'nof_words_{text_col}'].max() >= 3:
+                    if df[f'nof_words_{text_col}'].max() >= 1:
                         lst_stopwords = nltk.corpus.stopwords.words("english")
                         df[text_col] = df[text_col].apply(lambda x:
                                                               self.utils_preprocess_text(x, flg_stemm=False, flg_lemm=True,
@@ -579,9 +604,12 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     df.drop(f'nof_words_{text_col}', axis=1, inplace=True)
                 except AttributeError:
                     pass
-            # get unique original column names
-            unique_nlp_cols = list(set(nlp_columns))
-            self.nlp_columns = unique_nlp_cols
+            if self.nlp_columns:
+                pass
+            else:
+                # get unique original column names
+                unique_nlp_cols = list(set(nlp_columns))
+                self.nlp_columns = unique_nlp_cols
         return df
 
     def tfidf_naive_bayes_proba(self, pca_pos_tags=True, analyzer="char_wb", ngram_range=(1, 2)):
@@ -630,9 +658,9 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             nlp_columns = []
             for text_col in text_cols:
                 try:
-                    # do we have at least 3 words?
+                    # do we have at least 1 words?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
-                    if df[f'nof_words_{text_col}'].max() >= 3:
+                    if df[f'nof_words_{text_col}'].max() >= 1:
                         df[text_col].fillna('None', inplace=True)
                         if self.class_problem == 'binary' or self.class_problem == 'multiclass':
                             vowpal = VWClassifier(convert_labels=False)
