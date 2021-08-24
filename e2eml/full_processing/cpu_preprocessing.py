@@ -211,6 +211,7 @@ class PreProcessing:
         self.prediction_mode = prediction_mode
         self.best_model = None
         self.excluded = None
+        self.detected_col_types = {}
         self.num_dtypes = ['int8', 'int16', 'int32', 'int64', 'float16', 'float32', 'float64']
         if not num_columns:
             num_col_list = []
@@ -340,6 +341,69 @@ class PreProcessing:
                 print('Xgboost uses CPU.')
         else:
             print("No algorithm has been checked for GPU acceleration.")
+
+    def automatic_type_detection_casting(self):
+        """
+        Loops through the dataframe and detects column types and type casts them accordingly.
+        :return: Returns casted dataframe
+        """
+        if self.prediction_mode:
+            self.get_current_timestamp(task='Started column type detection and casting')
+            logging.info('Started column type detection and casting.')
+            for key in self.detected_col_types:
+                if self.detected_col_types[key] == 'datetime[ns]':
+                    self.dataframe[key] = pd.to_datetime(self.dataframe[key], infer_datetime_format=True)
+                else:
+                    self.dataframe[key] = self.dataframe[key].astype(self.detected_col_types[key])
+            logging.info('Finished column type detection and casting.')
+            return self.dataframe
+        else:
+            self.get_current_timestamp(task='Started column type detection and casting')
+            logging.info('Started column type detection and casting.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            # detect and cast boolean columns
+            bool_cols = list(X_train.select_dtypes(['bool']))
+            for col in bool_cols:
+                X_train[col] = X_train[col].astype(bool)
+                X_test[col] = X_test[col].astype(bool)
+                self.detected_col_types[col] = 'bool'
+
+            # detect and cast datetime columns
+            try:
+                no_bool_df = X_train.loc[:, ~X_train.columns.isin(bool_cols)]
+                no_bool_cols = no_bool_df.columns.to_list()
+            except Exception:
+                no_bool_cols = X_train.columns.to_list()
+            if not self.date_columns:
+                date_columns = []
+                # convert date columns from object to datetime type
+                for col in no_bool_cols:
+                    if col not in self.num_columns:
+                        try:
+                            X_train[col] = pd.to_datetime(X_train[col], infer_datetime_format=True)
+                            X_test[col] = pd.to_datetime(X_test[col], infer_datetime_format=True)
+                            date_columns.append(col)
+                            self.detected_col_types[col] = 'datetime[ns]'
+                        except Exception:
+                            pass
+                self.date_columns = date_columns
+
+            # detect and cast floats
+            no_bool_dt_cols = bool_cols + self.date_columns
+            no_bool_datetime_df = X_train.loc[:, ~X_train.columns.isin(no_bool_dt_cols)]
+            no_bool_datetime_cols = no_bool_datetime_df.columns.to_list()
+            for col in no_bool_datetime_cols:
+                try:
+                    X_train[col] = X_train[col].astype(float)
+                    X_test[col] = X_test[col].astype(float)
+                    self.detected_col_types[col] = 'float'
+                except Exception:
+                    X_train[col] = X_train[col].astype(str)
+                    X_test[col] = X_test[col].astype(str)
+                    self.detected_col_types[col] = 'object'
+            logging.info('Finished column type detection and casting.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def wrap_test_train_to_dict(self, X_train, X_test, Y_train, Y_test):
         """

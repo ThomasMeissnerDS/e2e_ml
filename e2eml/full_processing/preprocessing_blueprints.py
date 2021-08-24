@@ -24,6 +24,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         except AttributeError:
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
+        self.automatic_type_detection_casting()
+        self.fill_nulls(how='static') # can only be here when "static"
         self.datetime_converter(datetime_handling='all')
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
@@ -80,6 +82,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         except AttributeError:
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
+        self.automatic_type_detection_casting()
+        self.fill_nulls(how='static') # can only be here when "static"
         self.datetime_converter(datetime_handling='all')
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
@@ -128,6 +132,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         except AttributeError:
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
+        self.automatic_type_detection_casting()
+        self.fill_nulls(how='static') # can only be here when "static"
         self.datetime_converter(datetime_handling='all')
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
@@ -183,6 +189,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         except AttributeError:
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
+        self.automatic_type_detection_casting()
+        self.fill_nulls(how='static') # can only be here when "static"
         self.datetime_converter(datetime_handling='all')
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
