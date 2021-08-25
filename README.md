@@ -131,7 +131,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 1.7.4
+* 1.7.5
   - Instead of a global probability threshold, e2eml stores threshold for each tested model
   - Deprecated binary boosting blender due to lack of performance
 * 1.7.3

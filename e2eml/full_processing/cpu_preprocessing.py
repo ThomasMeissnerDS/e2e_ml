@@ -1160,7 +1160,7 @@ class PreProcessing:
         _ = gc.collect()
         return dataframe_final
 
-    def static_filling(self, dataframe, fill_with=0, fill_cat_col_with='None'):
+    def static_filling(self, dataframe, fill_with=0, fill_cat_col_with='No words have been found'):
         """
         Loop through dataframe and fill categorical and numeric columns seperately with predefined values.
         :param dataframe: Pandas Dataframe
@@ -1182,7 +1182,7 @@ class PreProcessing:
         return dataframe
 
     # TODO: Check if parameters can be used via **kwargs argument
-    def fill_nulls(self, how='iterative_imputation', fill_with=0, fill_cat_col_with='None'):
+    def fill_nulls(self, how='iterative_imputation', fill_with=0, fill_cat_col_with='No words have been found'):
         """
         Takes in a dataframe and fills all NULLs with chosen value.
         :param fill_with: Define value to replace NULLs with.
@@ -1227,6 +1227,19 @@ class PreProcessing:
                 self.preprocess_decisions[f"fill_nulls_how"] = how
             logging.info('Finished filling NULLs.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def fill_infinite_values(self, fill_with_zero=True):
+        if fill_with_zero:
+            filler = 0
+        else:
+            filler = np.nan
+        if self.prediction_mode:
+            self.dataframe.replace([np.inf, -np.inf], filler)
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train.replace([np.inf, -np.inf], filler)
+            X_test.replace([np.inf, -np.inf], filler)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def isolation_forest_identifier(self, how='append', threshold=0):
@@ -1664,6 +1677,21 @@ class PreProcessing:
             self.num_columns_encoded = encoded_num_cols
             logging.info('Finished to binarize numeric columns + PCA binarized features.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def target_encode_multiclass(self, X, y, cat_columns):
+        # TODO: COMPLETE
+        enc = OneHotEncoder().fit(y)
+        y_onehot = enc.transform(y)
+        class_names = y_onehot.columns
+        X_obj = X.select_dtypes('object')
+        X = X.select_dtypes(exclude='object')
+        for class_ in class_names:
+            enc = TargetEncoder()
+            enc.fit(X_obj, y_onehot[class_])
+            temp = enc.transform(X_obj)
+            temp.columns = [str(x)+'_'+str(class_) for x in temp.columns]
+            X = pd.concat([X, temp], axis=1)
+        return X
 
     def category_encoding(self, algorithm='target'):
         """

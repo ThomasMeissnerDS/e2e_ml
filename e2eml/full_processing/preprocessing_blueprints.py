@@ -25,6 +25,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.automatic_type_detection_casting()
+        self.fill_infinite_values()
         self.fill_nulls(how='static') # can only be here when "static"
         self.datetime_converter(datetime_handling='all')
         self.pos_tagging_pca(pca_pos_tags=True)
@@ -83,6 +84,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.automatic_type_detection_casting()
+        self.fill_infinite_values()
         self.fill_nulls(how='static') # can only be here when "static"
         self.datetime_converter(datetime_handling='all')
         self.pos_tagging_pca(pca_pos_tags=True)
@@ -133,12 +135,13 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.automatic_type_detection_casting()
+        self.fill_infinite_values()
         self.fill_nulls(how='static') # can only be here when "static"
         self.datetime_converter(datetime_handling='all')
         self.pos_tagging_pca(pca_pos_tags=True)
         if preprocessing_type == 'nlp':
             self.pos_tagging_pca(pca_pos_tags=False)
-            #self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
+            self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
             self.tfidf_naive_bayes_proba()
         self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
         self.cardinality_remover(threshold=100)
@@ -190,6 +193,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.automatic_type_detection_casting()
+        self.fill_infinite_values()
         self.fill_nulls(how='static') # can only be here when "static"
         self.datetime_converter(datetime_handling='all')
         self.pos_tagging_pca(pca_pos_tags=True)

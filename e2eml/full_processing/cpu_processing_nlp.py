@@ -343,7 +343,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 try:
                     # do we have at least 3 words?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
-                    if df[f'nof_words_{text_col}'].max() >= 1:
+                    if df[f'nof_words_{text_col}'].max() >= 3:
                         temp_target_columns = [x + text_col for x in target_columns]
                         df[text_col].fillna('None', inplace=True)
                         spacy_df = pd.DataFrame(self.spacy_features(df, text_col), columns=self.get_spacy_col_names())
@@ -446,7 +446,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 try:
                     # do we have at least 1 word?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
-                    if df[f'nof_words_{text_col}'].max() >= 1:
+                    if df[f'nof_words_{text_col}'].max() >= 3:
                         df[text_col].fillna('None', inplace=True)
                         tfids = TfidfVectorizer(ngram_range=ngram_range, strip_accents="unicode", max_features=10000)
                         vector = list(tfids.fit_transform(df[text_col]).toarray())
@@ -554,7 +554,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 try:
                     # do we have at least 1 word?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
-                    if df[f'nof_words_{text_col}'].max() >= 1:
+                    if df[f'nof_words_{text_col}'].max() >= 3:
                         lst_stopwords = nltk.corpus.stopwords.words("english")
                         df[text_col] = df[text_col].apply(lambda x:
                                                               self.utils_preprocess_text(x, flg_stemm=False, flg_lemm=True,
@@ -660,7 +660,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 try:
                     # do we have at least 1 words?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
-                    if df[f'nof_words_{text_col}'].max() >= 1:
+                    if df[f'nof_words_{text_col}'].max() >= 3:
                         df[text_col].fillna('None', inplace=True)
                         if self.class_problem == 'binary' or self.class_problem == 'multiclass':
                             vowpal = VWClassifier(convert_labels=False)
