@@ -148,18 +148,11 @@ class RegressionModels(postprocessing.FullPipeline):
                 factor = trial.suggest_uniform('factor', 0.1, 0.9)
                 pretrain_difficulty = trial.suggest_uniform('pretrain_difficulty', 0.7, 0.9)
                 mode = trial.suggest_categorical('mode', ["max", "min"])
-                if optimization_rounds >= 20:
-                    gamma = trial.suggest_loguniform('gamma', 1e-5, 2.0)
-                    lambda_sparse = trial.suggest_loguniform('lambda_sparse', 1e-6, 1e-3)
-                    mask_type = trial.suggest_categorical('mask_type', ["sparsemax", "entmax"])
-                    n_shared = trial.suggest_int('n_shared', 1, 5)
-                    n_independent = trial.suggest_int('n_independent', 1, 5)
-                else:
-                    gamma = 1.3
-                    lambda_sparse = 1e-3
-                    mask_type = "entmax"
-                    n_shared = 2
-                    n_independent = 2
+                gamma = trial.suggest_loguniform('gamma', 1e-5, 2.0)
+                lambda_sparse = trial.suggest_loguniform('lambda_sparse', 1e-6, 1e-3)
+                mask_type = trial.suggest_categorical('mask_type', ["sparsemax", "entmax"])
+                n_shared = trial.suggest_int('n_shared', 1, 5)
+                n_independent = trial.suggest_int('n_independent', 1, 5)
                 #loss_func = trial.suggest_categorical('loss_func', ['rmsle', 'mae', 'rmse', 'mse'])
                 # ['auc', 'accuracy', 'balanced_accuracy', 'logloss', 'mae', 'mse', 'rmsle', 'unsup_loss', 'rmse']"
 

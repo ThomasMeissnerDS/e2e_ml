@@ -31,6 +31,7 @@ requirements = ["babel>=2.9.0",
                 "vowpalwabbit>=8.11.0",
                 "xgboost>=1.3.3",
                 ]
+
 extras_require = {
     'rapids': ['cupy', 'cython'],
     'jupyter': ['ipython>=7.10.0', 'jupyter_core>=4.7.0', 'notebook>=6.1.0'],
@@ -39,7 +40,7 @@ extras_require = {
 
 setup(
     name="e2eml",
-    version="1.7.6",
+    version="1.7.7",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",
@@ -48,6 +49,7 @@ setup(
     url="https://github.com/ThomasMeissnerDS/e2e_ml",
     packages=find_packages(),
     install_requires=requirements,
+    extras_require=extras_require,
     classifiers=[
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
