@@ -10,7 +10,7 @@ from nltk.corpus import wordnet, stopwords
 from nltk import pos_tag
 from textblob import TextBlob
 import transformers
-from transformers import AutoModel, AutoTokenizer, AdamW, BertModel, RobertaModel, RobertaTokenizer, BertTokenizer, ElectraTokenizer, ElectraForSequenceClassification, XLNetForSequenceClassification, XLMRobertaForSequenceClassification, GPT2ForSequenceClassification, DistilBertForSequenceClassification
+from transformers import AutoModel, AutoTokenizer, AdamW, BertModel, RobertaModel, RobertaTokenizer, BertTokenizer, ElectraTokenizer, ElectraForSequenceClassification, XLNetForSequenceClassification, XLMRobertaForSequenceClassification, GPT2ForSequenceClassification, DistilBertForSequenceClassification, AlbertForSequenceClassification
 from transformers import get_linear_schedule_with_warmup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import naive_bayes
@@ -808,8 +808,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         elif chosen_model in ['google/electra-small-discriminator',
                               'google/electra-large-discriminator', 'german-nlp-group/electra-base-german-uncased']:
             model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
-        elif chosen_model in ['microsoft/DialogRPT-updown']:
-            model = transformers.GPT2ForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
+        elif chosen_model in ['albert-base-v2', 'albert-large-v2']:
+            model = transformers.AlbertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
         else:
             model = transformers.AutoModel.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
         return model
@@ -832,8 +832,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 self.transformer_chosen, num_labels=1)
         elif chosen_model in ['google/electra-small-discriminator']:
             model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
-        elif chosen_model in ['microsoft/DialogRPT-updown']:
-            model = transformers.GPT2ForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
+        elif chosen_model in ['albert-base-v2', 'albert-large-v2']:
+            model = transformers.AlbertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
         else:
             model = transformers.AutoModel.from_pretrained(self.transformer_chosen, num_labels=1)
         return model
