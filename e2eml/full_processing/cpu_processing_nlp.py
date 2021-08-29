@@ -10,7 +10,7 @@ from nltk.corpus import wordnet, stopwords
 from nltk import pos_tag
 from textblob import TextBlob
 import transformers
-from transformers import AutoModel, AutoTokenizer, AdamW, BertModel, RobertaModel, RobertaTokenizer, BertTokenizer, ElectraTokenizer, ElectraForSequenceClassification, XLNetForSequenceClassification, XLMRobertaForSequenceClassification
+from transformers import AutoModel, AutoTokenizer, AdamW, BertModel, RobertaModel, RobertaTokenizer, BertTokenizer, ElectraTokenizer, ElectraForSequenceClassification, XLNetForSequenceClassification, XLMRobertaForSequenceClassification, GPT2ForSequenceClassification, DistilBertForSequenceClassification
 from transformers import get_linear_schedule_with_warmup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import naive_bayes
@@ -779,7 +779,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             X_train[self.target_variable] = Y_train
             if mode == 'auto':
                 sentence_length = X_train[self.nlp_transformer_columns].apply(lambda x: np.max([len(w) for w in x.split()]))
-                words_to_replace = int(sentence_length.max()/10) # exchange ten percent of the words
+                words_to_replace = int(sentence_length.max()/15) # exchange fifteen percent of the words
             train_copy = X_train.copy()
             train_copy[self.nlp_transformer_columns] = train_copy[self.nlp_transformer_columns].apply(lambda x : self.synonym_replacement(x, words_to_replace))
             X_train = pd.concat([X_train, train_copy], ignore_index=True)
@@ -792,7 +792,9 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         logging.info('Start creating or loading transformer model for classification.')
         if not self.transformer_chosen:
             chosen_model = chosen_model
-        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'bert-large-cased', 'bert-base-multilingual-cased']:
+
+        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'bert-large-cased', 'bert-base-multilingual-cased',
+                            'bert-base-german-dbmdz-uncased', 'bert-base-german-cased', 'dbmdz/bert-base-german-europeana-uncased']:
             model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
         elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base', 'roberta-base-openai-detector']:
             model = transformers.RobertaForSequenceClassification.from_pretrained(
@@ -803,8 +805,11 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         elif chosen_model in ['xlm-roberta', 'xlm-roberta-base', 'xlm-roberta-large']:
             model = transformers.XLMRobertaForSequenceClassification.from_pretrained(
                 self.transformer_chosen, num_labels=self.num_classes)
-        elif chosen_model == 'google/electra-small-discriminator':
+        elif chosen_model in ['google/electra-small-discriminator',
+                              'google/electra-large-discriminator', 'german-nlp-group/electra-base-german-uncased']:
             model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
+        elif chosen_model in ['microsoft/DialogRPT-updown']:
+            model = transformers.GPT2ForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
         else:
             model = transformers.AutoModel.from_pretrained(self.transformer_chosen, num_labels=self.num_classes)
         return model
@@ -813,7 +818,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         logging.info('Start creating or loading transformer model for regression.')
         if not self.transformer_chosen:
             chosen_model = chosen_model
-        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'bert-large-uncased', 'bert-large-cased', 'bert-base-multilingual-cased']:
+        if chosen_model in ['bert-base-uncased', 'bert-base-cased', 'bert-large-cased', 'bert-base-multilingual-cased',
+                            'bert-base-german-dbmdz-uncased', 'bert-base-german-cased', 'dbmdz/bert-base-german-europeana-uncased']:
             model = transformers.BertForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
         elif chosen_model in ['roberta-base', 'roberta-large', 'distilroberta-base']:
             model = transformers.RobertaForSequenceClassification.from_pretrained(
@@ -824,8 +830,10 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         elif chosen_model in ['xlm-roberta', 'xlm-roberta-base', 'xlm-roberta-large']:
             model = transformers.XLMRobertaForSequenceClassification.from_pretrained(
                 self.transformer_chosen, num_labels=1)
-        elif chosen_model == 'google/electra-small-discriminator':
+        elif chosen_model in ['google/electra-small-discriminator']:
             model = transformers.ElectraForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
+        elif chosen_model in ['microsoft/DialogRPT-updown']:
+            model = transformers.GPT2ForSequenceClassification.from_pretrained(self.transformer_chosen, num_labels=1)
         else:
             model = transformers.AutoModel.from_pretrained(self.transformer_chosen, num_labels=1)
         return model

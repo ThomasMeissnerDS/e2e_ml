@@ -33,14 +33,14 @@ requirements = ["babel>=2.9.0",
                 ]
 
 extras_require = {
-    'rapids': ['cupy', 'cython'],
+    'rapids': ['cupy>=8.1.0', 'cython>=0.29.21'],
     'jupyter': ['ipython>=7.10.0', 'jupyter_core>=4.7.0', 'notebook>=6.1.0'],
-    'full': ['cupy', 'cython', 'ipython>=7.10.0', 'jupyter_core>=4.7.0', 'notebook>=6.1.0']
+    'full': ['cupy>=8.1.0', 'cython>=0.29.21', 'ipython>=7.10.0', 'jupyter_core>=4.7.0', 'notebook>=6.1.0']
 }
 
 setup(
     name="e2eml",
-    version="1.7.7",
+    version="1.7.8",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",
