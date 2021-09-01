@@ -210,7 +210,6 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.reduce_memory_footprint()
         self.automated_feature_selection(metric='logloss')
         self.sort_columns_alphabetically()
-        self.smote_data()
         if self.prediction_mode:
             pass
         else:

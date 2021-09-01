@@ -786,6 +786,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             X_train = X_train.reset_index(drop=True)
             Y_train = X_train[self.target_variable]
             X_train.drop(self.target_variable, axis=1)
+
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def create_bert_classification_model(self, chosen_model='bert-base-uncased'):

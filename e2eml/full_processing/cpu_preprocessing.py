@@ -161,9 +161,9 @@ class PreProcessing:
             self.preprocess_decisions = preprocess_decisions
         self.transformer_model_load_from_path = transformer_model_load_from_path
         self.transformer_model_save_states_path = transformer_model_save_states_path
-        self.transformer_settings = {f"train_batch_size": 16,
-                                     "test_batch_size": 16,
-                                     "pred_batch_size": 16,
+        self.transformer_settings = {f"train_batch_size": 32,
+                                     "test_batch_size": 32,
+                                     "pred_batch_size": 32,
                                      "num_workers": 4,
                                      "epochs": self.transformer_epochs, # TODO: Change to 20 again
                                      "transformer_model_path": self.transformer_model_load_from_path,
@@ -644,6 +644,16 @@ class PreProcessing:
             #pandas_series = pandas_series[col]
             return pandas_series
 
+        def label_encoder_reverse_transform(pandas_series):
+            col = pandas_series.name
+            try:
+                pandas_series = pandas_series.to_frame()
+            except Exception:
+                pass
+            reverse_mapping = {value: key for key, value in self.preprocess_decisions["label_encoder_mapping"].items()}
+            pandas_series = pandas_series.replace({col: reverse_mapping})
+            return pandas_series
+
         if self.prediction_mode:
             target = label_encoder_transform(target, self.preprocess_decisions["label_encoder_mapping"])
         else:
@@ -826,10 +836,19 @@ class PreProcessing:
             logging.info('Started test train split.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             self.check_target_class_distribution()
-            X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
+
+            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+                try:
+                    X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
                                                                                     self.dataframe[self.target_variable],
                                                                                     train_size=train_size,
-                                                                                    random_state=42)
+                                                                                    random_state=42,
+                                                                                    stratify=self.dataframe[self.target_variable])
+                except Exception:
+                    X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
+                                                                                        self.dataframe[self.target_variable],
+                                                                                        train_size=train_size,
+                                                                                        random_state=42)
             try:
                 Y_train = Y_train.astype(float)
                 Y_test = Y_test.astype(float)
