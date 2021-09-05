@@ -198,11 +198,11 @@ class PreProcessing:
                                              "tabnet": 25,
                                              "ngboost": 15,
                                              "sklearn_ensemble": 10}
-        self.hyperparameter_tuning_max_runtine_hours = {"xgboost": 24,
-                                             "lgbm": 24,
-                                             "tabnet": 24,
-                                             "ngboost": 24,
-                                             "sklearn_ensemble": 24}
+        self.hyperparameter_tuning_max_runtime_hours = {"xgboost": 24*60*60,
+                                             "lgbm": 24*60*60,
+                                             "tabnet": 24*60*60,
+                                             "ngboost": 24*60*60,
+                                             "sklearn_ensemble": 24*60*60}
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model

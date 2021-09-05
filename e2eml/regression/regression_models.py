@@ -228,12 +228,12 @@ class RegressionModels(postprocessing.FullPipeline):
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            optuna.visualization.plot_optimization_history(study)  # .show()
-            optuna.visualization.plot_param_importances(study)  # .show()
-            self.optuna_studies[
-                f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(study)
-            self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(
-                study)
+            fig = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+            fig.show()
+            fig = optuna.visualization.plot_param_importances(study)
+            self.optuna_studies[f"{algorithm}_param_importance"] = fig
+            fig.show()
 
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             Y_train = Y_train.values.reshape(-1, 1)
@@ -452,12 +452,13 @@ class RegressionModels(postprocessing.FullPipeline):
                 self.optuna_studies[f"{algorithm}"] = {}
                 # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-                optuna.visualization.plot_optimization_history(study)
-                optuna.visualization.plot_param_importances(study)
-                self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(
-                    study)
-                self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(
-                    study)
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+
                 lgbm_best_param = study.best_trial.params
                 param = {
                     'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
@@ -619,11 +620,13 @@ class RegressionModels(postprocessing.FullPipeline):
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            optuna.visualization.plot_optimization_history(study)
-            optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(
-                study)
-            self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+            fig = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+            fig.show()
+            fig = optuna.visualization.plot_param_importances(study)
+            self.optuna_studies[f"{algorithm}_param_importance"] = fig
+            fig.show()
+
             lgbm_best_param = study.best_trial.params
             param = {
                 'objective': 'regression',
@@ -917,11 +920,13 @@ class RegressionModels(postprocessing.FullPipeline):
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            optuna.visualization.plot_optimization_history(study)
-            optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = optuna.visualization.plot_optimization_history(
-                study)
-            self.optuna_studies[f"{algorithm}_param_importance"] = optuna.visualization.plot_param_importances(study)
+            fig = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+            fig.show()
+            fig = optuna.visualization.plot_param_importances(study)
+            self.optuna_studies[f"{algorithm}_param_importance"] = fig
+            fig.show()
+
             lgbm_best_param = study.best_trial.params
 
             if lgbm_best_param["base_learner"] == "DecTree_depth2":
