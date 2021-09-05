@@ -237,14 +237,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
                     mask_type=mask_type,
                     scheduler_params=dict(
-                        mode=mode, patience=10, min_lr=1e-5, factor=factor),
+                        mode=mode, patience=30, min_lr=1e-5, factor=factor),
                     scheduler_fn=ReduceLROnPlateau,
                     seed=42,
                     verbose=1
                 )
                 mean_matthew_corr = []
                 from sklearn.model_selection import StratifiedKFold
-                skf = StratifiedKFold(n_splits=5, random_state=42, shuffle=True)
+                skf = StratifiedKFold(n_splits=10, random_state=42, shuffle=True)
 
                 for train_index, test_index in skf.split(X_train, Y_train):
                     x_train, x_test = X_train.iloc[train_index], X_train.iloc[test_index]
@@ -264,7 +264,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     pretrainer.fit(x_train,
                                    eval_set=[(x_test)],
                                    max_epochs=max_epochs,
-                                   patience=20,
+                                   patience=30,
                                    batch_size=batch_size,
                                    virtual_batch_size=virtual_batch_size,
                                    num_workers=num_workers,
@@ -276,7 +276,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         x_train, y_train,
                         eval_set=[(x_test, y_test)],
                         eval_metric=[Matthews],
-                        patience=25,
+                        patience=30,
                         batch_size=batch_size,
                         virtual_batch_size=virtual_batch_size,
                         num_workers=num_workers,
@@ -338,7 +338,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pretrainer.fit(X_train,
                            eval_set=[(X_test)],
                            max_epochs=max_epochs,
-                           patience=25,
+                           patience=30,
                            batch_size=batch_size,
                            virtual_batch_size=virtual_batch_size,
                            num_workers=num_workers,
@@ -552,13 +552,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                             return result['test-mlogloss-mean'].mean()
 
                     algorithm = 'xgboost'
+                    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
                     if tune_mode == 'simple':
-                        study = optuna.create_study(direction='maximize')
+                        study = optuna.create_study(direction='maximize', sampler=sampler)
                         logging.info(f'Start Xgboost simple validation.')
                     else:
-                        study = optuna.create_study(direction='minimize')
+                        study = optuna.create_study(direction='minimize', sampler=sampler)
                         logging.info(f'Start Xgboost advanced validation.')
-                    study.optimize(objective, n_trials=40)
+                    study.optimize(objective, n_trials=50)
                     self.optuna_studies[f"{algorithm}"] = {}
                     # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -630,13 +631,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                             return result['test-mlogloss-mean'].mean()
 
                     algorithm = 'xgboost'
+                    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
                     if tune_mode == 'simple':
                         logging.info(f'Start Xgboost simple validation.')
-                        study = optuna.create_study(direction='maximize')
+                        study = optuna.create_study(direction='maximize', sampler=sampler)
                     else:
                         logging.info(f'Start Xgboost advanced validation.')
-                        study = optuna.create_study(direction='minimize')
-                    study.optimize(objective, n_trials=30)
+                        study = optuna.create_study(direction='minimize', sampler=sampler)
+                    study.optimize(objective, n_trials=50)
                     self.optuna_studies[f"{algorithm}"] = {}
                     # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -848,11 +850,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         return avg_result
 
                 algorithm = 'lgbm'
+                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
                 if tune_mode == 'simple':
-                    study = optuna.create_study(direction='maximize')
+                    study = optuna.create_study(direction='maximize', sampler=sampler)
                 else:
-                    study = optuna.create_study(direction='minimize')
-                study.optimize(objective, n_trials=40)
+                    study = optuna.create_study(direction='minimize', sampler=sampler)
+
+
+                study.optimize(objective, n_trials=50)
                 self.optuna_studies[f"{algorithm}"] = {}
                 # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -932,10 +937,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         return avg_result
 
                 algorithm = 'lgbm'
+                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
                 if tune_mode == 'simple':
-                    study = optuna.create_study(direction='maximize')
+                    study = optuna.create_study(direction='maximize', sampler=sampler)
                 else:
-                    study = optuna.create_study(direction='minimize')
+                    study = optuna.create_study(direction='minimize', sampler=sampler)
                 study.optimize(objective, n_trials=40)
                 self.optuna_studies[f"{algorithm}"] = {}
                 # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
@@ -1110,7 +1116,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 matthews = matthews_corrcoef(Y_test, predicted_classes)
                 return matthews
 
-            study = optuna.create_study(direction="maximize")
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            study = optuna.create_study(direction="maximize", sampler=sampler)
             study.optimize(objective, n_trials=10)
             best_variant = study.best_trial.params["ensemble_variant"]
             if best_variant == '2_boosters':

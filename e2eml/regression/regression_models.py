@@ -167,13 +167,13 @@ class RegressionModels(postprocessing.FullPipeline):
                     optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
                     mask_type=mask_type,
                     scheduler_params=dict(
-                        mode=mode, patience=10, min_lr=1e-5, factor=factor),
+                        mode=mode, patience=50, min_lr=1e-5, factor=factor),
                     scheduler_fn=ReduceLROnPlateau,
                     seed=42,
                     verbose=1
                 )
                 mean_abs_errors = []
-                skf = KFold(n_splits=5, random_state=42, shuffle=True)
+                skf = KFold(n_splits=10, random_state=42, shuffle=True)
 
                 for train_index, test_index in skf.split(X_train):
                     x_train, x_test = X_train.iloc[train_index], X_train.iloc[test_index]
@@ -193,7 +193,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     pretrainer.fit(x_train,
                                    eval_set=[(x_test)],
                                    max_epochs=max_epochs,
-                                   patience=20,
+                                   patience=50,
                                    batch_size=batch_size,
                                    virtual_batch_size=virtual_batch_size,
                                    num_workers=num_workers,
@@ -205,7 +205,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         x_train, y_train,
                         eval_set=[(x_test, y_test)],
                         eval_metric=['mae'],
-                        patience=20,
+                        patience=50,
                         batch_size=batch_size,
                         virtual_batch_size=virtual_batch_size,
                         num_workers=num_workers,
@@ -262,7 +262,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pretrainer.fit(X_train,
                            eval_set=[(X_test)],
                            max_epochs=max_epochs,
-                           patience=20,
+                           patience=50,
                            batch_size=batch_size,
                            virtual_batch_size=virtual_batch_size,
                            num_workers=num_workers,
@@ -435,15 +435,20 @@ class RegressionModels(postprocessing.FullPipeline):
                     else:
                         result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'],
                                         early_stopping_rounds=10,
-                                        as_pandas=True, seed=42, callbacks=[pruning_callback], nfold=5)
+                                        as_pandas=True, seed=42, callbacks=[pruning_callback], nfold=10)
                         return result['test-gamma-nloglik-mean'].mean()
 
                 algorithm = 'xgboost'
+                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+
                 if tune_mode == 'simple':
-                    study = optuna.create_study(direction='minimize')
+                    study = optuna.create_study(direction='minimize', sampler=sampler)
                 else:
                     study = optuna.create_study(direction='minimize')
-                study.optimize(objective, n_trials=30)
+
+
+                study.optimize(objective, n_trials=50)
+
                 self.optuna_studies[f"{algorithm}"] = {}
                 # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -607,7 +612,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     return avg_result
 
             algorithm = 'lgbm'
-            study = optuna.create_study(direction='minimize')
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            study = optuna.create_study(direction='minimize', sampler=sampler)
+
             study.optimize(objective, n_trials=50)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
