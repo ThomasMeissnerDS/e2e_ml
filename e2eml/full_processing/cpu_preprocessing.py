@@ -193,6 +193,16 @@ class PreProcessing:
                                 "num_workers": 0,
                                 "max_epochs": 1000,
                                 'optimization_rounds': 25}
+        self.hyperparameter_tuning_rounds = {"xgboost": 100,
+                                             "lgbm": 100,
+                                             "tabnet": 25,
+                                             "ngboost": 15,
+                                             "sklearn_ensemble": 10}
+        self.hyperparameter_tuning_max_runtine_hours = {"xgboost": 24,
+                                             "lgbm": 24,
+                                             "tabnet": 24,
+                                             "ngboost": 24,
+                                             "sklearn_ensemble": 24}
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
