@@ -224,7 +224,7 @@ class RegressionModels(postprocessing.FullPipeline):
 
             logging.info(f'Start Tabnet validation.')
 
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["tabnet"], timeout=self.hyperparameter_tuning_max_runtine_hours["tabnet"], gc_after_trial=True, show_progress_bar=True)
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["tabnet"], timeout=self.hyperparameter_tuning_max_runtime_hours["tabnet"], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -447,7 +447,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
 
 
-                study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["xgboost"], timeout=self.hyperparameter_tuning_max_runtine_hours["xgboost"], gc_after_trial=True, show_progress_bar=True)
+                study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["xgboost"], timeout=self.hyperparameter_tuning_max_runtime_hours["xgboost"], gc_after_trial=True, show_progress_bar=True)
 
                 self.optuna_studies[f"{algorithm}"] = {}
                 # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
@@ -616,7 +616,7 @@ class RegressionModels(postprocessing.FullPipeline):
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
             study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
 
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["lgbm"], timeout=self.hyperparameter_tuning_max_runtine_hours["lgbm"], gc_after_trial=True, show_progress_bar=True)
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["lgbm"], timeout=self.hyperparameter_tuning_max_runtime_hours["lgbm"], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -754,7 +754,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 return mae
 
             study = optuna.create_study(direction="minimize", study_name=f"{algorithm} tuning")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["sklearn_ensemble"], timeout=self.hyperparameter_tuning_max_runtine_hours["sklearn_ensemble"], gc_after_trial=True, show_progress_bar=True)
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["sklearn_ensemble"], timeout=self.hyperparameter_tuning_max_runtime_hours["sklearn_ensemble"], gc_after_trial=True, show_progress_bar=True)
             best_variant = study.best_trial.params["ensemble_variant"]
             if best_variant == '2_boosters':
                 level0 = list()
@@ -916,7 +916,7 @@ class RegressionModels(postprocessing.FullPipeline):
 
             algorithm = 'ngboost'
             study = optuna.create_study(direction='maximize', study_name=f"{algorithm} tuning")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["ngboost"], timeout=self.hyperparameter_tuning_max_runtine_hours["ngboost"], gc_after_trial=True, show_progress_bar=True)
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["ngboost"], timeout=self.hyperparameter_tuning_max_runtime_hours["ngboost"], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
