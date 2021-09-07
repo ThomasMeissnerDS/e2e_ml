@@ -26,7 +26,7 @@ class BERTDataSet(Dataset):
         self.sentences = sentences
         self.targets = targets
         self.tokenizer = tokenizer
-        self.max_sen_length = 300
+        self.max_sen_length = max_length
 
     def __len__(self):
         return len(self.sentences)

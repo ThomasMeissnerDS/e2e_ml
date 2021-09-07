@@ -300,7 +300,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             study = optuna.create_study(direction='maximize', study_name=f"{algorithm} tuning")
             logging.info(f'Start Tabnet validation.')
 
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["tabnet"], timeout=self.hyperparameter_tuning_max_runtime_hours["tabnet"], gc_after_trial=True, show_progress_bar=True)
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["tabnet"], timeout=self.hyperparameter_tuning_max_runtime_secs["tabnet"], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -559,7 +559,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     else:
                         study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
                         logging.info(f'Start Xgboost advanced validation.')
-                    study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["xgboost"], timeout=self.hyperparameter_tuning_max_runtime_hours["xgboost"], gc_after_trial=True, show_progress_bar=True)
+                    study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["xgboost"], timeout=self.hyperparameter_tuning_max_runtime_secs["xgboost"], gc_after_trial=True, show_progress_bar=True)
                     self.optuna_studies[f"{algorithm}"] = {}
                     # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -638,7 +638,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     else:
                         logging.info(f'Start Xgboost advanced validation.')
                         study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
-                    study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["xgboost"], timeout=self.hyperparameter_tuning_max_runtime_hours["xgboost"], gc_after_trial=True, show_progress_bar=True)
+                    study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["xgboost"], timeout=self.hyperparameter_tuning_max_runtime_secs["xgboost"], gc_after_trial=True, show_progress_bar=True)
                     self.optuna_studies[f"{algorithm}"] = {}
                     # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -857,7 +857,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
 
 
-                study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["lgbm"], timeout=self.hyperparameter_tuning_max_runtime_hours["lgbm"], gc_after_trial=True, show_progress_bar=True)
+                study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["lgbm"], timeout=self.hyperparameter_tuning_max_runtime_secs["lgbm"], gc_after_trial=True, show_progress_bar=True)
                 self.optuna_studies[f"{algorithm}"] = {}
                 # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -942,7 +942,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm} tuning")
                 else:
                     study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
-                study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["lgbm"], timeout=self.hyperparameter_tuning_max_runtime_hours["lgbm"], gc_after_trial=True, show_progress_bar=True)
+                study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["lgbm"], timeout=self.hyperparameter_tuning_max_runtime_secs["lgbm"], gc_after_trial=True, show_progress_bar=True)
                 self.optuna_studies[f"{algorithm}"] = {}
                 # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -1118,7 +1118,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
             study = optuna.create_study(direction="maximize", sampler=sampler, study_name=f"{algorithm} tuning")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["sklearn_ensemble"], timeout=self.hyperparameter_tuning_max_runtime_hours["sklearn_ensemble"], gc_after_trial=True, show_progress_bar=True)
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["sklearn_ensemble"], timeout=self.hyperparameter_tuning_max_runtime_secs["sklearn_ensemble"], gc_after_trial=True, show_progress_bar=True)
             best_variant = study.best_trial.params["ensemble_variant"]
             if best_variant == '2_boosters':
                 level0 = list()
@@ -1318,7 +1318,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 study = optuna.create_study(direction='maximize', study_name=f"{algorithm} tuning")
             else:
                 study = optuna.create_study(direction='maximize', study_name=f"{algorithm} tuning")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["ngboost"], timeout=self.hyperparameter_tuning_max_runtime_hours["ngboost"], gc_after_trial=True, show_progress_bar=True)
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["ngboost"], timeout=self.hyperparameter_tuning_max_runtime_secs["ngboost"], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
