@@ -74,7 +74,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
     :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
     :param preferred_training_mode: Must be 'cpu', if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
     Can be set to 'gpu', if LGBM and Xgboost have been installed with GPU support. The default 'auto' will detect GPU support
-    and optimize accordingly. (Default: 'auto')
+    and optimize accordingly. (Default: 'auto'). Only TabNet can only run on GPU and will not be impacted from this parameter.
     :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
     :param low_memory_mode: Adds a preprocessing feature to reduce dataframe memory footprint. Will lead to a loss in
     model performance. Will be extended by further memory savings features in future releases.

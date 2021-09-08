@@ -38,7 +38,7 @@ class BERTDataSet(Dataset):
             sentence,
             None,
             add_special_tokens=True,
-            max_length=int(self.max_sen_length*1.2),
+            max_length=int(self.max_sen_length*1.2),  # changed from static 300
             padding='max_length',
             return_token_type_ids=True,
             truncation=True
