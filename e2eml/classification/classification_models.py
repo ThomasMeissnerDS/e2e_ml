@@ -213,7 +213,6 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             virtual_batch_size = self.tabnet_settings["virtual_batch_size"]
             num_workers = self.tabnet_settings["num_workers"]
             max_epochs = self.tabnet_settings["max_epochs"]
-            optimization_rounds = self.tabnet_settings["optimization_rounds"]
 
             def objective(trial):
                 depths = trial.suggest_int('depths', 16, 64)

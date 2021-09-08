@@ -13,7 +13,11 @@ from sklearn.mixture import GaussianMixture
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.decomposition import PCA
+from sklearn.model_selection import cross_val_score
+from sklearn.utils import class_weight
 from boostaroota import BoostARoota
+from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
+import optuna
 import lightgbm
 import xgboost as xgb
 import torch
@@ -191,8 +195,7 @@ class PreProcessing:
                                 "virtual_batch_size": virtual_batch_size,
                                 # pred batch size?
                                 "num_workers": 0,
-                                "max_epochs": 1000,
-                                'optimization_rounds': 25}
+                                "max_epochs": 1000}
         self.hyperparameter_tuning_rounds = {"xgboost": 100,
                                              "lgbm": 100,
                                              "tabnet": 25,
@@ -1951,6 +1954,91 @@ class PreProcessing:
             _ = gc.collect()
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
+
+    def vowpal_bruteforce_feature_selection(self, metric=None):
+        self.get_current_timestamp('Select best features')
+        if self.prediction_mode:
+            logging.info('Start filtering for final preselected columns.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            self.dataframe = self.dataframe[self.selected_feats]
+            logging.info('Finished filtering final preselected columns.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            return self.dataframe
+        else:
+            logging.info('Start Vowpal bruteforce feature selection.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            classes_weights = class_weight.compute_sample_weight(
+                class_weight='balanced',
+                y=Y_train
+            )
+
+            for col in X_train.columns:
+                print(f"Features before selection are...{col}")
+            if metric:
+                metric = metric
+            elif self.class_problem == 'binary':
+                metric = 'f1_weighted'
+            elif self.class_problem == 'multiclass':
+                metric = 'f1_weighted'
+            elif self.class_problem == 'regression':
+                metric = 'neg_mean_squared_error'
+
+            def objective(trial):
+                all_cols = X_train.columns.to_list()
+                param = {}
+                for col in all_cols:
+                    param[col] = trial.suggest_int(col, 0, 1)
+
+                print(param)
+
+                temp_features = []
+                for k, v in param.items():
+                    if v == 1:
+                        temp_features.append(k)
+                    else:
+                        pass
+
+                model = VWClassifier()
+                try:
+                    scores = cross_val_score(model, X_train[temp_features], Y_train, cv=10, scoring=metric)
+                    mae = np.mean(scores)
+                except Exception:
+                    mae = 0
+                return mae
+
+            algorithm = 'Vowpal bruteforce feature selection'
+
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
+            study.optimize(objective, n_trials=500, timeout=2*60*60, gc_after_trial=True, show_progress_bar=True, n_jobs=-1)
+            self.optuna_studies[f"{algorithm}"] = {}
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            fig = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+            fig.show()
+            fig = optuna.visualization.plot_param_importances(study)
+            self.optuna_studies[f"{algorithm}_param_importance"] = fig
+            fig.show()
+
+            best_feature_combination = study.best_trial.params
+            final_features = []
+            for k, v in best_feature_combination.items():
+                if v == 1:
+                    final_features.append(k)
+                else:
+                    pass
+
+            X_train = X_train[final_features]
+            X_test = X_test[final_features]
+            self.selected_feats = final_features
+            for i in final_features:
+                print(f" Final features are... {i}.")
+            logging.info('Finished Vowpal bruteforce feature selection.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
+
 
 
 

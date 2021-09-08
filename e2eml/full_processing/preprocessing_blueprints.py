@@ -61,6 +61,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         if self.low_memory_mode:
             self.reduce_memory_footprint()
         self.automated_feature_selection()
+        self.vowpal_bruteforce_feature_selection()
         self.sort_columns_alphabetically()
 
     def pp_bp02_std_preprocessing(self, df=None, preprocessing_type='full'):
@@ -112,6 +113,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         if self.low_memory_mode:
             self.reduce_memory_footprint()
         self.automated_feature_selection()
+        self.vowpal_bruteforce_feature_selection()
         self.sort_columns_alphabetically()
 
     def pp_bp03_std_preprocessing(self, df=None, preprocessing_type='full'):
@@ -165,6 +167,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         if self.low_memory_mode:
             self.reduce_memory_footprint()
         self.automated_feature_selection()
+        self.vowpal_bruteforce_feature_selection()
         self.sort_columns_alphabetically()
         self.data_scaling()
         if self.class_problem == 'binary' or self.class_problem == 'multiclass':
@@ -225,6 +228,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         if self.low_memory_mode:
             self.reduce_memory_footprint()
         self.automated_feature_selection()
+        self.vowpal_bruteforce_feature_selection()
         self.sort_columns_alphabetically()
 
 
