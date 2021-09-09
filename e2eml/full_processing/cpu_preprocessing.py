@@ -852,18 +852,17 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             self.check_target_class_distribution()
 
-            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-                try:
-                    X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
+            try:
+                X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
+                                                                                self.dataframe[self.target_variable],
+                                                                                train_size=train_size,
+                                                                                random_state=42,
+                                                                                stratify=self.dataframe[self.target_variable])
+            except Exception:
+                X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
                                                                                     self.dataframe[self.target_variable],
                                                                                     train_size=train_size,
-                                                                                    random_state=42,
-                                                                                    stratify=self.dataframe[self.target_variable])
-                except Exception:
-                    X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
-                                                                                        self.dataframe[self.target_variable],
-                                                                                        train_size=train_size,
-                                                                                        random_state=42)
+                                                                                    random_state=42)
             try:
                 Y_train = Y_train.astype(float)
                 Y_test = Y_test.astype(float)
@@ -1981,10 +1980,13 @@ class PreProcessing:
                 metric = metric
             elif self.class_problem == 'binary':
                 metric = 'f1_weighted'
+                model = VWClassifier()
             elif self.class_problem == 'multiclass':
                 metric = 'f1_weighted'
+                model = VWClassifier()
             elif self.class_problem == 'regression':
                 metric = 'neg_mean_squared_error'
+                model = VWRegressor()
 
             def objective(trial):
                 all_cols = X_train.columns.to_list()
@@ -2001,7 +2003,6 @@ class PreProcessing:
                     else:
                         pass
 
-                model = VWClassifier()
                 try:
                     scores = cross_val_score(model, X_train[temp_features], Y_train, cv=10, scoring=metric)
                     mae = np.mean(scores)
