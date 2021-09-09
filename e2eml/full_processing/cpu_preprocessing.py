@@ -19,6 +19,7 @@ from sklearn.metrics import fbeta_score, make_scorer
 from sklearn.metrics import matthews_corrcoef
 from boostaroota import BoostARoota
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
+import lightgbm as lgb
 import optuna
 import lightgbm
 import xgboost as xgb
@@ -210,6 +211,7 @@ class PreProcessing:
                                              "ngboost": 24*60*60,
                                              "sklearn_ensemble": 24*60*60,
                                              "vowpal_bruteforce": 24*60*60}
+        self.bruteforce_tuning_backend = 'lgbm'
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -1981,14 +1983,23 @@ class PreProcessing:
             if metric:
                 metric = metric
             elif self.class_problem == 'binary':
-                metric = 'f1_weighted'
-                model = VWClassifier()
+                metric = make_scorer(matthews_corrcoef)
+                if self.bruteforce_tuning_backend == 'lgbm':
+                    model = lgb.LGBMClassifier()
+                else:
+                    model = VWClassifier()
             elif self.class_problem == 'multiclass':
-                metric = 'f1_weighted'
-                model = VWClassifier()
+                metric = make_scorer(matthews_corrcoef)
+                if self.bruteforce_tuning_backend == 'lgbm':
+                    model = lgb.LGBMClassifier()
+                else:
+                    model = VWClassifier()
             elif self.class_problem == 'regression':
                 metric = 'neg_mean_squared_error'
-                model = VWRegressor()
+                if self.bruteforce_tuning_backend == 'lgbm':
+                    model = lgb.LGBMRegressor()
+                else:
+                    model = VWClassifier()
 
             all_cols = X_train.columns.to_list()
 
@@ -2007,7 +2018,7 @@ class PreProcessing:
                         pass
 
                 try:
-                    scores = cross_val_score(model, X_train[temp_features], Y_train, cv=10, scoring=make_scorer(matthews_corrcoef))
+                    scores = cross_val_score(model, X_train[temp_features], Y_train, cv=10, scoring=metric)
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
