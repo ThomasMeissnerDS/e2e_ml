@@ -211,7 +211,6 @@ class PreProcessing:
                                              "ngboost": 24*60*60,
                                              "sklearn_ensemble": 24*60*60,
                                              "vowpal_bruteforce": 24*60*60}
-        self.bruteforce_tuning_backend = 'lgbm'
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -1960,7 +1959,7 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
 
-    def vowpal_bruteforce_feature_selection(self, metric=None):
+    def bruteforce_random_feature_selection(self, metric=None):
         self.get_current_timestamp('Select best features')
         if self.prediction_mode:
             logging.info('Start filtering for final preselected columns.')
@@ -1980,26 +1979,17 @@ class PreProcessing:
 
             for col in X_train.columns:
                 print(f"Features before selection are...{col}")
+
+            problem = self.class_problem
             if metric:
                 metric = metric
             elif self.class_problem == 'binary':
                 metric = make_scorer(matthews_corrcoef)
-                if self.bruteforce_tuning_backend == 'lgbm':
-                    model = lgb.LGBMClassifier()
-                else:
-                    model = VWClassifier()
             elif self.class_problem == 'multiclass':
                 metric = make_scorer(matthews_corrcoef)
-                if self.bruteforce_tuning_backend == 'lgbm':
-                    model = lgb.LGBMClassifier()
-                else:
-                    model = VWClassifier()
             elif self.class_problem == 'regression':
                 metric = 'neg_mean_squared_error'
-                if self.bruteforce_tuning_backend == 'lgbm':
-                    model = lgb.LGBMRegressor()
-                else:
-                    model = VWClassifier()
+
 
             all_cols = X_train.columns.to_list()
 
@@ -2008,7 +1998,23 @@ class PreProcessing:
                 for col in all_cols:
                     param[col] = trial.suggest_int(col, 0, 1)
 
-                print(param)
+                base_learner = trial.suggest_categorical("base_learner", ["lgbm",
+                                                                        "vowal_wobbit"])
+                if base_learner == 'lgbm':
+                    if problem == 'binary' or problem == 'multiclass':
+                        model = lgb.LGBMClassifier()
+                    else:
+                        model = lgb.LGBMRegressor()
+                elif base_learner == 'vowal_wobbit':
+                    if problem == 'binary' or problem == 'multiclass':
+                        model = VWClassifier()
+                    else:
+                        model = VWRegressor()
+                else:
+                    if problem == 'binary' or problem == 'multiclass':
+                        model = VWClassifier()
+                    else:
+                        model = VWRegressor()
 
                 temp_features = []
                 for k, v in param.items():
@@ -2024,7 +2030,7 @@ class PreProcessing:
                     mae = 0
                 return mae
 
-            algorithm = 'vowpal_bruteforce'
+            algorithm = 'bruteforce_random'
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
