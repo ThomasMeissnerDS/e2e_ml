@@ -200,12 +200,14 @@ class PreProcessing:
                                              "lgbm": 100,
                                              "tabnet": 25,
                                              "ngboost": 15,
-                                             "sklearn_ensemble": 10}
+                                             "sklearn_ensemble": 10,
+                                             "vowpal_bruteforce": 500}
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 24*60*60,
                                              "lgbm": 24*60*60,
                                              "tabnet": 24*60*60,
                                              "ngboost": 24*60*60,
-                                             "sklearn_ensemble": 24*60*60}
+                                             "sklearn_ensemble": 24*60*60,
+                                             "vowpal_bruteforce": 24*60*60}
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -2007,11 +2009,11 @@ class PreProcessing:
                     mae = 0
                 return mae
 
-            algorithm = 'Vowpal bruteforce feature selection'
+            algorithm = 'vowpal_bruteforce'
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective, n_trials=500, timeout=2*60*60, gc_after_trial=True, show_progress_bar=True)
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
