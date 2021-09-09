@@ -2011,7 +2011,7 @@ class PreProcessing:
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective, n_trials=500, timeout=2*60*60, gc_after_trial=True, show_progress_bar=True, n_jobs=-1)
+            study.optimize(objective, n_trials=500, timeout=2*60*60, gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')

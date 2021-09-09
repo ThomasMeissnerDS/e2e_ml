@@ -131,6 +131,8 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 1.8.1
+ - Added another layer of feature selection
 * 1.8.0
  - Transformer padding length will be max text length + 20% instead of static 300
  - Transformers use AutoModelForSequenceClassification instead of hardcoded transformers now
