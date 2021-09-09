@@ -15,6 +15,8 @@ from sklearn.impute import IterativeImputer
 from sklearn.decomposition import PCA
 from sklearn.model_selection import cross_val_score
 from sklearn.utils import class_weight
+from sklearn.metrics import fbeta_score, make_scorer
+from sklearn.metrics import matthews_corrcoef
 from boostaroota import BoostARoota
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
 import optuna
@@ -1988,8 +1990,9 @@ class PreProcessing:
                 metric = 'neg_mean_squared_error'
                 model = VWRegressor()
 
+            all_cols = X_train.columns.to_list()
+
             def objective(trial):
-                all_cols = X_train.columns.to_list()
                 param = {}
                 for col in all_cols:
                     param[col] = trial.suggest_int(col, 0, 1)
@@ -2004,7 +2007,7 @@ class PreProcessing:
                         pass
 
                 try:
-                    scores = cross_val_score(model, X_train[temp_features], Y_train, cv=10, scoring=metric)
+                    scores = cross_val_score(model, X_train[temp_features], Y_train, cv=10, scoring=make_scorer(matthews_corrcoef))
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
