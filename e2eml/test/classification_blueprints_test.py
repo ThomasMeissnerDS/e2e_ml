@@ -186,6 +186,13 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
         # label encode targets
         val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
         val_y_hat = titanic_auto_ml.predicted_classes['tabnet']
+    elif blueprint == 'ridge':
+        titanic_auto_ml.ml_bp08_multiclass_full_processing_ridge()
+        print("Start prediction on holdout dataset")
+        titanic_auto_ml.ml_bp08_multiclass_full_processing_ridge(val_df)
+        # label encode targets
+        #val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
+        val_y_hat = titanic_auto_ml.predicted_classes['ridge']
     else:
         pass
 
@@ -204,4 +211,4 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
 
 
 if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='vowpal_wabbit', dataset='titanic') # corona_tweet
+    blueprint_binary_test_titanic(blueprint='ridge', dataset='titanic') # corona_tweet

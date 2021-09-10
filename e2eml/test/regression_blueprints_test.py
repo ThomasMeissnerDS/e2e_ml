@@ -95,9 +95,16 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         val_y_hat = titanic_auto_ml.predicted_values['tabnet']
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
+    elif blueprint == 'ridge':
+        titanic_auto_ml.ml_bp18_regression_full_processing_ridge_reg()
+        print("Start prediction on holdout dataset")
+        titanic_auto_ml.ml_bp18_regression_full_processing_ridge_reg(val_df)
+        val_y_hat = titanic_auto_ml.predicted_values['ridge']
+        mae = mean_absolute_error(val_df_target, val_y_hat)
+        print(mae)
     else:
         pass
 
 
 if __name__ == "__main__":
-    blueprint_regression_test_housingprices(blueprint='ngboost')
+    blueprint_regression_test_housingprices(blueprint='ridge')

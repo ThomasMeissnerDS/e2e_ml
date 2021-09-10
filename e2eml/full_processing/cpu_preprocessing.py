@@ -15,7 +15,7 @@ from sklearn.impute import IterativeImputer
 from sklearn.decomposition import PCA
 from sklearn.model_selection import cross_val_score
 from sklearn.utils import class_weight
-from sklearn.metrics import fbeta_score, make_scorer
+from sklearn.metrics import make_scorer
 from sklearn.metrics import matthews_corrcoef
 from boostaroota import BoostARoota
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
@@ -202,15 +202,17 @@ class PreProcessing:
         self.hyperparameter_tuning_rounds = {"xgboost": 100,
                                              "lgbm": 100,
                                              "tabnet": 25,
-                                             "ngboost": 15,
+                                             "ngboost": 25,
                                              "sklearn_ensemble": 10,
-                                             "vowpal_bruteforce": 500}
+                                             "ridge": 25,
+                                             "bruteforce_random": 500}
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 24*60*60,
                                              "lgbm": 24*60*60,
                                              "tabnet": 24*60*60,
                                              "ngboost": 24*60*60,
                                              "sklearn_ensemble": 24*60*60,
-                                             "vowpal_bruteforce": 24*60*60}
+                                             "ridge": 24*60*60,
+                                             "bruteforce_random": 24*60*60}
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -1998,8 +2000,9 @@ class PreProcessing:
                 for col in all_cols:
                     param[col] = trial.suggest_int(col, 0, 1)
 
-                base_learner = trial.suggest_categorical("base_learner", ["lgbm",
-                                                                        "vowal_wobbit"])
+                #base_learner = trial.suggest_categorical("base_learner", ["lgbm","vowal_wobbit"])
+                base_learner = "vowal_wobbit"
+
                 if base_learner == 'lgbm':
                     if problem == 'binary' or problem == 'multiclass':
                         model = lgb.LGBMClassifier()

@@ -8,7 +8,7 @@ import lightgbm as lgb
 import torch
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
 from sklearn.ensemble import StackingRegressor
-from sklearn.linear_model import RidgeCV
+from sklearn.linear_model import RidgeCV, Ridge
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import KFold
@@ -66,7 +66,7 @@ class RegressionModels(postprocessing.FullPipeline):
 
     def linear_regression_train(self):
         """
-        Trains a simple Linear regression classifier.
+        Trains a simple Linear regression model.
         :return: Trained model.
         """
         self.get_current_timestamp(task='Train logistic regression model')
@@ -92,6 +92,106 @@ class RegressionModels(postprocessing.FullPipeline):
         """
         self.get_current_timestamp(task='Predict with Logistic regression')
         algorithm = 'linear_regression'
+        if self.prediction_mode:
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.predict(self.dataframe)
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.predict(X_test)
+
+            if feat_importance and importance_alg == 'SHAP':
+                self.runtime_warnings(warn_about='shap_cpu')
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            elif feat_importance and importance_alg == 'permutation':
+                result = permutation_importance(
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
+                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                fig, ax = plt.subplots()
+                permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
+                ax.set_title("Feature importances using permutation on full model")
+                ax.set_ylabel("Mean accuracy decrease")
+                fig.tight_layout()
+                plt.show()
+            else:
+                pass
+        self.predicted_values[f"{algorithm}"] = {}
+        self.predicted_values[f"{algorithm}"] = predicted_probs
+        del model
+        _ = gc.collect()
+
+    def ridge_regression_train(self):
+        """
+        Trains a Ridge regression model.
+        :return: Trained model.
+        """
+        self.get_current_timestamp(task='Train ridge regression model')
+        algorithm = 'ridge'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            def objective(trial):
+                solver = trial.suggest_categorical("solver", ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"])
+                param = {
+                    'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
+                    'max_iter': trial.suggest_loguniform('max_iter', 10, 1000),
+                    'tol': trial.suggest_int('tol', 1e-5, 1e-1)
+                }
+                model = Ridge(alpha=param["alpha"],
+                              max_iter=param["max_iter"],
+                              tol=param["tol"],
+                              solver=solver,
+                              random_state=42).fit(X_train, Y_train)
+                try:
+                    scores = cross_val_score(model, X_train, Y_train, cv=10, scoring='neg_mean_squared_error')
+                    mae = np.mean(scores)
+                except Exception:
+                    mae = 0
+                return mae
+
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+            self.optuna_studies[f"{algorithm}"] = {}
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                pass
+
+            best_parameters = study.best_trial.params
+            model = Ridge(alpha=best_parameters["alpha"],
+                          max_iter=best_parameters["max_iter"],
+                          tol=best_parameters["tol"],
+                          solver=best_parameters["solver"],
+                          random_state=42).fit(X_train, Y_train)
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
+            return self.trained_models
+
+    def ridge_regression_predict(self, feat_importance=True, importance_alg='permutation'):
+        """
+        Loads the pretrained model from the class itself and predicts on new data.
+        :param feat_importance: Set True, if feature importance shall be calculated.
+        :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
+        GPU acceleration). (Default: 'permutation')
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp(task='Predict with ridge regression')
+        algorithm = 'ridge'
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
@@ -721,7 +821,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     level0.append(('sgd', SGDRegressor()))
                     level0.append(('svr', LinearSVR()))
                     level0.append(('ard', ARDRegression()))
-                    level0.append(('ridge', RidgeCV()))
+                    level0.append(('ridge', Ridge()))
                     level1 = GradientBoostingRegressor()
                     model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
                 elif ensemble_variation == 'reversed_boosters':
@@ -738,7 +838,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     level0.append(('sgd', SGDRegressor()))
                     level0.append(('svr', LinearSVR()))
                     level0.append(('ard', ARDRegression()))
-                    level0.append(('ridge', RidgeCV()))
+                    level0.append(('ridge', Ridge()))
                     level0.append(('qda', BayesianRidge()))
                     level0.append(('rdf', RandomForestRegressor(max_depth=5, n_jobs=-2)))
                     # define meta learner model
@@ -765,7 +865,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 level0.append(('sgd', SGDRegressor()))
                 level0.append(('svr', LinearSVR()))
                 level0.append(('ard', ARDRegression()))
-                level0.append(('ridge', RidgeCV()))
+                level0.append(('ridge', Ridge()))
                 level1 = GradientBoostingRegressor()
                 model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
             elif best_variant == 'reversed_boosters':
@@ -782,7 +882,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 level0.append(('sgd', SGDRegressor()))
                 level0.append(('svr', LinearSVR()))
                 level0.append(('ard', ARDRegression()))
-                level0.append(('ridge', RidgeCV()))
+                level0.append(('ridge', Ridge()))
                 level0.append(('qda', BayesianRidge()))
                 level0.append(('rdf', RandomForestRegressor(max_depth=5, n_jobs=-2)))
                 # define meta learner model

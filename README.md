@@ -87,6 +87,7 @@ Multiclass blueprints can handle binary and multiclass tasks:
 - ml_bp05_multiclass_full_processing_vowpal_wabbit
 - ml_bp06_multiclass_full_processing_bert_transformer() # for NLP specifically
 - ml_bp07_multiclass_full_processing_tabnet()
+- ml_bp08_multiclass_full_processing_ridge
 - ml_special_binary_full_processing_boosting_blender()
 - ml_special_multiclass_auto_model_exploration()
 - ml_special_multiclass_full_processing_multimodel_max_voting()
@@ -100,6 +101,7 @@ There are regression blueprints as well (in regression module):
 - ml_bp15_regression_full_processing_vowpal_wabbit_reg()
 - ml_bp16_regressions_full_processing_bert_transformer()
 - ml_bp17_regression_full_processing_tabnet_reg()
+- ml_bp18_regression_full_processing_ridge_reg
 - ml_special_regression_multiclass_full_processing_multimodel_avg_blender()
 - ml_special_regression_auto_model_exploration()
 
@@ -131,6 +133,8 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 1.8.2
+ - Added Ridge classifier and regression as new blueprints
 * 1.8.1
  - Added another layer of feature selection
 * 1.8.0
