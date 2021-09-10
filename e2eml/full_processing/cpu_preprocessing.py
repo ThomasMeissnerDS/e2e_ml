@@ -178,21 +178,18 @@ class PreProcessing:
                                      "keep_best_model_only": False}
 
         # automatically determine batch sizes for Tabnet
-        if not prediction_mode:
-            rec_batch_size = (len(self.dataframe.index)*0.8)/20
-            if int(rec_batch_size) % 2 == 0:
-                rec_batch_size = int(rec_batch_size)
-            else:
-                rec_batch_size = int(rec_batch_size)+1
 
-            if rec_batch_size > 8192:
-                rec_batch_size = 8192
-                virtual_batch_size = 1024
-            else:
-                virtual_batch_size = int(rec_batch_size/4)
+        rec_batch_size = (len(self.dataframe.index)*0.8)/10
+        if int(rec_batch_size) % 2 == 0:
+            rec_batch_size = int(rec_batch_size)
         else:
+            rec_batch_size = int(rec_batch_size)+1
+        if rec_batch_size > 8192:
             rec_batch_size = 8192
             virtual_batch_size = 1024
+        else:
+            virtual_batch_size = int(rec_batch_size/4)
+
 
         self.tabnet_settings = {f"batch_size": rec_batch_size,
                                 "virtual_batch_size": virtual_batch_size,

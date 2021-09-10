@@ -395,6 +395,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
             self.vowpal_wabbit_train()
             self.tabnet_train()
+            self.ridge_classifier_train()
         self.lgbm_predict(feat_importance=False)
         self.classification_eval('lgbm')
         self.xgboost_predict(feat_importance=True)
@@ -403,16 +404,20 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.classification_eval('vowpal_wabbit')
         self.tabnet_predict()
         self.classification_eval('tabnet')
+        self.ridge_classifier_predict()
+        self.classification_eval('ridge')
         algorithm = 'max_voting'
         mode_cols = ["lgbm_class",
                      "xgboost_class",
                      "vowpal_wabbit_class",
-                     "tabnet"]
+                     "tabnet",
+                     "ridge"]
         if self.prediction_mode:
             self.dataframe["lgbm_class"] = self.predicted_classes[f"lgbm"]
             self.dataframe["xgboost_class"] = self.predicted_classes[f"xgboost"]
             self.dataframe["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
             self.dataframe["tabnet"] = self.predicted_classes[f"tabnet"]
+            self.dataframe["ridge"] = self.predicted_classes[f"ridge"]
             self.dataframe["max_voting_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
             self.predicted_classes[f"max_voting"] = self.dataframe["max_voting_class"]
         else:
@@ -421,6 +426,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             X_test["xgboost_class"] = self.predicted_classes[f"xgboost"]
             X_test["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
             X_test["tabnet"] = self.predicted_classes[f"tabnet"]
+            X_test["ridge"] = self.predicted_classes[f"ridge"]
             X_test["max_voting_class"] = X_test[mode_cols].mode(axis=1)[0]
             self.predicted_classes[f"max_voting"] = X_test["max_voting_class"]
         self.classification_eval('max_voting')

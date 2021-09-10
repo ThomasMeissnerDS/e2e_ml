@@ -294,7 +294,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp17_regression_full_processing_tabnet_reg(self, df=None, preprocessing_type='full', preprocess_bp="bp_04"):
+    def ml_bp17_regression_full_processing_tabnet_reg(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -354,7 +354,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_special_regression_multiclass_full_processing_multimodel_avg_blender(self, df=None, preprocessing_type='full', preprocess_bp="bp_04"):
+    def ml_special_regression_multiclass_full_processing_multimodel_avg_blender(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -381,22 +381,26 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.lgbm_train(tune_mode=self.tune_mode)
             self.vowpal_wabbit_train()
             self.tabnet_regression_train()
+            self.ridge_regression_train()
         self.ngboost_predict(feat_importance=True)
         self.lgbm_predict(feat_importance=True)
         self.vowpal_wabbit_predict(feat_importance=True)
         self.tabnet_regression_predict()
+        self.ridge_regression_predict()
         if self.prediction_mode:
             self.dataframe["lgbm_preds"] = self.predicted_values[f"lgbm"]
             self.dataframe["ngboost_preds"] = self.predicted_values[f"ngboost"]
-            self.dataframe["tabnet"] = self.predicted_values[f"tabnet"]
-            self.dataframe["blended_preds"] = (self.dataframe["lgbm_preds"] + self.dataframe["ngboost_preds"] + self.dataframe["tabnet"])/3
+            self.dataframe["tabnet_preds"] = self.predicted_values[f"tabnet"]
+            self.dataframe["ridge_preds"] = self.predicted_values[f"ridge"]
+            self.dataframe["blended_preds"] = (self.dataframe["lgbm_preds"] + self.dataframe["ngboost_preds"] + self.dataframe["tabnet_preds"] + self.dataframe["ridge_preds"])/4
             self.predicted_values[f"blended_preds"] = self.dataframe["blended_preds"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_test["lgbm_preds"] = self.predicted_values[f"lgbm"]
             X_test["ngboost_preds"] = self.predicted_values[f"ngboost"]
             X_test["tabnet_preds"] = self.predicted_values[f"tabnet"]
-            X_test["blended_preds"] = (X_test["lgbm_preds"] + X_test["ngboost_preds"] + X_test["tabnet_preds"])/3
+            X_test["ridge_preds"] = self.predicted_values[f"ridge"]
+            X_test["blended_preds"] = (X_test["lgbm_preds"] + X_test["ngboost_preds"] + X_test["tabnet_preds"] + X_test["ridge_preds"])/4
             self.predicted_values[f"blended_preds"] = X_test["blended_preds"]
         self.regression_eval('blended_preds')
         self.prediction_mode = True
