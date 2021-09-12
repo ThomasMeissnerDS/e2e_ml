@@ -458,6 +458,28 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
+    def reset_dataframe_index(self):
+        """
+        All indices will be reset and indices will be dropped. This shall prevent a breaking blueprint by duplicates
+        in the intex (i.e. after concatinating multiples dataframes before).
+        :return: Updates class instance.
+        """
+        self.get_current_timestamp('Reset dataframe index.')
+        logging.info('Started resetting dataframe.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        if self.prediction_mode:
+            self.dataframe = self.dataframe.reset_index(drop=True)
+            logging.info('Finished resetting dataframe.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            return self.dataframe
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train = X_train.reset_index(drop=True)
+            X_test = X_test.reset_index(drop=True)
+            logging.info('Finished resetting dataframe.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
     def wrap_test_train_to_dict(self, X_train, X_test, Y_train, Y_test):
         """
         Takes in X_train & X_test parts and updates the class instance dictionary.
@@ -1994,7 +2016,16 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
 
-    def bruteforce_random_feature_selection(self, metric=None):
+    def bruteforce_random_feature_selection(self, metric=None, sample_size=None):
+        """
+        Takes a dataframe or a sample of it. Select randomly features and runs Vowpal Wabbit on it with 10-fold cross
+        validation. Evaluates performance and optimizes incrementally feature selection by learning from previous attempts.
+        :param metric: Scoring metric for cross validation. Must be compatible for Sklearn's cross_val_score.
+        :param sample_size: If dataframe is bigger than 100k rows, it is recommended to set this to 100k. Otherwise runtimes
+        might be extremely high. Can also be controlled via class attribute hyperparameter_tuning_max_runtime_secs, which will
+        stop tuning after the given time.
+        :return: Updates class attributes
+        """
         self.get_current_timestamp('Select best features')
         if self.prediction_mode:
             logging.info('Start filtering for final preselected columns.')
@@ -2024,6 +2055,25 @@ class PreProcessing:
                 metric = make_scorer(matthews_corrcoef)
             elif self.class_problem == 'regression':
                 metric = 'neg_mean_squared_error'
+
+            if not sample_size:
+                if len(X_train.index) > 100000:
+                    sample_size = 100000
+                    X_train_sample = X_train.copy()
+                    X_train_sample[self.target_variable] = Y_train
+                    X_train_sample = X_train.sample(sample_size, random_state=42)
+                    Y_train_sample = X_train_sample[self.target_variable]
+                    del X_train_sample[self.target_variable]
+                else:
+                    sample_size = len(X_train.index)
+                    X_train_sample = X_train.copy()
+                    X_train_sample[self.target_variable] = Y_train
+                    X_train_sample = X_train.sample(sample_size, random_state=42)
+                    Y_train_sample = X_train_sample[self.target_variable]
+                    del X_train_sample[self.target_variable]
+            else:
+                X_train_sample = X_train
+                Y_train_sample = Y_train
 
 
             all_cols = X_train.columns.to_list()
@@ -2060,7 +2110,7 @@ class PreProcessing:
                         pass
 
                 try:
-                    scores = cross_val_score(model, X_train[temp_features], Y_train, cv=10, scoring=metric)
+                    scores = cross_val_score(model, X_train_sample[temp_features], Y_train_sample, cv=10, scoring=metric)
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
