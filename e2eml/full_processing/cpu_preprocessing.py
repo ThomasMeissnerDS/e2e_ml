@@ -212,6 +212,7 @@ class PreProcessing:
                                              "ridge": 24*60*60,
                                              "bruteforce_random": 24*60*60}
 
+        self.brute_force_selection_sample_size = 100000
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -2016,14 +2017,11 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
 
-    def bruteforce_random_feature_selection(self, metric=None, sample_size=None):
+    def bruteforce_random_feature_selection(self, metric=None):
         """
         Takes a dataframe or a sample of it. Select randomly features and runs Vowpal Wabbit on it with 10-fold cross
         validation. Evaluates performance and optimizes incrementally feature selection by learning from previous attempts.
         :param metric: Scoring metric for cross validation. Must be compatible for Sklearn's cross_val_score.
-        :param sample_size: If dataframe is bigger than 100k rows, it is recommended to set this to 100k. Otherwise runtimes
-        might be extremely high. Can also be controlled via class attribute hyperparameter_tuning_max_runtime_secs, which will
-        stop tuning after the given time.
         :return: Updates class attributes
         """
         self.get_current_timestamp('Select best features')
@@ -2056,24 +2054,17 @@ class PreProcessing:
             elif self.class_problem == 'regression':
                 metric = 'neg_mean_squared_error'
 
-            if not sample_size:
-                if len(X_train.index) > 100000:
-                    sample_size = 100000
-                    X_train_sample = X_train.copy()
-                    X_train_sample[self.target_variable] = Y_train
-                    X_train_sample = X_train.sample(sample_size, random_state=42)
-                    Y_train_sample = X_train_sample[self.target_variable]
-                    del X_train_sample[self.target_variable]
-                else:
-                    sample_size = len(X_train.index)
-                    X_train_sample = X_train.copy()
-                    X_train_sample[self.target_variable] = Y_train
-                    X_train_sample = X_train.sample(sample_size, random_state=42)
-                    Y_train_sample = X_train_sample[self.target_variable]
-                    del X_train_sample[self.target_variable]
+            # get sample size to run brute force feature selection against
+            if self.brute_force_selection_sample_size > len(X_train.index):
+                sample_size = len(X_train.index)
             else:
-                X_train_sample = X_train
-                Y_train_sample = Y_train
+                sample_size = self.brute_force_selection_sample_size
+
+            X_train_sample = X_train.copy()
+            X_train_sample[self.target_variable] = Y_train
+            X_train_sample = X_train.sample(sample_size, random_state=42)
+            Y_train_sample = X_train_sample[self.target_variable]
+            del X_train_sample[self.target_variable]
 
 
             all_cols = X_train.columns.to_list()
