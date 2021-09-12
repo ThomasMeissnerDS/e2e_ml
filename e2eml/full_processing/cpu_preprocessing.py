@@ -475,8 +475,18 @@ class PreProcessing:
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+            X_train[self.target_variable] = Y_train
+            X_test[self.target_variable] = Y_test
+
             X_train = X_train.reset_index(drop=True)
             X_test = X_test.reset_index(drop=True)
+
+            Y_train = X_train[self.target_variable]
+            Y_test = X_test[self.target_variable]
+
+            X_train = X_train.drop(self.target_variable, axis=1)
+            X_test = X_test.drop(self.target_variable, axis=1)
             logging.info('Finished resetting dataframe.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -2062,10 +2072,9 @@ class PreProcessing:
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
-            X_train_sample = X_train.sample(sample_size, random_state=42)
+            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
             Y_train_sample = X_train_sample[self.target_variable]
-            del X_train_sample[self.target_variable]
-
+            X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
             all_cols = X_train.columns.to_list()
 
@@ -2111,7 +2120,11 @@ class PreProcessing:
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+            study.optimize(objective,
+                           n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                           timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                           gc_after_trial=True,
+                           show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
