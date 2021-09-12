@@ -179,7 +179,7 @@ class PreProcessing:
 
         # automatically determine batch sizes for Tabnet
 
-        rec_batch_size = (len(self.dataframe.index)*0.8)/10
+        rec_batch_size = (len(self.dataframe.index)*0.8)/20
         if int(rec_batch_size) % 2 == 0:
             rec_batch_size = int(rec_batch_size)
         else:
@@ -190,19 +190,20 @@ class PreProcessing:
         else:
             virtual_batch_size = int(rec_batch_size/4)
 
-
         self.tabnet_settings = {f"batch_size": rec_batch_size,
                                 "virtual_batch_size": virtual_batch_size,
                                 # pred batch size?
                                 "num_workers": 0,
                                 "max_epochs": 1000}
+
         self.hyperparameter_tuning_rounds = {"xgboost": 100,
                                              "lgbm": 100,
                                              "tabnet": 25,
                                              "ngboost": 25,
                                              "sklearn_ensemble": 10,
-                                             "ridge": 25,
+                                             "ridge": 100,
                                              "bruteforce_random": 500}
+
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 24*60*60,
                                              "lgbm": 24*60*60,
                                              "tabnet": 24*60*60,
@@ -210,6 +211,7 @@ class PreProcessing:
                                              "sklearn_ensemble": 24*60*60,
                                              "ridge": 24*60*60,
                                              "bruteforce_random": 24*60*60}
+
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -292,6 +294,11 @@ class PreProcessing:
         elif warn_about == 'no_nlp_transformer':
             warning_message = """No nlp_transformer_columns have been provided during class instantiation. Some 
             NLP related functions only run with this information.."""
+            return warnings.warn(warning_message, UserWarning)
+        elif warn_about == 'duplicate_column_names':
+            warning_message = """Duplicate column names have been found and duplicate columns have been removed. Please
+            make check, if these columns were fully duplicates or sharing an identical name only.
+            """
             return warnings.warn(warning_message, UserWarning)
         elif warn_about == 'not_enough_target_class_members':
             warning_message = """Some target classes have less members than allowed. You can ignore this message, if you
@@ -420,6 +427,35 @@ class PreProcessing:
                     X_test[col] = X_test[col].astype(str)
                     self.detected_col_types[col] = 'object'
             logging.info('Finished column type detection and casting.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def remove_duplicate_column_names(self):
+        """
+        Takes the dataframes in the class instance and checks, if column names are duplicate.
+        If so, it will reduce the dataframe to non-duplicate column names and raise a warning to prevent the blueprint
+        to break at later steps.
+        :return: Updates class attributes
+        """
+        self.get_current_timestamp(task='Checking for duplicate columns')
+        logging.info('Start checking for duplicate columns')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        if self.prediction_mode:
+            all_columns = self.dataframe.columns.to_list()
+            cols_no_duplicates = list(set(all_columns))
+            self.dataframe = self.dataframe[cols_no_duplicates].copy()
+            logging.info('Finished checking for duplicate columns')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            return self.dataframe
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            all_columns = X_train.columns.to_list()
+            cols_no_duplicates = list(set(all_columns))
+            X_train = X_train[cols_no_duplicates].copy()
+            X_test = X_test[cols_no_duplicates].copy()
+            if len(all_columns) != len(cols_no_duplicates):
+                self.runtime_warnings(warn_about='duplicate_column_names')
+            logging.info('Finished checking for duplicate columns')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def wrap_test_train_to_dict(self, X_train, X_test, Y_train, Y_test):

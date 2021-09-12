@@ -96,9 +96,9 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
     elif blueprint == 'ridge':
-        titanic_auto_ml.ml_bp18_regression_full_processing_ridge_reg()
+        titanic_auto_ml.ml_bp18_regression_full_processing_ridge_reg(preprocessing_type='nlp')
         print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp18_regression_full_processing_ridge_reg(val_df)
+        titanic_auto_ml.ml_bp18_regression_full_processing_ridge_reg(val_df, preprocessing_type='nlp')
         val_y_hat = titanic_auto_ml.predicted_values['ridge']
         mae = mean_absolute_error(val_df_target, val_y_hat)
         print(mae)
@@ -107,4 +107,4 @@ def blueprint_regression_test_housingprices(blueprint='lgbm'):
 
 
 if __name__ == "__main__":
-    blueprint_regression_test_housingprices(blueprint='tabnet')
+    blueprint_regression_test_housingprices(blueprint='ridge')

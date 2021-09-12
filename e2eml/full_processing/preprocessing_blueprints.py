@@ -25,6 +25,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.prediction_mode = False
         self.train_test_split(how=self.train_split_type)
         self.automatic_type_detection_casting()
+        self.remove_duplicate_column_names()
         self.fill_infinite_values()
         self.fill_nulls(how='static') # can only be here when "static"
         self.datetime_converter(datetime_handling='all')

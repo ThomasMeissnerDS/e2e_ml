@@ -140,7 +140,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 param = {
                     'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
                     'max_iter': trial.suggest_loguniform('max_iter', 10, 1000),
-                    'tol': trial.suggest_int('tol', 1e-5, 1e-1)
+                    'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1)
                 }
                 model = Ridge(alpha=param["alpha"],
                               max_iter=param["max_iter"],
