@@ -213,6 +213,7 @@ class PreProcessing:
                                              "bruteforce_random": 24*60*60}
 
         self.brute_force_selection_sample_size = 100000
+        self.brute_force_selection_base_learner = 'auto' # 'lgbm', 'vowpal_wabbit'
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -2078,13 +2079,18 @@ class PreProcessing:
 
             all_cols = X_train.columns.to_list()
 
+            brute_force_selection_base_learner = self.brute_force_selection_base_learner
+
+
             def objective(trial):
                 param = {}
                 for col in all_cols:
                     param[col] = trial.suggest_int(col, 0, 1)
 
-                #base_learner = trial.suggest_categorical("base_learner", ["lgbm","vowal_wobbit"])
-                base_learner = "vowal_wobbit"
+                if brute_force_selection_base_learner == 'auto':
+                    base_learner = trial.suggest_categorical("base_learner", ["lgbm", "vowal_wobbit"])
+                else:
+                    base_learner = brute_force_selection_base_learner
 
                 if base_learner == 'lgbm':
                     if problem == 'binary' or problem == 'multiclass':
