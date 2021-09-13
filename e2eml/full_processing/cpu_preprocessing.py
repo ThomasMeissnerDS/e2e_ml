@@ -161,6 +161,55 @@ class PreProcessing:
         self.labels_encoded = False
         self.new_sin_cos_col_names = None
         self.df_dict = None
+        self.blueprint_step_selection_non_nlp = {
+            "train_test_split": True,
+            "automatic_type_detection_casting": True,
+            "remove_duplicate_column_names": True,
+            "reset_dataframe_index": True,
+            "fill_infinite_values": True,
+            "datetime_converter": True,
+            "pos_tagging_pca": True,
+            "append_text_sentiment_score": False,
+            "tfidf_vectorizer_to_pca": False,
+            "tfidf_naive_bayes_proba_char_wb_bigram": False,
+            "tfidf_naive_bayes_proba_char_wb_trigram": False,
+            "tfidf_naive_bayes_proba_unigram": False,
+            "rare_feature_processing": True,
+            "cardinality_remover": True,
+            "delete_high_null_cols": True,
+            "numeric_binarizer_pca": True,
+            "onehot_pca": True,
+            "category_encoding": True,
+            "fill_nulls_static": True,
+            "data_binning": True,
+            "outlier_care": True,
+            "remove_collinearity": True,
+            "skewness_removal": True,
+            "clustering_as_a_feature_dbscan": True,
+            "clustering_as_a_feature_kmeans_loop": True,
+            "clustering_as_a_feature_gaussian_mixture_loop": True,
+            "reduce_memory_footprint": False,
+            "automated_feature_selection": True,
+            "bruteforce_random_feature_selection": True,
+            "sort_columns_alphabetically": True,
+            "scale_data": False,
+            "smote": False
+        }
+        self.blueprint_step_selection_nlp_transformers = {
+            "train_test_split": True,
+            "rare_feature_processing": True,
+            "sort_columns_alphabetically": True,
+            "random_synonym_replacement": False,
+            "oversampling": False
+        }
+        self.special_blueprint_algorithms = {"ridge": True,
+                                             "xgboost": True,
+                                             "ngboost": True,
+                                             "lgbm": True,
+                                             "tabnet": False,
+                                             "vowpal_wabbit": True,
+                                             "sklearn_ensemble": False
+                                             }
         # store chosen preprocessing settings
         if not preprocess_decisions:
             self.preprocess_decisions = {}
@@ -213,7 +262,7 @@ class PreProcessing:
                                              "bruteforce_random": 24*60*60}
 
         self.brute_force_selection_sample_size = 100000
-        self.brute_force_selection_base_learner = 'auto' # 'lgbm', 'vowpal_wabbit'
+        self.brute_force_selection_base_learner = 'vowpal_wabbit' # 'lgbm', 'vowpal_wabbit'
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -1230,7 +1279,7 @@ class PreProcessing:
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def delete_high_null_cols(self, threshold=0.5):
+    def delete_high_null_cols(self, threshold=0.95):
         """
         Takes in a dataframe and removes columns, which have more NULLs than the given threshold.
         :param threshold: Maximum percentage of NULLs in a column allowed.

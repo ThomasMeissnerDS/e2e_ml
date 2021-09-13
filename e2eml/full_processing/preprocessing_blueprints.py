@@ -4,7 +4,24 @@ import logging
 
 
 class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
-    def pp_bp01_std_preprocessing(self, df=None, preprocessing_type='full'):
+    def check_prediction_mode(self, df):
+        """
+        Takes in the dataframe that has been passed to the blueprint pipeline. If no dataframe has been passed,
+        sets prediction mode to False. Otherwise sets prediction mode to True. This is a fallback function. In case
+        someone has built a custom pipeline it makes sure to fall back into prediction mode once used for that.
+        :param df: Pandas Dataframe
+        :return: Updates class attributes
+        """
+        try:
+            if df.empty:
+                self.prediction_mode = False
+            else:
+                self.dataframe = df
+                self.prediction_mode = True
+        except AttributeError:
+            self.prediction_mode = False
+
+    def std_preprocessing_pipeline(self, df=None):
         """
         Our recommended blueprint for Tabnet testing.
         Runs a preprocessing blueprint only. This is useful for building custom pipelines.
@@ -15,292 +32,103 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         """
         logging.info('Start blueprint.')
         self.runtime_warnings(warn_about="future_architecture_change")
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.automatic_type_detection_casting()
-        self.remove_duplicate_column_names()
-        self.reset_dataframe_index()
-        self.fill_infinite_values()
-        self.fill_nulls(how='static') # can only be here when "static"
-        self.datetime_converter(datetime_handling='all')
-        self.pos_tagging_pca(pca_pos_tags=True)
-        if preprocessing_type == 'nlp':
+        self.check_prediction_mode(df)
+
+        if self.blueprint_step_selection_non_nlp["train_test_split"]:
+            self.train_test_split(how=self.train_split_type)
+        if self.blueprint_step_selection_non_nlp["automatic_type_detection_casting"]:
+            self.automatic_type_detection_casting()
+        if self.blueprint_step_selection_non_nlp["remove_duplicate_column_names"]:
+            self.remove_duplicate_column_names()
+        if self.blueprint_step_selection_non_nlp["reset_dataframe_index"]:
+            self.reset_dataframe_index()
+        if self.blueprint_step_selection_non_nlp["fill_infinite_values"]:
+            self.fill_infinite_values()
+        #self.fill_nulls(how='static') # can only be here when "static"
+        if self.blueprint_step_selection_non_nlp["datetime_converter"]:
+            self.datetime_converter(datetime_handling='all')
+        if self.blueprint_step_selection_non_nlp["pos_tagging_pca"]:
+            self.pos_tagging_pca(pca_pos_tags=True)
+        if self.blueprint_step_selection_non_nlp["append_text_sentiment_score"]:
             self.append_text_sentiment_score()
+        if self.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"]:
             self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
+        if self.blueprint_step_selection_non_nlp["tfidf_naive_bayes_proba_char_wb_bigram"]:
             self.tfidf_naive_bayes_proba(analyzer="char_wb", ngram_range=(1, 2))
+        if self.blueprint_step_selection_non_nlp["tfidf_naive_bayes_proba_char_wb_trigram"]:
+            self.tfidf_naive_bayes_proba(analyzer="char_wb", ngram_range=(1, 3))
+        if self.blueprint_step_selection_non_nlp["tfidf_naive_bayes_proba_unigram"]:
             self.tfidf_naive_bayes_proba(analyzer="word", ngram_range=(1, 1))
-        self.cardinality_remover(threshold=100)
-        self.delete_high_null_cols(threshold=0.5)
-        self.numeric_binarizer_pca()
-        self.onehot_pca()
-        self.category_encoding(algorithm='target')
-        self.fill_nulls(how='static') # can only be here when "static"
-        self.data_binning(nb_bins=10)
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.8)
-        self.skewness_removal(overwrite_orig_col=False)
-        try:
-            self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        except ValueError:
-            print("Clustering as a feature skipped due to ValueError.")
-        for nb_cluster in [3, 5, 7, 9]:
+        if self.blueprint_step_selection_non_nlp["rare_feature_processing"]:
+            self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
+        if self.blueprint_step_selection_non_nlp["cardinality_remover"]:
+            self.cardinality_remover(threshold=100)
+        if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
+            self.delete_high_null_cols(threshold=0.95)
+        if self.blueprint_step_selection_non_nlp["numeric_binarizer_pca"]:
+            self.numeric_binarizer_pca()
+        if self.blueprint_step_selection_non_nlp["onehot_pca"]:
+            self.onehot_pca()
+        if self.blueprint_step_selection_non_nlp["category_encoding"]:
+            self.category_encoding(algorithm='target')
+        if self.blueprint_step_selection_non_nlp["fill_nulls_static"]:
+            self.fill_nulls(how='static') # can only be here when "static"
+        if self.blueprint_step_selection_non_nlp["data_binning"]:
+            self.data_binning(nb_bins=10)
+        if self.blueprint_step_selection_non_nlp["outlier_care"]:
+            self.outlier_care(method='isolation', how='append')
+        if self.blueprint_step_selection_non_nlp["remove_collinearity"]:
+            self.remove_collinearity(threshold=0.8)
+        if self.blueprint_step_selection_non_nlp["skewness_removal"]:
+            self.skewness_removal(overwrite_orig_col=False)
+        if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_dbscan"]:
             try:
-                self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
+                self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
             except ValueError:
                 print("Clustering as a feature skipped due to ValueError.")
-        for nb_cluster in [2, 4, 6, 8, 10]:
-            try:
-                self.clustering_as_a_feature(algorithm='gaussian', nb_clusters=nb_cluster)
-            except ValueError:
-                print("Clustering as a feature skipped due to ValueError.")
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection()
-        self.bruteforce_random_feature_selection()
-        self.sort_columns_alphabetically()
+        if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_kmeans_loop"]:
+            for nb_cluster in [3, 5, 7, 9]:
+                try:
+                    self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
+                except ValueError:
+                    print("Clustering as a feature skipped due to ValueError.")
+        if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_gaussian_mixture_loop"]:
+            for nb_cluster in [2, 4, 6, 8, 10]:
+                try:
+                    self.clustering_as_a_feature(algorithm='gaussian', nb_clusters=nb_cluster)
+                except ValueError:
+                    print("Clustering as a feature skipped due to ValueError.")
+        if self.blueprint_step_selection_non_nlp["reduce_memory_footprint"]:
+            if self.low_memory_mode:
+                self.reduce_memory_footprint()
+        if self.blueprint_step_selection_non_nlp["scale_data"]:
+            self.data_scaling()
+        if self.blueprint_step_selection_non_nlp["smote"]:
+            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+                self.smote_data()
+            else:
+                pass
+        if self.blueprint_step_selection_non_nlp["automated_feature_selection"]:
+            self.automated_feature_selection()
+        if self.blueprint_step_selection_non_nlp["bruteforce_random_feature_selection"]:
+            self.bruteforce_random_feature_selection()
+        if self.blueprint_step_selection_non_nlp["sort_columns_alphabetically"]:
+            self.sort_columns_alphabetically()
 
-    def pp_bp02_std_preprocessing(self, df=None, preprocessing_type='full'):
-        """
-        This preprocessing blueprint contains alternative decision compare to pp_bp01.
-        Runs a preprocessing blueprint only. This is useful for building custom pipelines.
-        :param df: Accepts a dataframe to run ml preprocessing on it.
-        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
-        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
-        :return: Updates class attributes.
-        """
+    def nlp_transformer_preprocessing_pipeline(self, df):
         logging.info('Start blueprint.')
         self.runtime_warnings(warn_about="future_architecture_change")
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.automatic_type_detection_casting()
-        self.fill_infinite_values()
-        self.fill_nulls(how='static') # can only be here when "static"
-        self.datetime_converter(datetime_handling='all')
-        self.pos_tagging_pca(pca_pos_tags=True)
-        if preprocessing_type == 'nlp':
-            self.pos_tagging_pca(pca_pos_tags=False)
-        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='GLMM')
-        self.delete_high_null_cols(threshold=0.4)
-        self.fill_nulls(how='iterative_imputation', fill_with=0)
-        self.data_binning(nb_bins=20)
-        #self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.85)
-        try:
-            self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        except ValueError:
-            print("Clustering as a feature skipped due to ValueError.")
-        for nb_cluster in range(2, 10):
-            try:
-                self.clustering_as_a_feature(algorithm='GLMM', nb_clusters=nb_cluster)
-            except ValueError:
-                print("Clustering as a feature skipped due to ValueError.")
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection()
-        self.bruteforce_random_feature_selection()
-        self.sort_columns_alphabetically()
+        self.check_prediction_mode(df)
 
-    def pp_bp03_std_preprocessing(self, df=None, preprocessing_type='full'):
-        """
-        This blueprint adds skewness removal by log transformation, data scaling and SMOTE.
-        Runs a preprocessing blueprint only. This is useful for building custom pipelines.
-        :param df: Accepts a dataframe to run ml preprocessing on it.
-        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
-        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
-        :return: Updates class attributes.
-        """
-        logging.info('Start blueprint.')
-        self.runtime_warnings(warn_about="future_architecture_change")
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.automatic_type_detection_casting()
-        self.fill_infinite_values()
-        self.fill_nulls(how='static') # can only be here when "static"
-        self.datetime_converter(datetime_handling='all')
-        self.pos_tagging_pca(pca_pos_tags=True)
-        if preprocessing_type == 'nlp':
-            self.pos_tagging_pca(pca_pos_tags=False)
-            self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
-            self.tfidf_naive_bayes_proba()
-        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='GLMM')
-        self.delete_high_null_cols(threshold=0.4)
-        self.fill_nulls(how='static', fill_with=-99)
-        self.data_binning(nb_bins=5)
-        self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.80)
-        try:
-            self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        except ValueError:
-            print("Clustering as a feature skipped due to ValueError.")
-        for nb_cluster in range(2, 10):
-            try:
-                self.clustering_as_a_feature(algorithm='GLMM', nb_clusters=nb_cluster)
-            except ValueError:
-                print("Clustering as a feature skipped due to ValueError.")
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection()
-        self.bruteforce_random_feature_selection()
-        self.sort_columns_alphabetically()
-        self.data_scaling()
-        if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-            self.smote_data()
-        else:
-            pass
-
-    def pp_bp04_std_preprocessing(self, df=None, preprocessing_type='full'):
-        """
-        Our recommended blueprint for model testing.
-        Runs a preprocessing blueprint only. This is useful for building custom pipelines.
-        :param df: Accepts a dataframe to run ml preprocessing on it.
-        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
-        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
-        :return: Updates class attributes.
-        """
-        logging.info('Start blueprint.')
-        self.runtime_warnings(warn_about="future_architecture_change")
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.automatic_type_detection_casting()
-        self.fill_infinite_values()
-        self.fill_nulls(how='static') # can only be here when "static"
-        self.datetime_converter(datetime_handling='all')
-        self.pos_tagging_pca(pca_pos_tags=True)
-        if preprocessing_type == 'nlp':
-            self.append_text_sentiment_score()
-            self.pos_tagging_pca(pca_pos_tags=False)
-            self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
-            self.tfidf_naive_bayes_proba(analyzer="char_wb", ngram_range=(1, 2))
-            self.tfidf_naive_bayes_proba(analyzer="word", ngram_range=(1, 1))
-        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='target')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
-        self.data_binning(nb_bins=10)
-        #self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.8)
-        try:
-            self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        except ValueError:
-            print("Clustering as a feature skipped due to ValueError.")
-        for nb_cluster in range(2, 10):
-            try:
-                self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
-            except ValueError:
-                print("Clustering as a feature skipped due to ValueError.")
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection()
-        self.bruteforce_random_feature_selection()
-        self.sort_columns_alphabetically()
-
-    def pp_bp10_nlp_preprocessing(self, df):
-        logging.info('Start blueprint.')
-        self.runtime_warnings(warn_about="future_architecture_change")
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
-        self.sort_columns_alphabetically()
-        self.check_max_sentence_length()
-        self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)
-
-    def pp_bp11_nlp_preprocessing(self, df):
-        logging.info('Start blueprint.')
-        self.runtime_warnings(warn_about="future_architecture_change")
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
-        self.regex_clean_text_data()
-        self.sort_columns_alphabetically()
-        self.check_max_sentence_length()
-        self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)
-
-    def pp_bp12_nlp_preprocessing(self, df):
-        logging.info('Start blueprint.')
-        self.runtime_warnings(warn_about="future_architecture_change")
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.oversample_train_data()
-        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
-        self.sort_columns_alphabetically()
-        self.check_max_sentence_length()
-        self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)
-
-    def pp_bp13_nlp_preprocessing(self, df):
-        logging.info('Start blueprint.')
-        self.runtime_warnings(warn_about="future_architecture_change")
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.replace_synonyms_to_df_copy(words_to_replace=3, mode='auto')
-        #self.oversample_train_data()
-        self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
-        self.sort_columns_alphabetically()
+        if self.blueprint_step_selection_nlp_transformers["train_test_split"]:
+            self.train_test_split(how=self.train_split_type)
+        if self.blueprint_step_selection_nlp_transformers["random_synonym_replacement"]:
+            self.replace_synonyms_to_df_copy(words_to_replace=3, mode='auto')
+        if self.blueprint_step_selection_nlp_transformers["oversampling"]:
+            self.oversample_train_data()
+        if self.blueprint_step_selection_nlp_transformers["rare_feature_processing"]:
+            self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
+        if self.blueprint_step_selection_nlp_transformers["sort_columns_alphabetically"]:
+            self.sort_columns_alphabetically()
         self.check_max_sentence_length()
         self.import_transformer_model_tokenizer(transformer_chosen=self.transformer_chosen)

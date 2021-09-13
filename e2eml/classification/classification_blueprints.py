@@ -81,7 +81,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
             self.classification_eval(algorithm=algorithm)
 
-    def ml_bp00_train_test_binary_full_processing_log_reg_prob(self, df=None, preprocessing_type='full', preprocess_bp="bp_03"):
+    def ml_bp00_train_test_binary_full_processing_log_reg_prob(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -91,16 +91,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
-        if preprocess_bp == 'bp_01':
-            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_02':
-            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_03':
-            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_04':
-            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        else:
-            pass
+        self.std_preprocessing_pipeline(df=df)
         if self.prediction_mode:
             pass
         else:
@@ -111,7 +102,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp01_multiclass_full_processing_xgb_prob(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+    def ml_bp01_multiclass_full_processing_xgb_prob(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -121,16 +112,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
-        if preprocess_bp == 'bp_01':
-            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_02':
-            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_03':
-            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_04':
-            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        else:
-            pass
+        self.std_preprocessing_pipeline(df=df)
         if self.prediction_mode:
             pass
         else:
@@ -140,7 +122,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp02_multiclass_full_processing_lgbm_prob(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+    def ml_bp02_multiclass_full_processing_lgbm_prob(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -150,16 +132,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
-        if preprocess_bp == 'bp_01':
-            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_02':
-            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_03':
-            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_04':
-            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        else:
-            pass
+        self.std_preprocessing_pipeline(df=df)
         if self.prediction_mode:
             pass
         else:
@@ -169,7 +142,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+    def ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -181,35 +154,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         """
         logging.info('Start blueprint.')
         self.runtime_warnings(warn_about="long runtime")
-        try:
-            if df.empty:
-                self.prediction_mode = False
-            else:
-                self.dataframe = df
-                self.prediction_mode = True
-        except AttributeError:
-            self.prediction_mode = False
-        self.train_test_split(how=self.train_split_type)
-        self.datetime_converter(datetime_handling='all')
-        if preprocessing_type == 'nlp':
-            self.pos_tagging_pca()
-        self.rare_feature_processor(threshold=0.03, mask_as='miscellaneous')
-        self.cardinality_remover(threshold=100)
-        self.onehot_pca()
-        self.category_encoding(algorithm='target')
-        self.delete_high_null_cols(threshold=0.5)
-        self.fill_nulls(how='static')
-        self.data_binning(nb_bins=10)
-        #self.skewness_removal()
-        self.outlier_care(method='isolation', how='append')
-        self.remove_collinearity(threshold=0.8)
-        self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
-        for nb_cluster in range(2, 10):
-            self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
-        if self.low_memory_mode:
-            self.reduce_memory_footprint()
-        self.automated_feature_selection(metric='logloss')
-        self.sort_columns_alphabetically()
+        self.std_preprocessing_pipeline(df=df)
         if self.prediction_mode:
             pass
         else:
@@ -220,7 +165,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp04_multiclass_full_processing_ngboost(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+    def ml_bp04_multiclass_full_processing_ngboost(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -230,16 +175,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
-        if preprocess_bp == 'bp_01':
-            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_02':
-            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_03':
-            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_04':
-            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        else:
-            pass
+        self.std_preprocessing_pipeline(df=df)
         if self.prediction_mode:
             pass
         else:
@@ -250,7 +186,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp05_multiclass_full_processing_vowpal_wabbit(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+    def ml_bp05_multiclass_full_processing_vowpal_wabbit(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -260,16 +196,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
-        if preprocess_bp == 'bp_01':
-            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_02':
-            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_03':
-            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_04':
-            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        else:
-            pass
+        self.std_preprocessing_pipeline(df=df)
         if self.prediction_mode:
             pass
         else:
@@ -280,7 +207,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp06_multiclass_full_processing_bert_transformer(self, df=None, preprocess_bp="bp_nlp_10"):
+    def ml_bp06_multiclass_full_processing_bert_transformer(self, df=None):
         """
         Runs an NLP transformer blue print specifically for text classification. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -288,16 +215,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_nlp_10" or "bp_nlp_11")
         :return: Updates class attributes by its predictions.
         """
-        if preprocess_bp == 'bp_nlp_10':
-            self.pp_bp10_nlp_preprocessing(df=df)
-        elif preprocess_bp == 'bp_nlp_11':
-            self.pp_bp11_nlp_preprocessing(df=df)
-        elif preprocess_bp == 'bp_nlp_12':
-            self.pp_bp12_nlp_preprocessing(df=df)
-        elif preprocess_bp == 'bp_nlp_13':
-            self.pp_bp13_nlp_preprocessing(df=df)
-        else:
-            pass
+        self.nlp_transformer_preprocessing_pipeline(df=df)
         if self.prediction_mode:
             pass
         else:
@@ -308,7 +226,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp07_multiclass_full_processing_tabnet(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+    def ml_bp07_multiclass_full_processing_tabnet(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -318,16 +236,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
-        if preprocess_bp == 'bp_01':
-            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_02':
-            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_03':
-            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_04':
-            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        else:
-            pass
+        self.std_preprocessing_pipeline(df=df)
         if self.prediction_mode:
             pass
         else:
@@ -338,7 +247,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_bp08_multiclass_full_processing_ridge(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+    def ml_bp08_multiclass_full_processing_ridge(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -348,16 +257,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
-        if preprocess_bp == 'bp_01':
-            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_02':
-            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_03':
-            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_04':
-            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        else:
-            pass
+        self.std_preprocessing_pipeline(df=df)
         if self.prediction_mode:
             pass
         else:
@@ -368,7 +268,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_special_multiclass_full_processing_multimodel_max_voting(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+    def ml_special_multiclass_full_processing_multimodel_max_voting(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -378,62 +278,89 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
-        if preprocess_bp == 'bp_01':
-            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_02':
-            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_03':
-            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_04':
-            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        else:
-            pass
+        self.std_preprocessing_pipeline(df=df)
         if self.prediction_mode:
             pass
         else:
-            self.lgbm_train(tune_mode=self.tune_mode)
-            self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
-            self.vowpal_wabbit_train()
-            self.tabnet_train()
-            self.ridge_classifier_train()
-        self.lgbm_predict(feat_importance=False)
-        self.classification_eval('lgbm')
-        self.xgboost_predict(feat_importance=True)
-        self.classification_eval('xgboost')
-        self.vowpal_wabbit_predict(feat_importance=True)
-        self.classification_eval('vowpal_wabbit')
-        self.tabnet_predict()
-        self.classification_eval('tabnet')
-        self.ridge_classifier_predict()
-        self.classification_eval('ridge')
+            if self.special_blueprint_algorithms["lgbm"]:
+                self.lgbm_train(tune_mode=self.tune_mode)
+            if self.special_blueprint_algorithms["xgboost"]:
+                self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
+            if self.special_blueprint_algorithms["vowpal_wabbit"]:
+                self.vowpal_wabbit_train()
+            if self.special_blueprint_algorithms["tabnet"]:
+                self.tabnet_train()
+            if self.special_blueprint_algorithms["ridge"]:
+                self.ridge_classifier_train()
+            if self.special_blueprint_algorithms["sklearn_ensemble"]:
+                self.sklearn_ensemble_train()
+            if self.special_blueprint_algorithms["ngboost"]:
+                self.ngboost_train()
+        if self.special_blueprint_algorithms["lgbm"]:
+            self.lgbm_predict(feat_importance=False)
+            self.classification_eval('lgbm')
+        if self.special_blueprint_algorithms["xgboost"]:
+            self.xgboost_predict(feat_importance=True)
+            self.classification_eval('xgboost')
+        if self.special_blueprint_algorithms["vowpal_wabbit"]:
+            self.vowpal_wabbit_predict(feat_importance=True)
+            self.classification_eval('vowpal_wabbit')
+        if self.special_blueprint_algorithms["tabnet"]:
+            self.tabnet_predict()
+            self.classification_eval('tabnet')
+        if self.special_blueprint_algorithms["ridge"]:
+            self.ridge_classifier_predict()
+            self.classification_eval('ridge')
+        if self.special_blueprint_algorithms["sklearn_ensemble"]:
+            self.sklearn_ensemble_predict()
+            self.classification_eval('sklearn_ensemble')
+        if self.special_blueprint_algorithms["ngboost"]:
+            self.ngboost_predict()
+            self.classification_eval("ngboost")
+
         algorithm = 'max_voting'
-        mode_cols = ["lgbm_class",
-                     "xgboost_class",
-                     "vowpal_wabbit_class",
-                     "tabnet",
-                     "ridge"]
+        mode_cols = [alg for alg, value in self.special_blueprint_algorithms.items() if value]
+
         if self.prediction_mode:
-            self.dataframe["lgbm_class"] = self.predicted_classes[f"lgbm"]
-            self.dataframe["xgboost_class"] = self.predicted_classes[f"xgboost"]
-            self.dataframe["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
-            self.dataframe["tabnet"] = self.predicted_classes[f"tabnet"]
-            self.dataframe["ridge"] = self.predicted_classes[f"ridge"]
+            if self.special_blueprint_algorithms["lgbm"]:
+                self.dataframe["lgbm_class"] = self.predicted_classes[f"lgbm"]
+            if self.special_blueprint_algorithms["xgboost"]:
+                self.dataframe["xgboost_class"] = self.predicted_classes[f"xgboost"]
+            if self.special_blueprint_algorithms["vowpal_wabbit"]:
+                self.dataframe["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
+            if self.special_blueprint_algorithms["tabnet"]:
+                self.dataframe["tabnet"] = self.predicted_classes[f"tabnet"]
+            if self.special_blueprint_algorithms["ridge"]:
+                self.dataframe["ridge"] = self.predicted_classes[f"ridge"]
+            if self.special_blueprint_algorithms["sklearn_ensemble"]:
+                self.dataframe["sklearn_ensemble"] = self.predicted_classes[f"sklearn_ensemble"]
+            if self.special_blueprint_algorithms["ngboost"]:
+                self.dataframe["ngboost"] = self.predicted_classes[f"ngboost"]
             self.dataframe["max_voting_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
             self.predicted_classes[f"max_voting"] = self.dataframe["max_voting_class"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_test["lgbm_class"] = self.predicted_classes[f"lgbm"]
-            X_test["xgboost_class"] = self.predicted_classes[f"xgboost"]
-            X_test["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
-            X_test["tabnet"] = self.predicted_classes[f"tabnet"]
-            X_test["ridge"] = self.predicted_classes[f"ridge"]
+            if self.special_blueprint_algorithms["lgbm"]:
+                X_test["lgbm_class"] = self.predicted_classes[f"lgbm"]
+            if self.special_blueprint_algorithms["xgboost"]:
+                X_test["xgboost_class"] = self.predicted_classes[f"xgboost"]
+            if self.special_blueprint_algorithms["vowpal_wabbit"]:
+                X_test["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
+            if self.special_blueprint_algorithms["tabnet"]:
+                X_test["tabnet"] = self.predicted_classes[f"tabnet"]
+            if self.special_blueprint_algorithms["ridge"]:
+                X_test["ridge"] = self.predicted_classes[f"ridge"]
+            if self.special_blueprint_algorithms["sklearn_ensemble"]:
+                X_test["sklearn_ensemble"] = self.predicted_classes[f"sklearn_ensemble"]
+            if self.special_blueprint_algorithms["ngboost"]:
+                X_test["ngboost"] = self.predicted_classes[f"ngboost"]
             X_test["max_voting_class"] = X_test[mode_cols].mode(axis=1)[0]
             self.predicted_classes[f"max_voting"] = X_test["max_voting_class"]
         self.classification_eval('max_voting')
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_special_multiclass_auto_model_exploration(self, df=None, preprocessing_type='full', preprocess_bp="bp_01"):
+    def ml_special_multiclass_auto_model_exploration(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -443,23 +370,20 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
         :return: Updates class attributes by its predictions.
         """
-        if preprocess_bp == 'bp_01':
-            self.pp_bp01_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_02':
-            self.pp_bp02_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_03':
-            self.pp_bp03_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        elif preprocess_bp == 'bp_04':
-            self.pp_bp04_std_preprocessing(df=df, preprocessing_type=preprocessing_type)
-        else:
-            pass
+        self.std_preprocessing_pipeline(df=df)
         if not self.prediction_mode:
-            self.train_pred_selected_model(algorithm="ridge")
-            self.train_pred_selected_model(algorithm='lgbm')
-            self.train_pred_selected_model(algorithm='xgboost')
-            self.train_pred_selected_model(algorithm='ngboost')
-            self.train_pred_selected_model(algorithm="vowpal_wabbit")
-            self.train_pred_selected_model(algorithm="tabnet")
+            if self.special_blueprint_algorithms["ridge"]:
+                self.train_pred_selected_model(algorithm="ridge")
+            if self.special_blueprint_algorithms["lgbm"]:
+                self.train_pred_selected_model(algorithm='lgbm')
+            if self.special_blueprint_algorithms["xgboost"]:
+                self.train_pred_selected_model(algorithm='xgboost')
+            if self.special_blueprint_algorithms["ngboost"]:
+                self.train_pred_selected_model(algorithm='ngboost')
+            if self.special_blueprint_algorithms["vowpal_wabbit"]:
+                self.train_pred_selected_model(algorithm="vowpal_wabbit")
+            if self.special_blueprint_algorithms["tabnet"]:
+                self.train_pred_selected_model(algorithm="tabnet")
 
             # select best model
             max_matthews = 0
