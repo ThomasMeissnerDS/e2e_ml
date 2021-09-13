@@ -315,7 +315,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.sklearn_ensemble_predict()
             self.classification_eval('sklearn_ensemble')
         if self.special_blueprint_algorithms["ngboost"]:
-            self.ngboost_predict()
+            self.ngboost_predict(feat_importance=False)
             self.classification_eval("ngboost")
 
         algorithm = 'max_voting'

@@ -303,7 +303,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.sklearn_ensemble_train()
 
         if self.special_blueprint_algorithms["ngboost"]:
-            self.ngboost_predict(feat_importance=True)
+            self.ngboost_predict(feat_importance=False)
         if self.special_blueprint_algorithms["lgbm"]:
             self.lgbm_predict(feat_importance=True)
         if self.special_blueprint_algorithms["xgboost"]:
