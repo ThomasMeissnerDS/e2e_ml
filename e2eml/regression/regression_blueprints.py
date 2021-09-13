@@ -335,7 +335,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             if self.special_blueprint_algorithms["sklearn_ensemble"]:
                 self.dataframe["sklearn_ensemble"] = self.predicted_values[f"sklearn_ensemble"]
 
-            self.dataframe["blended_preds"] = self.dataframe[mode_cols].sum()/len(mode_cols)
+            self.dataframe["blended_preds"] = self.dataframe[mode_cols].sum(axis=1)/len(mode_cols)
             self.predicted_values[f"blended_preds"] = self.dataframe["blended_preds"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -354,7 +354,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             if self.special_blueprint_algorithms["sklearn_ensemble"]:
                 X_test["sklearn_ensemble"] = self.predicted_values[f"sklearn_ensemble"]
 
-            X_test["blended_preds"] = X_test[mode_cols].sum()/len(mode_cols)
+            X_test["blended_preds"] = X_test[mode_cols].sum(axis=1)/len(mode_cols)
             self.predicted_values[f"blended_preds"] = X_test["blended_preds"]
         self.regression_eval('blended_preds')
         self.prediction_mode = True
