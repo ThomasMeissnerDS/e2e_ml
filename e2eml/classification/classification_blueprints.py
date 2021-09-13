@@ -327,7 +327,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             if self.special_blueprint_algorithms["xgboost"]:
                 self.dataframe["xgboost"] = self.predicted_classes[f"xgboost"]
             if self.special_blueprint_algorithms["vowpal_wabbit"]:
-                self.dataframe["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
+                self.dataframe["vowpal_wabbit"] = self.predicted_classes[f"vowpal_wabbit"]
             if self.special_blueprint_algorithms["tabnet"]:
                 self.dataframe["tabnet"] = self.predicted_classes[f"tabnet"]
             if self.special_blueprint_algorithms["ridge"]:
