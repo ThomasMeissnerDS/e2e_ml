@@ -45,7 +45,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         self.data_binning(nb_bins=10)
         self.outlier_care(method='isolation', how='append')
         self.remove_collinearity(threshold=0.8)
-        self.skewness_removal()
+        self.skewness_removal(overwrite_orig_col=False)
         try:
             self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
         except ValueError:

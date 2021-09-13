@@ -812,10 +812,12 @@ class PreProcessing:
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
                                                 Y_test), self.data_scaled, self.preprocess_decisions
 
-    def skewness_removal(self):
+    def skewness_removal(self, overwrite_orig_col=False):
         """
         Loops through the in-class stored dataframe columns and checks the skewness. If skewness exceeds a certain threshold,
         executes log transformation.
+        :param overwrite_orig_col: If True, replace the original column with its unskewed counterpart. Otherwise append
+        an unskewed counterpart as new column to the dataframe.
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task='Remove skewness')
@@ -825,7 +827,10 @@ class PreProcessing:
             for col in self.preprocess_decisions["skewed_columns"]:
                 log_array = np.log1p(self.dataframe[col])
                 log_array[np.isfinite(log_array) == False] = 0
-                self.dataframe[col] = log_array
+                if overwrite_orig_col:
+                    self.dataframe[col] = log_array
+                else:
+                    self.dataframe[f"{col}_unskewed"] = log_array
             logging.info('Finished skewness removal.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
@@ -840,10 +845,12 @@ class PreProcessing:
             for col in X_train[skewed].columns:
                 log_array = np.log1p(X_train[col])
                 log_array[np.isfinite(log_array) == False] = 0
-                X_train[col] = log_array
+                if overwrite_orig_col:
+                    X_train[f"{col}_unskewed"] = log_array
                 log_array = np.log1p(X_test[col])
                 log_array[np.isfinite(log_array) == False] = 0
-                X_test[col] = log_array
+                if overwrite_orig_col:
+                    X_test[f"{col}_unskewed"] = log_array
             logging.info('Finished skewness removal.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             self.preprocess_decisions["skewed_columns"] = skewed
