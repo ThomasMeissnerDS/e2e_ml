@@ -320,10 +320,10 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         mode_cols = [alg for alg, value in self.special_blueprint_algorithms.items() if value]
 
         if self.prediction_mode:
-            if self.special_blueprint_algorithms["lgbm"]:
-                self.dataframe["lgbm"] = self.predicted_values[f"lgbm"]
             if self.special_blueprint_algorithms["ngboost"]:
                 self.dataframe["ngboost"] = self.predicted_values[f"ngboost"]
+            if self.special_blueprint_algorithms["lgbm"]:
+                self.dataframe["lgbm"] = self.predicted_values[f"lgbm"]
             if self.special_blueprint_algorithms["xgboost"]:
                 self.dataframe["xgboost"] = self.predicted_values[f"xgboost"]
             if self.special_blueprint_algorithms["vowpal_wabbit"]:
