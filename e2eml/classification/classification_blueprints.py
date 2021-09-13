@@ -323,9 +323,9 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
 
         if self.prediction_mode:
             if self.special_blueprint_algorithms["lgbm"]:
-                self.dataframe["lgbm_class"] = self.predicted_classes[f"lgbm"]
+                self.dataframe["lgbm"] = self.predicted_classes[f"lgbm"]
             if self.special_blueprint_algorithms["xgboost"]:
-                self.dataframe["xgboost_class"] = self.predicted_classes[f"xgboost"]
+                self.dataframe["xgboost"] = self.predicted_classes[f"xgboost"]
             if self.special_blueprint_algorithms["vowpal_wabbit"]:
                 self.dataframe["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
             if self.special_blueprint_algorithms["tabnet"]:
@@ -341,11 +341,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             if self.special_blueprint_algorithms["lgbm"]:
-                X_test["lgbm_class"] = self.predicted_classes[f"lgbm"]
+                X_test["lgbm"] = self.predicted_classes[f"lgbm"]
             if self.special_blueprint_algorithms["xgboost"]:
-                X_test["xgboost_class"] = self.predicted_classes[f"xgboost"]
+                X_test["xgboost"] = self.predicted_classes[f"xgboost"]
             if self.special_blueprint_algorithms["vowpal_wabbit"]:
-                X_test["vowpal_wabbit_class"] = self.predicted_classes[f"vowpal_wabbit"]
+                X_test["vowpal_wabbit"] = self.predicted_classes[f"vowpal_wabbit"]
             if self.special_blueprint_algorithms["tabnet"]:
                 X_test["tabnet"] = self.predicted_classes[f"tabnet"]
             if self.special_blueprint_algorithms["ridge"]:
