@@ -208,7 +208,7 @@ class PreProcessing:
                                              "lgbm": True,
                                              "tabnet": False,
                                              "vowpal_wabbit": True,
-                                             "sklearn_ensemble": False
+                                             "sklearn_ensemble": True
                                              }
         # store chosen preprocessing settings
         if not preprocess_decisions:
@@ -251,7 +251,7 @@ class PreProcessing:
                                              "ngboost": 25,
                                              "sklearn_ensemble": 10,
                                              "ridge": 100,
-                                             "bruteforce_random": 500}
+                                             "bruteforce_random": 250}
 
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 24*60*60,
                                              "lgbm": 24*60*60,
@@ -262,7 +262,7 @@ class PreProcessing:
                                              "bruteforce_random": 24*60*60}
 
         self.brute_force_selection_sample_size = 100000
-        self.brute_force_selection_base_learner = 'vowpal_wabbit' # 'lgbm', 'vowpal_wabbit'
+        self.brute_force_selection_base_learner = 'double' # 'lgbm', 'vowpal_wabbit', 'auto
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -2137,7 +2137,6 @@ class PreProcessing:
 
             brute_force_selection_base_learner = self.brute_force_selection_base_learner
 
-
             def objective(trial):
                 param = {}
                 for col in all_cols:
@@ -2145,6 +2144,8 @@ class PreProcessing:
 
                 if brute_force_selection_base_learner == 'auto':
                     base_learner = trial.suggest_categorical("base_learner", ["lgbm", "vowal_wobbit"])
+                elif brute_force_selection_base_learner == 'double':
+                    base_learner = None
                 else:
                     base_learner = brute_force_selection_base_learner
 
@@ -2158,6 +2159,13 @@ class PreProcessing:
                         model = VWClassifier()
                     else:
                         model = VWRegressor()
+                elif brute_force_selection_base_learner == 'double':
+                    if problem == 'binary' or problem == 'multiclass':
+                        model_1 = VWClassifier()
+                        model_2 = lgb.LGBMClassifier()
+                    else:
+                        model_1 = VWRegressor()
+                        model_2 = lgb.LGBMRegressor()
                 else:
                     if problem == 'binary' or problem == 'multiclass':
                         model = VWClassifier()
@@ -2171,12 +2179,23 @@ class PreProcessing:
                     else:
                         pass
 
-                try:
-                    scores = cross_val_score(model, X_train_sample[temp_features], Y_train_sample, cv=10, scoring=metric)
-                    mae = np.mean(scores)
-                except Exception:
-                    mae = 0
-                return mae
+                if brute_force_selection_base_learner == 'double':
+                    try:
+                        scores_1 = cross_val_score(model_1, X_train_sample[temp_features], Y_train_sample, cv=10, scoring=metric)
+                        scores_2 = cross_val_score(model_2, X_train_sample[temp_features], Y_train_sample, cv=10, scoring=metric)
+                        mae_1 = np.mean(scores_1)
+                        mae_2 = np.mean(scores_2)
+                        mae = (mae_1+mae_2)/2
+                    except Exception:
+                        mae = 0
+                    return mae
+                else:
+                    try:
+                        scores = cross_val_score(model, X_train_sample[temp_features], Y_train_sample, cv=10, scoring=metric)
+                        mae = np.mean(scores)
+                    except Exception:
+                        mae = 0
+                    return mae
 
             algorithm = 'bruteforce_random'
 
