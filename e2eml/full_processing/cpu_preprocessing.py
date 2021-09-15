@@ -251,7 +251,7 @@ class PreProcessing:
                                              "ngboost": 25,
                                              "sklearn_ensemble": 10,
                                              "ridge": 100,
-                                             "bruteforce_random": 250}
+                                             "bruteforce_random": 400}
 
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 24*60*60,
                                              "lgbm": 24*60*60,

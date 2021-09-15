@@ -140,11 +140,13 @@ class RegressionModels(postprocessing.FullPipeline):
                 param = {
                     'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
                     'max_iter': trial.suggest_loguniform('max_iter', 10, 1000),
-                    'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1)
+                    'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
+                    'normalize': trial.suggest_categorical("normalize", [True, False])
                 }
                 model = Ridge(alpha=param["alpha"],
                               max_iter=param["max_iter"],
                               tol=param["tol"],
+                              normalize=param["normalize"],
                               solver=solver,
                               random_state=42).fit(X_train, Y_train)
                 try:
@@ -173,6 +175,7 @@ class RegressionModels(postprocessing.FullPipeline):
             best_parameters = study.best_trial.params
             model = Ridge(alpha=best_parameters["alpha"],
                           max_iter=best_parameters["max_iter"],
+                          normalize=best_parameters["normalize"],
                           tol=best_parameters["tol"],
                           solver=best_parameters["solver"],
                           random_state=42).fit(X_train, Y_train)
@@ -1008,14 +1011,17 @@ class RegressionModels(postprocessing.FullPipeline):
                                          Base=base_learner_choice,
                                          learning_rate=param["learning_rate"],
                                          random_state=42)
-                    scores = cross_val_score(model, X_train, Y_train, cv=5, scoring='neg_mean_squared_error',
+                    scores = cross_val_score(model, X_train, Y_train, cv=10, scoring='neg_mean_squared_error',
                                              fit_params={'X_val': X_test, 'Y_val': Y_test, 'early_stopping_rounds': 10})
                     mae = np.mean(scores)
                     return mae
 
             algorithm = 'ngboost'
             study = optuna.create_study(direction='maximize', study_name=f"{algorithm} tuning")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["ngboost"], timeout=self.hyperparameter_tuning_max_runtime_secs["ngboost"], gc_after_trial=True, show_progress_bar=True)
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["ngboost"],
+                           timeout=self.hyperparameter_tuning_max_runtime_secs["ngboost"],
+                           gc_after_trial=True,
+                           show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
