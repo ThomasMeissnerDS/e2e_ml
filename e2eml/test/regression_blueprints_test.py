@@ -64,22 +64,6 @@ def test_ml_bp10_train_test_regression_full_processing_linear_reg():
                                              categorical_columns=test_categorical_cols,
                                              preferred_training_mode='auto',
                                              tune_mode='accurate')
-    titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 3,
-                                                    "lgbm": 3,
-                                                    "tabnet": 3,
-                                                    "ngboost": 3,
-                                                    "sklearn_ensemble": 3,
-                                                    "ridge": 3,
-                                                    "bruteforce_random": 500}
-    titanic_auto_ml.special_blueprint_algorithms = {"ridge": True,
-                                                    "xgboost": True,
-                                                    "ngboost": True,
-                                                    "lgbm": True,
-                                                    "tabnet": True,
-                                                    "vowpal_wabbit": False,
-                                                    "sklearn_ensemble": True
-                                                    }
-
     titanic_auto_ml.ml_bp10_train_test_regression_full_processing_linear_reg()
     titanic_auto_ml.ml_bp10_train_test_regression_full_processing_linear_reg(val_df)
     val_y_hat = titanic_auto_ml.predicted_values['linear_regression']

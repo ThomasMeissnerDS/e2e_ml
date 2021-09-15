@@ -1017,7 +1017,8 @@ class RegressionModels(postprocessing.FullPipeline):
                     return mae
 
             algorithm = 'ngboost'
-            study = optuna.create_study(direction='maximize', study_name=f"{algorithm} tuning")
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm} tuning")
             study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["ngboost"],
                            timeout=self.hyperparameter_tuning_max_runtime_secs["ngboost"],
                            gc_after_trial=True,

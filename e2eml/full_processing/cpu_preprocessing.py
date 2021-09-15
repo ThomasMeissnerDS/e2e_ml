@@ -11,7 +11,7 @@ from sklearn.ensemble import IsolationForest
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.mixture import GaussianMixture
 from sklearn.experimental import enable_iterative_imputer
-from sklearn.impute import IterativeImputer
+from sklearn.impute import IterativeImputer, SimpleImputer
 from sklearn.decomposition import PCA
 from sklearn.model_selection import cross_val_score
 from sklearn.utils import class_weight
@@ -1307,13 +1307,46 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
+    def holistic_null_filling(self):
+        if self.prediction_mode:
+            for col in self.preprocess_decisions[f"holistically_filled_cols"]:
+                algorithm = 'mean_filling'
+                imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
+                self.dataframe[col+algorithm] = imp.transform( self.dataframe[col])
+                algorithm = 'most_frequent'
+                imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
+                self.dataframe[col+algorithm] = imp.transform( self.dataframe[col])
+            return self.dataframe
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            filled_cols = []
+            # numeric vs categorical
+            for col in X_train.columns.to_list():
+                if X_train[col].isna().sum() > 0:
+                    algorithm = 'mean_filling'
+                    imp = SimpleImputer(missing_values=np.nan, strategy='mean')
+                    imp.fit(X_train[col])
+                    X_train[col+algorithm] = imp.transform(X_train[col])
+                    self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
+                    # most frequent filling
+                    algorithm = 'mean_filling'
+                    imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
+                    imp.fit(X_train[col])
+                    X_train[col+algorithm] = imp.transform(X_train[col])
+                    self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
+
+                    filled_cols.append(col)
+            self.preprocess_decisions[f"holistically_filled_cols"] = filled_cols
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
     def iterative_imputation(self, dataframe, imputer=None):
         dataframe_cols = dataframe.columns#[dataframe.isna().any()].tolist()
-        imp_mean = IterativeImputer(random_state=0, estimator=BayesianRidge(), imputation_order='ascending')
+        imp_mean = IterativeImputer(random_state=0, estimator=BayesianRidge(), imputation_order='ascending', max_iter=100)
         if not imputer:
             imp_mean.fit(dataframe)
         else:
             imp_mean = imputer
+            imp_mean.fit(dataframe)
         dataframe = imp_mean.transform(dataframe)
         dataframe_final = pd.DataFrame(dataframe, columns=dataframe_cols)
         self.preprocess_decisions[f"fill_nulls_imputer"] = imp_mean
@@ -1342,7 +1375,6 @@ class PreProcessing:
                 pass
         return dataframe
 
-    # TODO: Check if parameters can be used via **kwargs argument
     def fill_nulls(self, how='iterative_imputation', fill_with=0, fill_cat_col_with='No words have been found'):
         """
         Takes in a dataframe and fills all NULLs with chosen value.
