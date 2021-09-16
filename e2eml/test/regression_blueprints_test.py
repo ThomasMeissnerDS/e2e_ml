@@ -10,6 +10,24 @@ def load_housingprices_data():
     :return: Several dataframes and series to be processed by blueprint.
     """
     data = pd.read_csv("housingprices_train.csv")
+
+    def new_features(X):
+        X['HasWoodDeck'] = (X['WoodDeckSF'] == 0) * 1
+        X['HasOpenPorch'] = (X['OpenPorchSF'] == 0) * 1
+        X['HasEnclosedPorch'] = (X['EnclosedPorch'] == 0) * 1
+        X['Has3SsnPorch'] = (X['3SsnPorch'] == 0) * 1
+        X['HasScreenPorch'] = (X['ScreenPorch'] == 0) * 1
+        X['Total_Home_Quality'] = X['OverallQual'] + X['OverallCond']
+        X['TotalSF'] = X['TotalBsmtSF'] + X['1stFlrSF'] + X['2ndFlrSF']
+        X['TotalSquareFootage'] = (X['BsmtFinSF1'] + X['BsmtFinSF2'] + X['1stFlrSF'] + X['2ndFlrSF'])
+        X['HasPool'] = X['PoolArea'].apply(lambda x: 1 if x > 0 else 0)
+        X['Has2ndFloor'] = X['2ndFlrSF'].apply(lambda x: 1 if x > 0 else 0)
+        X['HasGarage'] = X['GarageArea'].apply(lambda x: 1 if x > 0 else 0)
+        X['HasBsmt'] = X['TotalBsmtSF'].apply(lambda x: 1 if x > 0 else 0)
+        X['HasFireplace'] = X['Fireplaces'].apply(lambda x: 1 if x > 0 else 0)
+        return X
+
+    data = new_features(data)
     print('Do dataframe splits.')
     test_df = data.head(1000).copy()
     val_df = data.tail(460).copy()
@@ -46,7 +64,7 @@ def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender
                                                     "lgbm": True,
                                                     "tabnet": False,
                                                     "vowpal_wabbit": False,
-                                                    "sklearn_ensemble": True
+                                                    "sklearn_ensemble": False
                                                     }
 
     titanic_auto_ml.ml_special_regression_multiclass_full_processing_multimodel_avg_blender()

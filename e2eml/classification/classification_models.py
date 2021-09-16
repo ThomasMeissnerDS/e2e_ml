@@ -220,7 +220,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 solver = trial.suggest_categorical("solver", ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"])
                 param = {
                     'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
-                    'max_iter': trial.suggest_loguniform('max_iter', 10, 1000),
+                    'max_iter': trial.suggest_loguniform('max_iter', 10, 10000),
                     'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
                     'normalize': trial.suggest_categorical("normalize", [True, False])
                 }

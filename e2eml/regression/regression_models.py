@@ -95,6 +95,7 @@ class RegressionModels(postprocessing.FullPipeline):
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
+            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
@@ -139,7 +140,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 solver = trial.suggest_categorical("solver", ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"])
                 param = {
                     'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
-                    'max_iter': trial.suggest_loguniform('max_iter', 10, 1000),
+                    'max_iter': trial.suggest_loguniform('max_iter', 10, 10000),
                     'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
                     'normalize': trial.suggest_categorical("normalize", [True, False])
                 }
@@ -198,6 +199,7 @@ class RegressionModels(postprocessing.FullPipeline):
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
+            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
@@ -408,6 +410,7 @@ class RegressionModels(postprocessing.FullPipeline):
             print(len(self.dataframe.columns))
             print(self.dataframe.info())
             predicted_probs = model.predict(self.dataframe.to_numpy())
+            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             Y_train = Y_train.values.reshape(-1, 1)
@@ -455,6 +458,7 @@ class RegressionModels(postprocessing.FullPipeline):
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
+            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
@@ -631,6 +635,7 @@ class RegressionModels(postprocessing.FullPipeline):
             D_test = xgb.DMatrix(self.dataframe)
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(D_test)
+            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted_probs
         else:
@@ -732,7 +737,7 @@ class RegressionModels(postprocessing.FullPipeline):
             lgbm_best_param = study.best_trial.params
             param = {
                 'objective': 'regression',
-                'metric': 'gamma',
+                'metric': 'huber', #'gamma'
                 'num_boost_round': lgbm_best_param["num_boost_round"],
                 'lambda_l1': lgbm_best_param["lambda_l1"],
                 'lambda_l2': lgbm_best_param["lambda_l2"],
@@ -769,6 +774,7 @@ class RegressionModels(postprocessing.FullPipeline):
         if self.prediction_mode:
             X_test = self.dataframe
             predicted_probs = model.predict(X_test)
+            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted_probs
         else:
@@ -913,6 +919,7 @@ class RegressionModels(postprocessing.FullPipeline):
         if self.prediction_mode:
             X_test = self.dataframe
             predicted = model.predict(X_test)
+            predicted = self.target_skewness_handling(preds_to_reconvert=predicted, mode='revert')
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted
         else:
@@ -1092,6 +1099,7 @@ class RegressionModels(postprocessing.FullPipeline):
         if self.prediction_mode:
             X_test = self.dataframe
             predicted = model.predict(X_test)
+            predicted = self.target_skewness_handling(preds_to_reconvert=predicted, mode='revert')
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted
         else:

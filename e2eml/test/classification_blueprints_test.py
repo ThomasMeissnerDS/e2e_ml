@@ -103,7 +103,7 @@ def nlp_multiclass_data():
     return test_df, test_target, val_df, val_df_target, test_categorical_cols
 
 
-def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='titanic'):
+def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='titanic'):
     if dataset == 'titanic':
         test_df, test_target, val_df, val_df_target, test_categorical_cols = load_titanic_data()
         titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
@@ -125,90 +125,26 @@ def blueprint_binary_test_titanic(blueprint='logistic_regression', dataset='tita
                                                      tune_mode='accurate',
                                                      nlp_transformer_columns='OriginalTweet'
                                                      )
-    if blueprint == 'lgbm':
-        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(preprocessing_type='nlp', preprocess_bp='bp_01')
-        print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp02_multiclass_full_processing_lgbm_prob(val_df, preprocessing_type='nlp', preprocess_bp='bp_01')
-        #val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
-        val_y_hat = titanic_auto_ml.predicted_classes['lgbm']
-        # nlp+dynamic scale_pos: matth 0.60, no scale_pos: 0.54
-        # no nlp, scale_pos: 0.49, no scale_pos: 0.54
-    elif blueprint == 'xgboost':
-        titanic_auto_ml.ml_bp01_multiclass_full_processing_xgb_prob(preprocessing_type='nlp')
-        print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp01_multiclass_full_processing_xgb_prob(val_df, preprocessing_type='nlp')
-        # label encode targets
-        val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
-        val_y_hat = titanic_auto_ml.predicted_classes['xgboost']
-    elif blueprint == 'sklearn_ensemble':
-        titanic_auto_ml.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble()
-        print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble(val_df)
-        val_y_hat = titanic_auto_ml.predicted_classes['sklearn_ensemble']
-    elif blueprint == 'logistic_regression':
-        titanic_auto_ml.ml_bp00_train_test_binary_full_processing_log_reg_prob()
-        print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp00_train_test_binary_full_processing_log_reg_prob(val_df)
-        val_y_hat = titanic_auto_ml.predicted_classes['logistic_regression']
-    elif blueprint == 'ngboost':
-        titanic_auto_ml.ml_bp04_multiclass_full_processing_ngboost(preprocessing_type='nlp')
-        print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp04_multiclass_full_processing_ngboost(val_df, preprocessing_type='nlp')
-        val_y_hat = titanic_auto_ml.predicted_classes['ngboost']
-    elif blueprint == 'vowpal_wabbit':
-        titanic_auto_ml.ml_bp05_multiclass_full_processing_vowpal_wabbit(preprocessing_type='full')
-        print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp05_multiclass_full_processing_vowpal_wabbit(val_df, preprocessing_type='full')
-        # label encode targets
-        #val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
-        val_y_hat = titanic_auto_ml.predicted_classes['vowpal_wabbit']
-    elif blueprint == 'max_voting':
-        titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
-        print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting(val_df)
-        val_y_hat = titanic_auto_ml.predicted_classes['blended_preds']
-    elif blueprint == 'autoselect':
-        titanic_auto_ml.ml_special_multiclass_auto_model_exploration(preprocessing_type='full')
-        print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_special_multiclass_auto_model_exploration(val_df, preprocessing_type='full')
-        val_y_hat = titanic_auto_ml.predicted_classes[titanic_auto_ml.best_model]
-    elif blueprint == 'nlp_transformer':
-        titanic_auto_ml.ml_bp06_multiclass_full_processing_bert_transformer()
-        print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp06_multiclass_full_processing_bert_transformer(val_df)
-        # label encode targets
-        val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
-        val_y_hat = titanic_auto_ml.predicted_classes['nlp_transformer']
-    elif blueprint == 'tabnet':
-        titanic_auto_ml.ml_bp07_multiclass_full_processing_tabnet()
-        print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp07_multiclass_full_processing_tabnet(val_df)
-        # label encode targets
-        val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
-        val_y_hat = titanic_auto_ml.predicted_classes['tabnet']
-    elif blueprint == 'ridge':
-        titanic_auto_ml.ml_bp08_multiclass_full_processing_ridge()
-        print("Start prediction on holdout dataset")
-        titanic_auto_ml.ml_bp08_multiclass_full_processing_ridge(val_df)
-        # label encode targets
-        #val_df_target = titanic_auto_ml.label_encoder_decoder(val_df_target, mode='transform')
-        val_y_hat = titanic_auto_ml.predicted_classes['ridge']
-    else:
-        pass
 
-    print(classification_report(val_df_target, val_y_hat))
-    try:
-        matthews = matthews_corrcoef(val_df_target, val_y_hat)
-    except Exception:
-        print("Matthew failed.")
-        matthews = 0
-    print(matthews)
-
-    if matthews > 0:
-        return print('The test ran successfully.')
-    else:
-        return print('The test failed. Please investigate.')
+    titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 3,
+                                                    "lgbm": 3,
+                                                    "tabnet": 3,
+                                                    "ngboost": 3,
+                                                    "sklearn_ensemble": 3,
+                                                    "ridge": 3,
+                                                    "bruteforce_random": 10}
+    titanic_auto_ml.special_blueprint_algorithms = {"ridge": True,
+                                                    "xgboost": True,
+                                                    "ngboost": True,
+                                                    "lgbm": True,
+                                                    "tabnet": False,
+                                                    "vowpal_wabbit": False,
+                                                    "sklearn_ensemble": False
+                                                    }
 
 
-if __name__ == "__main__":
-    blueprint_binary_test_titanic(blueprint='ridge', dataset='titanic') # corona_tweet
+    titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
+    titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting(val_df)
+    val_y_hat = titanic_auto_ml.predicted_classes['blended_preds']
+    finished = True
+    assert finished == True

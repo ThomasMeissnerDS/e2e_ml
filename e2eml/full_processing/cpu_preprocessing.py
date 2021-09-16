@@ -1,6 +1,6 @@
 from pandas.core.common import SettingWithCopyWarning
 from sklearn import model_selection
-from sklearn.linear_model import BayesianRidge
+from sklearn.linear_model import BayesianRidge, Ridge
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import TimeSeriesSplit
 import numpy as np
@@ -162,18 +162,16 @@ class PreProcessing:
         self.new_sin_cos_col_names = None
         self.df_dict = None
         self.blueprint_step_selection_non_nlp = {
-            "train_test_split": True,
             "automatic_type_detection_casting": True,
             "remove_duplicate_column_names": True,
             "reset_dataframe_index": True,
+            "handle_target_skewness": True,
+            "holistic_null_filling": True,
             "fill_infinite_values": True,
             "datetime_converter": True,
             "pos_tagging_pca": True,
             "append_text_sentiment_score": False,
-            "tfidf_vectorizer_to_pca": False,
-            "tfidf_naive_bayes_proba_char_wb_bigram": False,
-            "tfidf_naive_bayes_proba_char_wb_trigram": False,
-            "tfidf_naive_bayes_proba_unigram": False,
+            "tfidf_vectorizer_to_pca": True,
             "rare_feature_processing": True,
             "cardinality_remover": True,
             "delete_high_null_cols": True,
@@ -263,6 +261,13 @@ class PreProcessing:
 
         self.brute_force_selection_sample_size = 100000
         self.brute_force_selection_base_learner = 'double' # 'lgbm', 'vowpal_wabbit', 'auto
+
+        if self.class_problem == 'regression':
+            skewness = datasource[self.target_variable].skew(axis=0, skipna=True)
+            if skewness < -0.75 or skewness > 0.75:
+                self.target_is_skewed = True
+            else:
+                self.target_is_skewed = False
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
@@ -888,8 +893,8 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             skewness = X_train.skew(axis=0, skipna=True)
-            left_skewed = skewness[skewness < -0.75].index.to_list()
-            right_skewed = skewness[skewness > 0.75].index.to_list()
+            left_skewed = skewness[skewness < -0.5].index.to_list()
+            right_skewed = skewness[skewness > 0.5].index.to_list()
             skewed = left_skewed+right_skewed
             for col in X_train[skewed].columns:
                 log_array = np.log1p(X_train[col])
@@ -903,8 +908,47 @@ class PreProcessing:
             logging.info('Finished skewness removal.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             self.preprocess_decisions["skewed_columns"] = skewed
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
-                                                Y_test)
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def target_skewness_handling(self, mode='fit', preds_to_reconvert=None):
+        """
+        Loops through the in-class stored dataframe columns and checks the skewness. If skewness exceeds a certain threshold,
+        executes log transformation.
+        :param overwrite_orig_col: If True, replace the original column with its unskewed counterpart. Otherwise append
+        an unskewed counterpart as new column to the dataframe.
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp(task='Target skewness handling')
+        logging.info('Started target skewness handling.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        if self.prediction_mode:
+            if self.target_is_skewed and self.blueprint_step_selection_non_nlp["handle_target_skewness"]:
+                if mode == 'fit':
+                    pass
+                else:
+                    preds_to_reconvert_reverted = np.expm1(preds_to_reconvert)
+                    return preds_to_reconvert_reverted
+            else:
+                pass
+            return preds_to_reconvert
+        else:
+            if self.target_is_skewed and self.blueprint_step_selection_non_nlp["handle_target_skewness"]:
+                X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+                if mode == 'fit':
+                    skewness = Y_train.skew(axis=0, skipna=True)
+                    if skewness < -0.5 or skewness > 0.5:
+                        Y_train = np.log1p(Y_train)
+                        Y_train[np.isfinite(Y_train) == False] = 0
+                        Y_test = np.log1p(Y_test)
+                        Y_test[np.isfinite(Y_test) == False] = 0
+                else:
+                    Y_train = np.expm1(Y_train)
+                    Y_test = np.expm1(Y_test)
+                logging.info('Finished target skewness handling.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            else:
+                pass
 
     def create_folds(self, data, target, num_splits=5, mode='advanced'):
         if self.prediction_mode:
@@ -1307,41 +1351,9 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def holistic_null_filling(self):
-        if self.prediction_mode:
-            for col in self.preprocess_decisions[f"holistically_filled_cols"]:
-                algorithm = 'mean_filling'
-                imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
-                self.dataframe[col+algorithm] = imp.transform( self.dataframe[col])
-                algorithm = 'most_frequent'
-                imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
-                self.dataframe[col+algorithm] = imp.transform( self.dataframe[col])
-            return self.dataframe
-        else:
-            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            filled_cols = []
-            # numeric vs categorical
-            for col in X_train.columns.to_list():
-                if X_train[col].isna().sum() > 0:
-                    algorithm = 'mean_filling'
-                    imp = SimpleImputer(missing_values=np.nan, strategy='mean')
-                    imp.fit(X_train[col])
-                    X_train[col+algorithm] = imp.transform(X_train[col])
-                    self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
-                    # most frequent filling
-                    algorithm = 'mean_filling'
-                    imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
-                    imp.fit(X_train[col])
-                    X_train[col+algorithm] = imp.transform(X_train[col])
-                    self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
-
-                    filled_cols.append(col)
-            self.preprocess_decisions[f"holistically_filled_cols"] = filled_cols
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
-
     def iterative_imputation(self, dataframe, imputer=None):
         dataframe_cols = dataframe.columns#[dataframe.isna().any()].tolist()
-        imp_mean = IterativeImputer(random_state=0, estimator=BayesianRidge(), imputation_order='ascending', max_iter=100)
+        imp_mean = IterativeImputer(random_state=0, estimator=BayesianRidge(), imputation_order='ascending', max_iter=1000)
         if not imputer:
             imp_mean.fit(dataframe)
         else:
@@ -1420,6 +1432,102 @@ class PreProcessing:
                 self.preprocess_decisions[f"fill_nulls_how"] = how
             logging.info('Finished filling NULLs.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def holistic_null_filling(self):
+        self.get_current_timestamp('Holistic NULL filling')
+        logging.info('Started holistic NULL filling.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        if self.prediction_mode:
+            for col in self.preprocess_decisions[f"holistically_filled_cols"]:
+                if self.dataframe[col].dtype in self.num_dtypes: #checking if col is numeric
+                    algorithm = 'mean_filling'
+                    imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
+                    self.dataframe[col+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1))
+
+                    algorithm = 'static_filling'
+                    self.dataframe[col+algorithm] = self.dataframe[col].fillna(0, inplace=False)
+
+                    algorithm = 'most_frequent'
+                    imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
+                    self.dataframe[col+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1))
+
+                else:
+                    algorithm = 'most_frequent'
+                    imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
+                    self.dataframe[col+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1))
+
+                    algorithm = 'static_filling'
+                    self.dataframe[col+algorithm] = self.dataframe[col].fillna('None', inplace=False)
+
+                    # fill original column as prep for iterative filling
+                    self.dataframe[col] = self.dataframe[col].fillna('None', inplace=False)
+
+            algorithm = 'iterative_filling'
+            imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_all_cols"]
+            cat_columns = self.dataframe.select_dtypes(include=['object']).columns.to_list()
+            no_cat_cols = self.dataframe.loc[:, ~self.dataframe.columns.isin(cat_columns)].columns.to_list()
+            imp.transform(self.dataframe[no_cat_cols])
+            logging.info('Finished holistic NULL filling.')
+            return self.dataframe
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            filled_cols = []
+            # numeric vs categorical
+            for col in X_train.columns.to_list():
+                if X_train[col].isna().sum() > 0:
+                    if X_train[col].dtype in self.num_dtypes: #checking if col is numeric
+                        algorithm = 'mean_filling'
+                        imp = SimpleImputer(missing_values=np.nan, strategy='mean')
+                        imp.fit(X_train[col].values.reshape(-1, 1))
+                        X_train[col+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1))
+                        X_test[col+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1))
+                        self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
+
+                        algorithm = 'static_filling'
+                        X_train[col+algorithm] = X_train[col].fillna(0, inplace=False)
+                        X_test[col+algorithm] = X_test[col].fillna(0, inplace=False)
+
+                        # most frequent filling
+                        algorithm = 'most_frequent'
+                        imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
+                        imp.fit(X_train[col].values.reshape(-1, 1))
+                        X_train[col+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1))
+                        X_test[col+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1))
+                        self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
+                    else:
+                        # most frequent filling
+                        algorithm = 'most_frequent'
+                        imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
+                        imp.fit(X_train[col].values.reshape(-1, 1))
+                        X_train[col+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1))
+                        X_test[col+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1))
+                        self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
+
+                        algorithm = 'static_filling'
+                        X_train[col+algorithm] = X_train[col].fillna('None', inplace=False)
+                        X_test[col+algorithm] = X_test[col].fillna('None', inplace=False)
+
+                        # fill original column as prep for iterative filling
+                        X_train[col] = X_train[col].fillna('None', inplace=False)
+                        X_test[col] = X_test[col].fillna('None', inplace=False)
+
+                    filled_cols.append(col)
+
+            algorithm = 'iterative_filling'
+            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+                model = lgb.LGBMClassifier()
+            else:
+                model = lgb.LGBMRegressor()
+            cat_columns = X_train.select_dtypes(include=['object']).columns.to_list()
+            no_cat_cols = X_train.loc[:, ~X_train.columns.isin(cat_columns)].columns.to_list()
+            imp = IterativeImputer(random_state=0, estimator=model, imputation_order='ascending', max_iter=1000)
+            imp.fit(X_train[no_cat_cols])
+            imp.transform(X_test[no_cat_cols])
+            self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_all_cols"] = imp
+
+            self.preprocess_decisions[f"holistically_filled_cols"] = filled_cols
+            logging.info('Finished holistic NULL filling.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def fill_infinite_values(self, fill_with_zero=True):
@@ -2153,8 +2261,10 @@ class PreProcessing:
             elif self.class_problem == 'regression':
                 metric = 'neg_mean_squared_error'
 
+            data_size = len(X_train.index)
+
             # get sample size to run brute force feature selection against
-            if self.brute_force_selection_sample_size > len(X_train.index):
+            if self.brute_force_selection_sample_size > data_size:
                 sample_size = len(X_train.index)
             else:
                 sample_size = self.brute_force_selection_sample_size
@@ -2196,7 +2306,10 @@ class PreProcessing:
                         model_1 = VWClassifier()
                         model_2 = lgb.LGBMClassifier()
                     else:
-                        model_1 = VWRegressor()
+                        if data_size < 20000:
+                            model_1 = Ridge()
+                        else:
+                            model_1 = VWRegressor()
                         model_2 = lgb.LGBMRegressor()
                 else:
                     if problem == 'binary' or problem == 'multiclass':

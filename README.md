@@ -133,11 +133,12 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 2.0.0
+* 2.0.1
  - Completely overworked preprocessing setup (changed API). Preprocessing blueprints can be customized through a class
    attribute now
  - Completely overworked special multimodel blueprints. The paricipating algorithms can be customized through a class
    attribute now
+ - Improved NULL handling & regression performance
 * 1.8.2
  - Added Ridge classifier and regression as new blueprints
 * 1.8.1

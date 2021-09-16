@@ -34,8 +34,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         self.runtime_warnings(warn_about="future_architecture_change")
         self.check_prediction_mode(df)
 
-        if self.blueprint_step_selection_non_nlp["train_test_split"]:
-            self.train_test_split(how=self.train_split_type)
+        self.train_test_split(how=self.train_split_type)
         if self.blueprint_step_selection_non_nlp["automatic_type_detection_casting"]:
             self.automatic_type_detection_casting()
         if self.blueprint_step_selection_non_nlp["remove_duplicate_column_names"]:
@@ -44,6 +43,9 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.reset_dataframe_index()
         if self.blueprint_step_selection_non_nlp["fill_infinite_values"]:
             self.fill_infinite_values()
+
+        self.target_skewness_handling(mode='fit')
+
         #self.fill_nulls(how='static') # can only be here when "static"
         if self.blueprint_step_selection_non_nlp["datetime_converter"]:
             self.datetime_converter(datetime_handling='all')
@@ -53,18 +55,14 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.append_text_sentiment_score()
         if self.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"]:
             self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
-        if self.blueprint_step_selection_non_nlp["tfidf_naive_bayes_proba_char_wb_bigram"]:
-            self.tfidf_naive_bayes_proba(analyzer="char_wb", ngram_range=(1, 2))
-        if self.blueprint_step_selection_non_nlp["tfidf_naive_bayes_proba_char_wb_trigram"]:
-            self.tfidf_naive_bayes_proba(analyzer="char_wb", ngram_range=(1, 3))
-        if self.blueprint_step_selection_non_nlp["tfidf_naive_bayes_proba_unigram"]:
-            self.tfidf_naive_bayes_proba(analyzer="word", ngram_range=(1, 1))
         if self.blueprint_step_selection_non_nlp["rare_feature_processing"]:
             self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
         if self.blueprint_step_selection_non_nlp["cardinality_remover"]:
             self.cardinality_remover(threshold=100)
         if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
             self.delete_high_null_cols(threshold=0.95)
+        if self.blueprint_step_selection_non_nlp["holistic_null_filling"]:
+            self.holistic_null_filling()
         if self.blueprint_step_selection_non_nlp["numeric_binarizer_pca"]:
             self.numeric_binarizer_pca()
         if self.blueprint_step_selection_non_nlp["onehot_pca"]:
