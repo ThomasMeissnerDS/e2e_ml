@@ -1517,10 +1517,8 @@ class PreProcessing:
                     filled_cols.append(col)
 
             algorithm = 'iterative_filling'
-            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-                model = lgb.LGBMClassifier()
-            else:
-                model = lgb.LGBMRegressor()
+
+            model = lgb.LGBMRegressor()
             cat_columns = X_train.select_dtypes(include=['object']).columns.to_list()
             no_cat_cols = X_train.loc[:, ~X_train.columns.isin(cat_columns)].columns.to_list()
             imp = IterativeImputer(random_state=0, estimator=model, imputation_order='ascending', max_iter=1000)
