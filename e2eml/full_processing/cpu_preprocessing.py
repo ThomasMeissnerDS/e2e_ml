@@ -268,6 +268,8 @@ class PreProcessing:
                 self.target_is_skewed = True
             else:
                 self.target_is_skewed = False
+        else:
+            self.target_is_skewed = False
         self.selected_feats = selected_feats
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
