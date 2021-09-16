@@ -478,7 +478,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         return df
 
     def tfidf_vectorizer_to_pca(self, pca_pos_tags=True, ngram_range=(1, 2)):
-        self.get_current_timestamp(task='Start Spacy, POS tagging')
+        self.get_current_timestamp(task='Start TFIDF to PCA loop')
         logging.info('Start TFIDF to PCA loop.')
         algorithm = 'spacy_pos'
         if self.prediction_mode:

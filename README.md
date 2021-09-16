@@ -73,8 +73,8 @@ This will massively improve training times and speed up SHAP feature importance 
 For Xgboost this should work out of the box, if installed into a RAPIDS environment.
 """
 # run actual blueprint
-test_class.ml_bp01_multiclass_full_processing_xgb_prob(preprocessing_type='nlp') 
-# you could also change the preprocessing blueprint with the parameter "preprocess_bp='bp_01' (or bp_02 or bp_03)"
+test_class.ml_bp01_multiclass_full_processing_xgb_prob() 
+
 """
 When choosing blueprints several options are available:
 
@@ -105,9 +105,76 @@ There are regression blueprints as well (in regression module):
 - ml_special_regression_multiclass_full_processing_multimodel_avg_blender()
 - ml_special_regression_auto_model_exploration()
 
-The preproccesing_type has 2 modes as of now:
-- full (default), which runs all steps except NLP specific ones
-- nlp: Adds some NLP related feature enginering steps.
+In ensembles algorithms can be chosen via the class attribute:
+test_class.special_blueprint_algorithms = {"ridge": True,
+                                             "xgboost": True,
+                                             "ngboost": True,
+                                             "lgbm": True,
+                                             "tabnet": False,
+                                             "vowpal_wabbit": True,
+                                             "sklearn_ensemble": True
+                                             }
+                                             
+Also preprocessing steps can be selected:
+test_class.blueprint_step_selection_non_nlp = {
+            "automatic_type_detection_casting": True,
+            "remove_duplicate_column_names": True,
+            "reset_dataframe_index": True,
+            "handle_target_skewness": True,
+            "holistic_null_filling": True,
+            "fill_infinite_values": True,
+            "datetime_converter": True,
+            "pos_tagging_pca": True,
+            "append_text_sentiment_score": False,
+            "tfidf_vectorizer_to_pca": True,
+            "rare_feature_processing": True,
+            "cardinality_remover": True,
+            "delete_high_null_cols": True,
+            "numeric_binarizer_pca": True,
+            "onehot_pca": True,
+            "category_encoding": True,
+            "fill_nulls_static": True,
+            "data_binning": True,
+            "outlier_care": True,
+            "remove_collinearity": True,
+            "skewness_removal": True,
+            "clustering_as_a_feature_dbscan": True,
+            "clustering_as_a_feature_kmeans_loop": True,
+            "clustering_as_a_feature_gaussian_mixture_loop": True,
+            "reduce_memory_footprint": False,
+            "automated_feature_selection": True,
+            "bruteforce_random_feature_selection": True, # This might run to long runtimes, but usually improves performance
+            "sort_columns_alphabetically": True,
+            "scale_data": False,
+            "smote": False
+        }
+        
+The bruteforce_random_feature_selection step is experimental. It showed promising results. The number of trials can be controlled 
+like test_class.hyperparameter_tuning_rounds["bruteforce_random"] = 400 .
+
+Generally the class instance is a control center and gives room for plenty of customization:
+
+test_class.tabnet_settings = {f"batch_size": rec_batch_size,
+                                "virtual_batch_size": virtual_batch_size,
+                                # pred batch size?
+                                "num_workers": 0,
+                                "max_epochs": 1000}
+
+test_class.hyperparameter_tuning_rounds = {"xgboost": 100,
+                                             "lgbm": 100,
+                                             "tabnet": 25,
+                                             "ngboost": 25,
+                                             "sklearn_ensemble": 10,
+                                             "ridge": 100,
+                                             "bruteforce_random": 400}
+
+test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 24*60*60,
+                                             "lgbm": 24*60*60,
+                                             "tabnet": 24*60*60,
+                                             "ngboost": 24*60*60,
+                                             "sklearn_ensemble": 24*60*60,
+                                             "ridge": 24*60*60,
+                                             "bruteforce_random": 24*60*60}
 """
 # After running the blueprint the pipeline is done. I can be saved with:
 save_to_production(test_class, file_name='automl_instance')
@@ -116,7 +183,7 @@ save_to_production(test_class, file_name='automl_instance')
 loaded_test_class = load_for_production(file_name='automl_instance')
 
 # predict on new data (in this case our holdout) with loaded blueprint
-loaded_test_class.ml_bp01_multiclass_full_processing_xgb_prob(holdout_df, preprocessing_type='nlp')
+loaded_test_class.ml_bp01_multiclass_full_processing_xgb_prob(holdout_df)
 
 # predictions can be accessed via a class attribute
 print(churn_class.predicted_classes['xgboost'])
@@ -133,12 +200,14 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 2.0.1
+* 2.0.2
  - Completely overworked preprocessing setup (changed API). Preprocessing blueprints can be customized through a class
    attribute now
  - Completely overworked special multimodel blueprints. The paricipating algorithms can be customized through a class
    attribute now
  - Improved NULL handling & regression performance
+ - Updated Readme
+ - First unittests
 * 1.8.2
  - Added Ridge classifier and regression as new blueprints
 * 1.8.1
