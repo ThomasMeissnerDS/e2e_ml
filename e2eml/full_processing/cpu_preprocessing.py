@@ -2306,10 +2306,7 @@ class PreProcessing:
                         model_1 = VWClassifier()
                         model_2 = lgb.LGBMClassifier()
                     else:
-                        if data_size < 20000:
-                            model_1 = Ridge()
-                        else:
-                            model_1 = VWRegressor()
+                        model_1 = VWRegressor()
                         model_2 = lgb.LGBMRegressor()
                 else:
                     if problem == 'binary' or problem == 'multiclass':
