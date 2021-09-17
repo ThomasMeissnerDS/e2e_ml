@@ -350,10 +350,11 @@ class RegressionModels(postprocessing.FullPipeline):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             eval_dataset = Pool(X_test, Y_test)
+
             def objective(trial):
                 param = {
                     'iterations': trial.suggest_int('iterations', 10, 50000),
-                    'learning_rate': trial.suggest_loguniform('learning_rate', 1e-4, 0.3),
+                    'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 0.3),
                     'l2_leaf_reg': trial.suggest_loguniform('l2_leaf_reg', 1e-3, 1e6),
                     "max_depth": trial.suggest_int('max_depth', 2, 10)
                 }
@@ -1062,6 +1063,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     level0 = list()
                     level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
                     level0.append(('lr', LinearRegression(n_jobs=-2)))
+                    level0.append(('ela', ElasticNet()))
                     level0.append(('gdc', GradientBoostingRegressor(n_estimators=5000)))
                     level0.append(('sgd', SGDRegressor()))
                     level0.append(('svr', LinearSVR()))
@@ -1106,6 +1108,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 level0 = list()
                 level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
                 level0.append(('lr', LinearRegression(n_jobs=-2)))
+                level0.append(('ela', ElasticNet()))
                 level0.append(('gdc', GradientBoostingRegressor(n_estimators=5000)))
                 level0.append(('sgd', SGDRegressor()))
                 level0.append(('svr', LinearSVR()))

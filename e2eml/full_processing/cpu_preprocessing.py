@@ -254,7 +254,7 @@ class PreProcessing:
                                              "sklearn_ensemble": 10,
                                              "ridge": 100,
                                              "elasticnet": 100,
-                                             "catboost": 25,
+                                             "catboost": 10,
                                              "bruteforce_random": 400}
 
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 24*60*60,

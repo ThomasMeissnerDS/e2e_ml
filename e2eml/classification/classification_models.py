@@ -346,7 +346,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 class_weighting = trial.suggest_categorical("class_weighting", ["None", "Balanced", "SqrtBalanced"])
                 param = {
                     'iterations': trial.suggest_int('iterations', 10, 50000),
-                    'learning_rate': trial.suggest_loguniform('learning_rate', 1e-4, 0.3),
+                    'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 0.3),
                     'l2_leaf_reg': trial.suggest_loguniform('l2_leaf_reg', 1e-3, 1e6),
                     "max_depth": trial.suggest_int('max_depth', 2, 10)
                 }
@@ -355,7 +355,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                                           l2_leaf_reg=param["l2_leaf_reg"],
                                           max_depth=param["max_depth"],
                                           early_stopping_rounds=10,
-                                          eval_metric=["MultiClass"],
+                                          loss_function='MultiClass',
+                                          #eval_metric=["MultiClass"],
                                           auto_class_weights=class_weighting,
                                           verbose=500,
                                           random_state=42).fit(X_train, Y_train,
@@ -390,12 +391,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                                       l2_leaf_reg=best_parameters["l2_leaf_reg"],
                                       max_depth=best_parameters["max_depth"],
                                       early_stopping_rounds=10,
-                                      eval_metric=["MultiClass"],
+                                      loss_function='MultiClass',
+                                      #eval_metric=["MultiClass"],
                                       auto_class_weights=best_parameters["class_weighting"],
                                       verbose=500,
                                       random_state=42).fit(X_train, Y_train,
                                                            eval_set=eval_dataset,
-                                                           early_stopping_rounds=10)
+                                                           early_stopping_rounds=10,
+                                                           plot=True)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
@@ -414,12 +417,26 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
         algorithm = 'catboost'
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
-            predicted_probs = model.predict(self.dataframe)
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            partial_probs = model.predict_proba(self.dataframe)
+
+            if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+            else:
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
-            predicted_probs = model.predict(X_test)
+            partial_probs = model.predict_proba(X_test)
+
+            if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+            else:
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
 
             if feat_importance and importance_alg == 'SHAP':
                 self.runtime_warnings(warn_about='shap_cpu')
@@ -440,8 +457,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 plt.show()
             else:
                 pass
-        self.predicted_values[f"{algorithm}"] = {}
-        self.predicted_values[f"{algorithm}"] = predicted_probs
+        self.predicted_probs[f"{algorithm}"] = predicted_probs
+        self.predicted_classes[f"{algorithm}"] = predicted_classes
         del model
         _ = gc.collect()
 
