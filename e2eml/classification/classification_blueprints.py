@@ -268,6 +268,27 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
+    def ml_bp09_multiclass_full_processing_catboost(self, df=None):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
+        :return: Updates class attributes by its predictions.
+        """
+        self.std_preprocessing_pipeline(df=df)
+        if self.prediction_mode:
+            pass
+        else:
+            self.catboost_train()
+        algorithm = 'catboost'
+        self.catboost_predict()
+        self.classification_eval(algorithm=algorithm)
+        self.prediction_mode = True
+        logging.info('Finished blueprint.')
+
     def ml_special_multiclass_full_processing_multimodel_max_voting(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
@@ -296,6 +317,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.sklearn_ensemble_train()
             if self.special_blueprint_algorithms["ngboost"]:
                 self.ngboost_train()
+            if self.special_blueprint_algorithms["catboost"]:
+                self.catboost_train()
         if self.special_blueprint_algorithms["lgbm"]:
             self.lgbm_predict(feat_importance=False)
             self.classification_eval('lgbm')
@@ -317,6 +340,9 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         if self.special_blueprint_algorithms["ngboost"]:
             self.ngboost_predict(feat_importance=False)
             self.classification_eval("ngboost")
+        if self.special_blueprint_algorithms["catboost"]:
+            self.catboost_predict()
+            self.classification_eval("catboost")
 
         algorithm = 'max_voting'
         mode_cols = [alg for alg, value in self.special_blueprint_algorithms.items() if value]
@@ -336,6 +362,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.dataframe["sklearn_ensemble"] = self.predicted_classes[f"sklearn_ensemble"]
             if self.special_blueprint_algorithms["ngboost"]:
                 self.dataframe["ngboost"] = self.predicted_classes[f"ngboost"]
+            if self.special_blueprint_algorithms["catboost"]:
+                self.dataframe["catboost"] = self.predicted_classes[f"catboost"]
             self.dataframe["max_voting_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
             self.predicted_classes[f"max_voting"] = self.dataframe["max_voting_class"]
         else:
@@ -354,6 +382,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 X_test["sklearn_ensemble"] = self.predicted_classes[f"sklearn_ensemble"]
             if self.special_blueprint_algorithms["ngboost"]:
                 X_test["ngboost"] = self.predicted_classes[f"ngboost"]
+            if self.special_blueprint_algorithms["catboost"]:
+                X_test["catboost"] = self.predicted_classes[f"catboost"]
             X_test["max_voting_class"] = X_test[mode_cols].mode(axis=1)[0]
             self.predicted_classes[f"max_voting"] = X_test["max_voting_class"]
         self.classification_eval('max_voting')
@@ -384,6 +414,10 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.train_pred_selected_model(algorithm="vowpal_wabbit")
             if self.special_blueprint_algorithms["tabnet"]:
                 self.train_pred_selected_model(algorithm="tabnet")
+            if self.special_blueprint_algorithms["sklearn_ensemble"]:
+                self.train_pred_selected_model(algorithm="sklearn_ensemble")
+            if self.special_blueprint_algorithms["catboost"]:
+                self.train_pred_selected_model(algorithm="catboost")
 
             # select best model
             max_matthews = 0

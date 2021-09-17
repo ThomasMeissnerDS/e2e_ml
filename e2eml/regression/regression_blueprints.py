@@ -273,6 +273,48 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
+    def ml_bp19_regression_full_processing_elasticnet_reg(self, df=None):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
+        :return: Updates class attributes by its predictions.
+        """
+        self.std_preprocessing_pipeline(df=df)
+        if self.prediction_mode:
+            pass
+        else:
+            self.elasticnet_regression_train()
+        algorithm = 'elasticnet'
+        self.elasticnet_regression_predict()
+        self.regression_eval(algorithm=algorithm)
+        self.prediction_mode = True
+        logging.info('Finished blueprint.')
+
+    def ml_bp20_regression_full_processing_catboost(self, df=None):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
+        :return: Updates class attributes by its predictions.
+        """
+        self.std_preprocessing_pipeline(df=df)
+        if self.prediction_mode:
+            pass
+        else:
+            self.catboost_regression_train()
+        algorithm = 'catboost'
+        self.catboost_regression_predict()
+        self.regression_eval(algorithm=algorithm)
+        self.prediction_mode = True
+        logging.info('Finished blueprint.')
+
     def ml_special_regression_multiclass_full_processing_multimodel_avg_blender(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
@@ -299,6 +341,10 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.tabnet_regression_train()
             if self.special_blueprint_algorithms["ridge"]:
                 self.ridge_regression_train()
+            if self.special_blueprint_algorithms["elasticnet"]:
+                self.elasticnet_regression_train()
+            if self.special_blueprint_algorithms["catboost"]:
+                self.catboost_regression_train()
             if self.special_blueprint_algorithms["sklearn_ensemble"]:
                 self.sklearn_ensemble_train()
 
@@ -314,6 +360,10 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             self.tabnet_regression_predict()
         if self.special_blueprint_algorithms["ridge"]:
             self.ridge_regression_predict()
+        if self.special_blueprint_algorithms["elasticnet"]:
+            self.elasticnet_regression_predict()
+        if self.special_blueprint_algorithms["catboost"]:
+            self.catboost_regression_predict()
         if self.special_blueprint_algorithms["sklearn_ensemble"]:
             self.sklearn_ensemble_predict()
 
@@ -332,6 +382,10 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.dataframe["tabnet"] = self.predicted_values[f"tabnet"]
             if self.special_blueprint_algorithms["ridge"]:
                 self.dataframe["ridge"] = self.predicted_values[f"ridge"]
+            if self.special_blueprint_algorithms["elasticnet"]:
+                self.dataframe["elasticnet"] = self.predicted_values[f"elasticnet"]
+            if self.special_blueprint_algorithms["catboost"]:
+                self.dataframe["catboost"] = self.predicted_values[f"catboost"]
             if self.special_blueprint_algorithms["sklearn_ensemble"]:
                 self.dataframe["sklearn_ensemble"] = self.predicted_values[f"sklearn_ensemble"]
 
@@ -351,6 +405,10 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 X_test["tabnet"] = self.predicted_values[f"tabnet"]
             if self.special_blueprint_algorithms["ridge"]:
                 X_test["ridge"] = self.predicted_values[f"ridge"]
+            if self.special_blueprint_algorithms["elasticnet"]:
+                X_test["elasticnet"] = self.predicted_values[f"elasticnet"]
+            if self.special_blueprint_algorithms["catboost"]:
+                X_test["catboost"] = self.predicted_values[f"catboost"]
             if self.special_blueprint_algorithms["sklearn_ensemble"]:
                 X_test["sklearn_ensemble"] = self.predicted_values[f"sklearn_ensemble"]
 
@@ -374,6 +432,10 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         if not self.prediction_mode:
             if self.special_blueprint_algorithms["ridge"]:
                 self.train_pred_selected_model(algorithm="ridge")
+            if self.special_blueprint_algorithms["elasticnet"]:
+                self.train_pred_selected_model(algorithm="elasticnet")
+            if self.special_blueprint_algorithms["catboost"]:
+                self.train_pred_selected_model(algorithm="catboost")
             if self.special_blueprint_algorithms["lgbm"]:
                 self.train_pred_selected_model(algorithm='lgbm')
             if self.special_blueprint_algorithms["xgboost"]:
@@ -384,6 +446,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.train_pred_selected_model(algorithm="vowpal_wabbit")
             if self.special_blueprint_algorithms["tabnet"]:
                 self.train_pred_selected_model(algorithm="tabnet")
+            if self.special_blueprint_algorithms["sklearn_ensemble"]:
+                self.train_pred_selected_model(algorithm="sklearn_ensemble")
 
             # select best model
             min_mae = 10000000

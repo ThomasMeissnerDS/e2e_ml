@@ -19,6 +19,7 @@ from sklearn.metrics import make_scorer
 from sklearn.metrics import matthews_corrcoef
 from boostaroota import BoostARoota
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
+from catboost import CatBoostClassifier
 import lightgbm as lgb
 import optuna
 import lightgbm
@@ -202,6 +203,8 @@ class PreProcessing:
             "oversampling": False
         }
         self.special_blueprint_algorithms = {"ridge": True,
+                                             "elasticnet": True,
+                                             "catboost": True,
                                              "xgboost": True,
                                              "ngboost": True,
                                              "lgbm": True,
@@ -250,15 +253,19 @@ class PreProcessing:
                                              "ngboost": 25,
                                              "sklearn_ensemble": 10,
                                              "ridge": 100,
+                                             "elasticnet": 100,
+                                             "catboost": 25,
                                              "bruteforce_random": 400}
 
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 24*60*60,
-                                             "lgbm": 24*60*60,
-                                             "tabnet": 24*60*60,
-                                             "ngboost": 24*60*60,
-                                             "sklearn_ensemble": 24*60*60,
-                                             "ridge": 24*60*60,
-                                             "bruteforce_random": 24*60*60}
+                                                       "lgbm": 24*60*60,
+                                                       "tabnet": 24*60*60,
+                                                       "ngboost": 24*60*60,
+                                                       "sklearn_ensemble": 24*60*60,
+                                                       "ridge": 24*60*60,
+                                                       "elasticnet": 24*60*60,
+                                                       "catboost": 24*60*60,
+                                                       "bruteforce_random": 24*60*60}
 
         self.brute_force_selection_sample_size = 100000
         self.brute_force_selection_base_learner = 'double' # 'lgbm', 'vowpal_wabbit', 'auto
@@ -422,6 +429,17 @@ class PreProcessing:
             except Exception:
                 self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'exact'
                 print('Xgboost uses CPU.')
+        elif algorithm == 'catboost':
+            try:
+                model = CatBoostClassifier(iterations=2,
+                                               task_type="GPU",
+                                               devices='0:1')
+                model.fit(data, label)
+                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'GPU'
+                print('Catboost uses GPU.')
+            except Exception:
+                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'CPU'
+                print('Catboost uses CPU.')
         else:
             print("No algorithm has been checked for GPU acceleration.")
 
