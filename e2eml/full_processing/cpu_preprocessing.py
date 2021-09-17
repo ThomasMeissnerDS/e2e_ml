@@ -166,12 +166,12 @@ class PreProcessing:
             "remove_duplicate_column_names": True,
             "reset_dataframe_index": True,
             "handle_target_skewness": True,
-            "holistic_null_filling": True,
+            "holistic_null_filling": False, # slow
             "fill_infinite_values": True,
             "datetime_converter": True,
-            "pos_tagging_pca": True,
+            "pos_tagging_pca": True, # slow with many categories
             "append_text_sentiment_score": False,
-            "tfidf_vectorizer_to_pca": True,
+            "tfidf_vectorizer_to_pca": True, # slow with many categories
             "rare_feature_processing": True,
             "cardinality_remover": True,
             "delete_high_null_cols": True,
@@ -188,7 +188,7 @@ class PreProcessing:
             "clustering_as_a_feature_gaussian_mixture_loop": True,
             "reduce_memory_footprint": False,
             "automated_feature_selection": True,
-            "bruteforce_random_feature_selection": True,
+            "bruteforce_random_feature_selection": True, # slow
             "sort_columns_alphabetically": True,
             "scale_data": False,
             "smote": False
@@ -1325,7 +1325,7 @@ class PreProcessing:
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def delete_high_null_cols(self, threshold=0.95):
+    def delete_high_null_cols(self, threshold=0.80):
         """
         Takes in a dataframe and removes columns, which have more NULLs than the given threshold.
         :param threshold: Maximum percentage of NULLs in a column allowed.
