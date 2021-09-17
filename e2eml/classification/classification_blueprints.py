@@ -80,6 +80,46 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.vowpal_wabbit_train()
             self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
             self.classification_eval(algorithm=algorithm)
+        elif algorithm == 'tabnet':
+            # train sklearn ensemble
+            if self.prediction_mode:
+                pass
+            else:
+                self.tabnet_train()
+            self.tabnet_predict()
+            self.classification_eval(algorithm=algorithm)
+        elif algorithm == 'ridge':
+            # train sklearn ensemble
+            if self.prediction_mode:
+                pass
+            else:
+                self.ridge_classifier_train()
+            self.ridge_classifier_predict()
+            self.classification_eval(algorithm=algorithm)
+        elif algorithm == 'catboost':
+            # train sklearn ensemble
+            if self.prediction_mode:
+                pass
+            else:
+                self.catboost_train()
+            self.catboost_predict()
+            self.classification_eval(algorithm=algorithm)
+        elif algorithm == 'logistic_regression':
+            # train sklearn ensemble
+            if self.prediction_mode:
+                pass
+            else:
+                self.logistic_regression_train()
+            self.logistic_regression_predict()
+            self.classification_eval(algorithm=algorithm)
+        elif algorithm == 'sklearn_ensemble':
+            # train sklearn ensemble
+            if self.prediction_mode:
+                pass
+            else:
+                self.sklearn_ensemble_train()
+            self.sklearn_ensemble_predict()
+            self.classification_eval(algorithm=algorithm)
 
     def ml_bp00_train_test_binary_full_processing_log_reg_prob(self, df=None):
         """
@@ -319,6 +359,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.ngboost_train()
             if self.special_blueprint_algorithms["catboost"]:
                 self.catboost_train()
+
         if self.special_blueprint_algorithms["lgbm"]:
             self.lgbm_predict(feat_importance=False)
             self.classification_eval('lgbm')
@@ -346,6 +387,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
 
         algorithm = 'max_voting'
         mode_cols = [alg for alg, value in self.special_blueprint_algorithms.items() if value]
+        mode_cols.remove("elasticnet")
 
         if self.prediction_mode:
             if self.special_blueprint_algorithms["lgbm"]:

@@ -88,6 +88,46 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.tabnet_regression_train()
             self.tabnet_regression_predict()
             self.regression_eval(algorithm=algorithm)
+        elif algorithm == 'ridge':
+            # train sklearn ensemble
+            if self.prediction_mode:
+                pass
+            else:
+                self.ridge_regression_train()
+            self.ridge_regression_predict()
+            self.regression_eval(algorithm=algorithm)
+        elif algorithm == 'elasticnet':
+            # train sklearn ensemble
+            if self.prediction_mode:
+                pass
+            else:
+                self.elasticnet_regression_train()
+            self.elasticnet_regression_predict()
+            self.regression_eval(algorithm=algorithm)
+        elif algorithm == 'catboost':
+            # train sklearn ensemble
+            if self.prediction_mode:
+                pass
+            else:
+                self.catboost_regression_train()
+            self.catboost_regression_predict()
+            self.regression_eval(algorithm=algorithm)
+        elif algorithm == 'linear_regression':
+            # train sklearn ensemble
+            if self.prediction_mode:
+                pass
+            else:
+                self.linear_regression_train()
+            self.linear_regression_predict()
+            self.regression_eval(algorithm=algorithm)
+        elif algorithm == 'sklearn_ensemble':
+            # train sklearn ensemble
+            if self.prediction_mode:
+                pass
+            else:
+                self.sklearn_ensemble_train()
+            self.sklearn_ensemble_predict()
+            self.regression_eval(algorithm=algorithm)
 
     def ml_bp10_train_test_regression_full_processing_linear_reg(self, df=None):
         """

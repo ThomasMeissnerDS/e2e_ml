@@ -166,7 +166,7 @@ class PreProcessing:
             "automatic_type_detection_casting": True,
             "remove_duplicate_column_names": True,
             "reset_dataframe_index": True,
-            "handle_target_skewness": True,
+            "handle_target_skewness": False,
             "holistic_null_filling": True, # slow
             "iterative_null_imputation": False,
             "fill_infinite_values": True,
@@ -230,7 +230,7 @@ class PreProcessing:
 
         # automatically determine batch sizes for Tabnet
 
-        rec_batch_size = (len(self.dataframe.index)*0.8)/20
+        rec_batch_size = (len(self.dataframe.index)*0.8)/10
         if int(rec_batch_size) % 2 == 0:
             rec_batch_size = int(rec_batch_size)
         else:
@@ -254,7 +254,7 @@ class PreProcessing:
                                              "sklearn_ensemble": 10,
                                              "ridge": 100,
                                              "elasticnet": 100,
-                                             "catboost": 10,
+                                             "catboost": 25,
                                              "bruteforce_random": 400}
 
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 24*60*60,
