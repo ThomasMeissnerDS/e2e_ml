@@ -62,7 +62,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
             self.delete_high_null_cols(threshold=0.95)
         if self.blueprint_step_selection_non_nlp["holistic_null_filling"]:
-            self.holistic_null_filling()
+            self.holistic_null_filling(iterative=self.blueprint_step_selection_non_nlp["iterative_null_imputation"])
         if self.blueprint_step_selection_non_nlp["numeric_binarizer_pca"]:
             self.numeric_binarizer_pca()
         if self.blueprint_step_selection_non_nlp["onehot_pca"]:

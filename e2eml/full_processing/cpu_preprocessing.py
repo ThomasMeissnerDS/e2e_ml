@@ -166,7 +166,8 @@ class PreProcessing:
             "remove_duplicate_column_names": True,
             "reset_dataframe_index": True,
             "handle_target_skewness": True,
-            "holistic_null_filling": False, # slow
+            "holistic_null_filling": True, # slow
+            "iterative_null_imputation": False,
             "fill_infinite_values": True,
             "datetime_converter": True,
             "pos_tagging_pca": True, # slow with many categories
@@ -1436,7 +1437,7 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def holistic_null_filling(self):
+    def holistic_null_filling(self, iterative=False):
         self.get_current_timestamp('Holistic NULL filling')
         logging.info('Started holistic NULL filling.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
@@ -1465,11 +1466,14 @@ class PreProcessing:
                     # fill original column as prep for iterative filling
                     self.dataframe[col] = self.dataframe[col].fillna('None', inplace=False)
 
-            algorithm = 'iterative_filling'
-            imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_all_cols"]
-            cat_columns = self.dataframe.select_dtypes(include=['object']).columns.to_list()
-            no_cat_cols = self.dataframe.loc[:, ~self.dataframe.columns.isin(cat_columns)].columns.to_list()
-            imp.transform(self.dataframe[no_cat_cols])
+            if iterative:
+                algorithm = 'iterative_filling'
+                imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_all_cols"]
+                cat_columns = self.dataframe.select_dtypes(include=['object']).columns.to_list()
+                no_cat_cols = self.dataframe.loc[:, ~self.dataframe.columns.isin(cat_columns)].columns.to_list()
+                imp.transform(self.dataframe[no_cat_cols])
+            else:
+                pass
             logging.info('Finished holistic NULL filling.')
             return self.dataframe
         else:
@@ -1515,16 +1519,17 @@ class PreProcessing:
                         X_test[col] = X_test[col].fillna('None', inplace=False)
 
                     filled_cols.append(col)
-
-            algorithm = 'iterative_filling'
-
-            model = lgb.LGBMRegressor()
-            cat_columns = X_train.select_dtypes(include=['object']).columns.to_list()
-            no_cat_cols = X_train.loc[:, ~X_train.columns.isin(cat_columns)].columns.to_list()
-            imp = IterativeImputer(random_state=0, estimator=model, imputation_order='ascending', max_iter=1000)
-            imp.fit(X_train[no_cat_cols])
-            imp.transform(X_test[no_cat_cols])
-            self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_all_cols"] = imp
+            if iterative:
+                algorithm = 'iterative_filling'
+                model = lgb.LGBMRegressor()
+                cat_columns = X_train.select_dtypes(include=['object']).columns.to_list()
+                no_cat_cols = X_train.loc[:, ~X_train.columns.isin(cat_columns)].columns.to_list()
+                imp = IterativeImputer(random_state=0, estimator=model, imputation_order='ascending', max_iter=1000)
+                imp.fit(X_train[no_cat_cols])
+                imp.transform(X_test[no_cat_cols])
+                self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_all_cols"] = imp
+            else:
+                pass
 
             self.preprocess_decisions[f"holistically_filled_cols"] = filled_cols
             logging.info('Finished holistic NULL filling.')
