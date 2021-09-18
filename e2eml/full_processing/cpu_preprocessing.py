@@ -17,7 +17,7 @@ from sklearn.model_selection import cross_val_score
 from sklearn.utils import class_weight
 from sklearn.metrics import make_scorer
 from sklearn.metrics import matthews_corrcoef
-from scipy.stats import bernoulli, norm, poisson, uniform,  gamma, expon, binom
+from scipy.stats import bernoulli, norm, poisson, uniform,  gamma, expon, binom, pareto, levy
 from boostaroota import BoostARoota
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
 from catboost import CatBoostClassifier
@@ -2287,13 +2287,16 @@ class PreProcessing:
                                                                                         "Exponential",
                                                                                         "Gamma",
                                                                                         "Normal",
-                                                                                        "Uniform"])
+                                                                                        "Uniform",
+                                                                                        "Pareto",
+                                                                                        "Levy"])
                 random_or_control_factor = trial.suggest_categorical("random_or_control_factor",
                                                                      ["Random",
                                                                       "Controlled"])
                 p_value = trial.suggest_loguniform('p_value', 0.05, 0.95)
                 mu = trial.suggest_int('mu', 1, 10000)
                 scale = trial.suggest_int('scale', 1, 10000)
+                parteo_b = trial.suggest_loguniform('parteo_b', 1e-3, 1e6)
 
                 random_factor = trial.suggest_int('random_factor', 1, 10000)
 
@@ -2302,7 +2305,7 @@ class PreProcessing:
                 param["p_value"] = p_value
                 param["mu"] = mu
                 param["scale"] = scale
-                param["random_factor"] = random_factor
+                param["random_factor"] = parteo_b
 
                 temp_df_list = []
                 X_train_sample[self.target_variable] = Y_train_sample
@@ -2324,6 +2327,10 @@ class PreProcessing:
                             gen_data = class_inst
                         elif sample_distribution == 'Normal':
                             gen_data = norm.rvs(size=size, loc=0, scale=scale)
+                        elif sample_distribution == "Pareto":
+                            gen_data = pareto.rvs(parteo_b, size=size)
+                        elif sample_distribution == "Levy":
+                            gen_data = levy.rvs(size=size)
                             if random_or_control_factor == 'Random':
                                 gen_data = gen_data*random_factor
                             else:
@@ -2351,6 +2358,10 @@ class PreProcessing:
                             gen_data = class_inst
                         elif sample_distribution == 'Normal':
                             gen_data = norm.rvs(size=size, loc=0, scale=scale)
+                        elif sample_distribution == "Pareto":
+                            gen_data = pareto.rvs(parteo_b, size=size)
+                        elif sample_distribution == "Levy":
+                            gen_data = levy.rvs(size=size)
                             if random_or_control_factor == 'Random':
                                 gen_data = gen_data*random_factor
                             else:
@@ -2361,11 +2372,12 @@ class PreProcessing:
                         temp_df_list.append(X_train_sample_class)
 
                 temp_df = pd.concat(temp_df_list)
+                Y_temp = temp_df[self.target_variable]
                 temp_df.drop(self.target_variable, axis=1)
 
                 try:
-                    scores_1 = cross_val_score(model_1, temp_df, Y_train_sample, cv=10, scoring=metric)
-                    scores_2 = cross_val_score(model_2, temp_df, Y_train_sample, cv=10, scoring=metric)
+                    scores_1 = cross_val_score(model_1, temp_df, Y_temp, cv=10, scoring=metric)
+                    scores_2 = cross_val_score(model_2, temp_df, Y_temp, cv=10, scoring=metric)
                     mae_1 = np.mean(scores_1)
                     mae_2 = np.mean(scores_2)
                     mae = (mae_1+mae_2)/2
@@ -2414,6 +2426,10 @@ class PreProcessing:
                         gen_data = class_inst
                     elif best_parameters["sample_distribution"] == 'Normal':
                         gen_data = norm.rvs(size=size, loc=0, scale=best_parameters["scale"])
+                    elif best_parameters["sample_distribution"] == "Pareto":
+                        gen_data = pareto.rvs(best_parameters["parteo_b"], size=size)
+                    elif best_parameters["sample_distribution"] == "Levy":
+                        gen_data = levy.rvs(size=size)
                         if best_parameters["random_or_control_factor"] == 'Random':
                             gen_data = gen_data*best_parameters["random_factor"]
                         else:
@@ -2441,6 +2457,10 @@ class PreProcessing:
                         gen_data = class_inst
                     elif best_parameters["sample_distribution"] == 'Normal':
                         gen_data = norm.rvs(size=size, loc=0, scale=best_parameters["scale"])
+                    elif best_parameters["sample_distribution"] == "Pareto":
+                        gen_data = pareto.rvs(best_parameters["parteo_b"], size=size)
+                    elif best_parameters["sample_distribution"] == "Levy":
+                        gen_data = levy.rvs(size=size)
                         if best_parameters["random_or_control_factor"] == 'Random':
                             gen_data = gen_data*best_parameters["random_factor"]
                         else:
@@ -2456,11 +2476,12 @@ class PreProcessing:
             # save copy of ol column
             original_col = X_train_sample[column_name].copy()
             X_train_sample[column_name] = temp_df[column_name]
+            Y_temp_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
             try:
-                scores_1 = cross_val_score(model_1, X_train_sample, Y_train_sample, cv=10, scoring=metric)
-                scores_2 = cross_val_score(model_2, X_train_sample, Y_train_sample, cv=10, scoring=metric)
+                scores_1 = cross_val_score(model_1, X_train_sample, Y_temp_sample, cv=10, scoring=metric)
+                scores_2 = cross_val_score(model_2, X_train_sample, Y_temp_sample, cv=10, scoring=metric)
                 mae_1 = np.mean(scores_1)
                 mae_2 = np.mean(scores_2)
                 synthetic_mae = (mae_1+mae_2)/2
