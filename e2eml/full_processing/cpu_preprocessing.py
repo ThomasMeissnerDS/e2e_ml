@@ -17,6 +17,7 @@ from sklearn.model_selection import cross_val_score
 from sklearn.utils import class_weight
 from sklearn.metrics import make_scorer
 from sklearn.metrics import matthews_corrcoef
+from scipy.stats import bernoulli, norm, poisson, uniform,  gamma, expon, binom
 from boostaroota import BoostARoota
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
 from catboost import CatBoostClassifier
@@ -257,15 +258,15 @@ class PreProcessing:
                                              "catboost": 25,
                                              "bruteforce_random": 400}
 
-        self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 24*60*60,
-                                                       "lgbm": 24*60*60,
-                                                       "tabnet": 24*60*60,
-                                                       "ngboost": 24*60*60,
-                                                       "sklearn_ensemble": 24*60*60,
-                                                       "ridge": 24*60*60,
-                                                       "elasticnet": 24*60*60,
-                                                       "catboost": 24*60*60,
-                                                       "bruteforce_random": 24*60*60}
+        self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
+                                                       "lgbm": 2*60*60,
+                                                       "tabnet": 2*60*60,
+                                                       "ngboost": 2*60*60,
+                                                       "sklearn_ensemble": 2*60*60,
+                                                       "ridge": 2*60*60,
+                                                       "elasticnet": 2*60*60,
+                                                       "catboost": 2*60*60,
+                                                       "bruteforce_random": 2*60*60}
 
         self.brute_force_selection_sample_size = 100000
         self.brute_force_selection_base_learner = 'double' # 'lgbm', 'vowpal_wabbit', 'auto
@@ -2203,6 +2204,287 @@ class PreProcessing:
                 Y_train = X_train[self.target_variable]
                 X_train.drop(self.target_variable, axis=1)
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def synthetic_data_generator(self, column_name=None, metric=None):
+        self.get_current_timestamp('Synthetic data augmentation')
+
+        if self.prediction_mode:
+            pass
+        else:
+            logging.info('Start creating synthetic data.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            data_size = len(X_train.index)
+
+            # get sample size to run brute force feature selection against
+            if self.brute_force_selection_sample_size > data_size:
+                sample_size = len(X_train.index)
+            else:
+                sample_size = self.brute_force_selection_sample_size
+
+            X_train_sample = X_train.copy()
+            X_train_sample[self.target_variable] = Y_train
+            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            Y_train_sample = X_train_sample[self.target_variable]
+            X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+
+            if metric:
+                metric = metric
+            elif self.class_problem == 'binary':
+                metric = make_scorer(matthews_corrcoef)
+                problem = 'binary'
+                class_cats = Y_train_sample.unique()
+            elif self.class_problem == 'multiclass':
+                metric = make_scorer(matthews_corrcoef)
+                problem = 'multiclass'
+                class_cats = Y_train_sample.unique()
+            elif self.class_problem == 'regression':
+                metric = 'neg_mean_squared_error'
+                problem = 'regression'
+
+            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+                model_1 = VWClassifier()
+                model_2 = lgb.LGBMClassifier()
+            else:
+                model_1 = VWRegressor()
+                model_2 = lgb.LGBMRegressor()
+                # sort on A
+                X_train_sample.sort_values(self.target_variable, inplace=True)
+                # create bins
+                X_train_sample['bin'] = pd.cut(X_train_sample[self.target_variable], 1, include_lowest=True)
+                # group on bin
+                group = X_train_sample.groupby('bin')
+                # list comprehension to split groups into list of dataframes
+                dfs = [group.get_group(x) for x in group.groups]
+
+            # get benchmark
+            try:
+                scores_1 = cross_val_score(model_1, X_train_sample, Y_train_sample, cv=10, scoring=metric)
+                scores_2 = cross_val_score(model_2, X_train_sample, Y_train_sample, cv=10, scoring=metric)
+                mae_1 = np.mean(scores_1)
+                mae_2 = np.mean(scores_2)
+                benchmark_mae = (mae_1+mae_2)/2
+            except Exception:
+                benchmark_mae = 0
+
+            print(f"The benchmark score is {benchmark_mae}.")
+
+            def objective(trial):
+                param = {}
+
+                sample_distribution = trial.suggest_categorical("sample_distribution", ["Uniform",
+                                                                                        "Binomial",
+                                                                                        "Poisson",
+                                                                                        "Exponential",
+                                                                                        "Gamma",
+                                                                                        "Normal",
+                                                                                        "Uniform"])
+                random_or_control_factor = trial.suggest_categorical("random_or_control_factor",
+                                                                     ["Random",
+                                                                      "Controlled"])
+                p_value = trial.suggest_loguniform('p_value', 0.05, 0.95)
+                mu = trial.suggest_int('mu', 1, 10000)
+                scale = trial.suggest_int('scale', 1, 10000)
+
+                random_factor = trial.suggest_int('random_factor', 1, 10000)
+
+                param["sample_distribution"] = sample_distribution
+                param["random_or_control_factor"] = random_or_control_factor
+                param["p_value"] = p_value
+                param["mu"] = mu
+                param["scale"] = scale
+                param["random_factor"] = random_factor
+
+                temp_df_list = []
+                X_train_sample[self.target_variable] = Y_train_sample
+                if problem == 'binary' or problem == 'multiclass':
+                    for class_inst in class_cats:
+                        X_train_sample_class = X_train_sample[(X_train_sample[self.target_variable] == class_inst)]
+                        size = len(X_train_sample_class.index)
+                        if sample_distribution == 'Uniform':
+                            gen_data = np.random.choice(np.arange(0, 100), size, replace=True)
+                        elif sample_distribution == 'Binomial':
+                            gen_data = binom.rvs(n=random_factor, p=p_value, size=size)
+                        elif sample_distribution == 'Poisson':
+                            gen_data = poisson.rvs(mu=mu, size=size)
+                        elif sample_distribution == 'Exponential':
+                            gen_data = expon.rvs(scale=scale, loc=0, size=size)
+                        elif sample_distribution == 'Gamma':
+                            gen_data = gamma.rvs(a=mu, size=size)
+                        elif sample_distribution == 'Uniform':
+                            gen_data = class_inst
+                        elif sample_distribution == 'Normal':
+                            gen_data = norm.rvs(size=size, loc=0, scale=scale)
+                            if random_or_control_factor == 'Random':
+                                gen_data = gen_data*random_factor
+                            else:
+                                gen_data += class_inst*2
+                        else:
+                            gen_data = random_factor
+                        X_train_sample_class[column_name] = gen_data
+                        temp_df_list.append(X_train_sample_class)
+
+                else:
+                    for X_train_sample_class in dfs:
+                        size = len(X_train_sample_class.index)
+                        class_inst = X_train_sample_class["bin"]
+                        if sample_distribution == 'Uniform':
+                            gen_data = np.random.choice(np.arange(0, 100), size, replace=True)
+                        elif sample_distribution == 'Binomial':
+                            gen_data = binom.rvs(n=random_factor, p=p_value, size=size)
+                        elif sample_distribution == 'Poisson':
+                            gen_data = poisson.rvs(mu=mu, size=size)
+                        elif sample_distribution == 'Exponential':
+                            gen_data = expon.rvs(scale=scale, loc=0, size=size)
+                        elif sample_distribution == 'Gamma':
+                            gen_data = gamma.rvs(a=mu, size=size)
+                        elif sample_distribution == 'Uniform':
+                            gen_data = class_inst
+                        elif sample_distribution == 'Normal':
+                            gen_data = norm.rvs(size=size, loc=0, scale=scale)
+                            if random_or_control_factor == 'Random':
+                                gen_data = gen_data*random_factor
+                            else:
+                                gen_data += class_inst*2
+                        else:
+                            gen_data = random_factor
+                        X_train_sample_class[column_name] = gen_data
+                        temp_df_list.append(X_train_sample_class)
+
+                temp_df = pd.concat(temp_df_list)
+                temp_df.drop(self.target_variable, axis=1)
+
+                try:
+                    scores_1 = cross_val_score(model_1, temp_df, Y_train_sample, cv=10, scoring=metric)
+                    scores_2 = cross_val_score(model_2, temp_df, Y_train_sample, cv=10, scoring=metric)
+                    mae_1 = np.mean(scores_1)
+                    mae_2 = np.mean(scores_2)
+                    mae = (mae_1+mae_2)/2
+                except Exception:
+                    mae = 0
+                return mae
+
+            algorithm = 'synthetic_data_augmentation'
+
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
+            study.optimize(objective,
+                           n_trials=50,
+                           timeout=600,
+                           gc_after_trial=True,
+                           show_progress_bar=True)
+            self.optuna_studies[f"{algorithm}"] = {}
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            fig = optuna.visualization.plot_optimization_history(study)
+            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+            fig.show()
+            fig = optuna.visualization.plot_param_importances(study)
+            self.optuna_studies[f"{algorithm}_param_importance"] = fig
+            fig.show()
+
+            # get best logic
+            best_parameters = study.best_trial.params
+            temp_df_list = []
+            X_train_sample[self.target_variable] = Y_train_sample
+            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+                for class_inst in class_cats:
+                    X_train_sample_class = X_train_sample[(X_train_sample[self.target_variable] == class_inst)]
+                    size = len(X_train_sample_class.index)
+                    if best_parameters["sample_distribution"] == 'Uniform':
+                        gen_data = np.random.choice(np.arange(0, 100), size, replace=True)
+                    elif best_parameters["sample_distribution"] == 'Binomial':
+                        gen_data = binom.rvs(n=best_parameters["random_factor"], p=best_parameters["p_value"], size=size)
+                    elif best_parameters["sample_distribution"] == 'Poisson':
+                        gen_data = poisson.rvs(mu=best_parameters["mu"], size=size)
+                    elif best_parameters["sample_distribution"] == 'Exponential':
+                        gen_data = expon.rvs(scale=best_parameters["scale"], loc=0, size=size)
+                    elif best_parameters["sample_distribution"] == 'Gamma':
+                        gen_data = gamma.rvs(a=best_parameters["mu"], size=size)
+                    elif best_parameters["sample_distribution"] == 'Uniform':
+                        gen_data = class_inst
+                    elif best_parameters["sample_distribution"] == 'Normal':
+                        gen_data = norm.rvs(size=size, loc=0, scale=best_parameters["scale"])
+                        if best_parameters["random_or_control_factor"] == 'Random':
+                            gen_data = gen_data*best_parameters["random_factor"]
+                        else:
+                            gen_data += class_inst*2
+                    else:
+                        gen_data = best_parameters["random_factor"]
+                    X_train_sample_class[column_name] = gen_data
+                    temp_df_list.append(X_train_sample_class)
+
+            else:
+                for X_train_sample_class in dfs:
+                    size = len(X_train_sample_class.index)
+                    class_inst = X_train_sample_class["bin"]
+                    if best_parameters["sample_distribution"] == 'Uniform':
+                        gen_data = np.random.choice(np.arange(0, 100), size, replace=True)
+                    elif best_parameters["sample_distribution"] == 'Binomial':
+                        gen_data = binom.rvs(n=best_parameters["random_factor"], p=best_parameters["p_value"], size=size)
+                    elif best_parameters["sample_distribution"] == 'Poisson':
+                        gen_data = poisson.rvs(mu=best_parameters["mu"], size=size)
+                    elif best_parameters["sample_distribution"] == 'Exponential':
+                        gen_data = expon.rvs(scale=best_parameters["scale"], loc=0, size=size)
+                    elif best_parameters["sample_distribution"] == 'Gamma':
+                        best_parameters["sample_distribution"] = gamma.rvs(a=best_parameters["mu"], size=size)
+                    elif best_parameters["sample_distribution"] == 'Uniform':
+                        gen_data = class_inst
+                    elif best_parameters["sample_distribution"] == 'Normal':
+                        gen_data = norm.rvs(size=size, loc=0, scale=best_parameters["scale"])
+                        if best_parameters["random_or_control_factor"] == 'Random':
+                            gen_data = gen_data*best_parameters["random_factor"]
+                        else:
+                            gen_data += class_inst*2
+                    else:
+                        gen_data = best_parameters["random_factor"]
+                    X_train_sample_class[column_name] = gen_data
+                    temp_df_list.append(X_train_sample_class)
+
+            temp_df = pd.concat(temp_df_list)
+            temp_df.drop(self.target_variable, axis=1)
+
+            # save copy of ol column
+            original_col = X_train_sample[column_name].copy()
+            X_train_sample[column_name] = temp_df[column_name]
+            X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+
+            try:
+                scores_1 = cross_val_score(model_1, X_train_sample, Y_train_sample, cv=10, scoring=metric)
+                scores_2 = cross_val_score(model_2, X_train_sample, Y_train_sample, cv=10, scoring=metric)
+                mae_1 = np.mean(scores_1)
+                mae_2 = np.mean(scores_2)
+                synthetic_mae = (mae_1+mae_2)/2
+            except Exception:
+                synthetic_mae = 0
+
+            print(f"The synthetic score is {synthetic_mae}.")
+
+            del model_1
+            del model_2
+            del temp_df_list
+            _ = gc.collect()
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+
+            # original data or synthetic data?
+            if synthetic_mae > benchmark_mae:
+                print("Keep synthetic column.")
+                return temp_df[column_name]
+            else:
+                print("Keep original column. No improvement found.")
+                return original_col
+
+    def synthetic_data_augmentation(self):
+        if self.prediction_mode:
+            pass
+        else:
+            logging.info('Start creating synthetic data.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+            for col in X_train.columns.to_list():
+                X_train[col] = self.synthetic_data_generator(column_name=col)
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def automated_feature_selection(self, metric=None):
         """
