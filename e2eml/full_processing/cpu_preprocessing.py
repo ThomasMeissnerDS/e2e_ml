@@ -1704,7 +1704,10 @@ class PreProcessing:
             else:
                 date_columns = self.date_columns
                 for col in date_columns:
-                    self.dataframe[col] = pd.to_datetime(self.dataframe[col], yearfirst=True)
+                    try:
+                        self.dataframe[col] = pd.to_datetime(self.dataframe[col], yearfirst=True)
+                    except KeyError:
+                        pass
 
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
