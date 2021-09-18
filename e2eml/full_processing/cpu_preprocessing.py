@@ -454,7 +454,7 @@ class PreProcessing:
             logging.info('Started column type detection and casting.')
             for key in self.detected_col_types:
                 if self.detected_col_types[key] == 'datetime[ns]':
-                    self.dataframe[key] = pd.to_datetime(self.dataframe[key], infer_datetime_format=True)
+                    self.dataframe[key] = pd.to_datetime(self.dataframe[key], yearfirst=True)
                 else:
                     self.dataframe[key] = self.dataframe[key].astype(self.detected_col_types[key])
             logging.info('Finished column type detection and casting.')
@@ -483,8 +483,8 @@ class PreProcessing:
                 for col in no_bool_cols:
                     if col not in self.num_columns:
                         try:
-                            X_train[col] = pd.to_datetime(X_train[col], infer_datetime_format=True)
-                            X_test[col] = pd.to_datetime(X_test[col], infer_datetime_format=True)
+                            X_train[col] = pd.to_datetime(X_train[col], yearfirst=True)
+                            X_test[col] = pd.to_datetime(X_test[col], yearfirst=True)
                             date_columns.append(col)
                             self.detected_col_types[col] = 'datetime[ns]'
                         except Exception:
@@ -1362,8 +1362,9 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             columns_before = X_train.columns.to_list()
-            X_train.dropna(axis=1, thresh=int(threshold * len(X_train)))
+            X_train.dropna(axis=1, thresh=int(threshold * len(X_train.index)), inplace=True)
             columns_after = X_train.columns.to_list()
+            X_test = X_test[columns_after].copy()
             deleted_columns = (set(columns_before).difference(columns_after))
             deleted = []
             for key in deleted_columns:
@@ -1465,22 +1466,22 @@ class PreProcessing:
                 if self.dataframe[col].dtype in self.num_dtypes: #checking if col is numeric
                     algorithm = 'mean_filling'
                     imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
-                    self.dataframe[col+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1))
+                    self.dataframe[col+"_"+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1)).reshape(-1, 1)
 
                     algorithm = 'static_filling'
-                    self.dataframe[col+algorithm] = self.dataframe[col].fillna(0, inplace=False)
+                    self.dataframe[col+"_"+algorithm] = self.dataframe[col].fillna(0, inplace=False)
 
                     algorithm = 'most_frequent'
                     imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
-                    self.dataframe[col+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1))
+                    self.dataframe[col+"_"+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1)).reshape(-1, 1)
 
                 else:
                     algorithm = 'most_frequent'
                     imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
-                    self.dataframe[col+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1))
+                    self.dataframe[col+"_"+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1)).reshape(-1, 1)
 
                     algorithm = 'static_filling'
-                    self.dataframe[col+algorithm] = self.dataframe[col].fillna('None', inplace=False)
+                    self.dataframe[col+"_"+algorithm] = self.dataframe[col].fillna('None', inplace=False)
 
                     # fill original column as prep for iterative filling
                     self.dataframe[col] = self.dataframe[col].fillna('None', inplace=False)
@@ -1501,37 +1502,38 @@ class PreProcessing:
             # numeric vs categorical
             for col in X_train.columns.to_list():
                 if X_train[col].isna().sum() > 0:
+                    print(f"Impute column {col}...")
                     if X_train[col].dtype in self.num_dtypes: #checking if col is numeric
                         algorithm = 'mean_filling'
-                        imp = SimpleImputer(missing_values=np.nan, strategy='mean')
+                        imp = SimpleImputer(missing_values=np.nan, strategy='mean', copy=True)
                         imp.fit(X_train[col].values.reshape(-1, 1))
-                        X_train[col+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1))
-                        X_test[col+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1))
+                        X_train[col+"_"+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1)).reshape(-1, 1)
+                        X_test[col+"_"+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1)).reshape(-1, 1)
                         self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
 
                         algorithm = 'static_filling'
-                        X_train[col+algorithm] = X_train[col].fillna(0, inplace=False)
-                        X_test[col+algorithm] = X_test[col].fillna(0, inplace=False)
+                        X_train[col+"_"+algorithm] = X_train[col].fillna(0, inplace=False)
+                        X_test[col+"_"+algorithm] = X_test[col].fillna(0, inplace=False)
 
                         # most frequent filling
                         algorithm = 'most_frequent'
-                        imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
+                        imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent', copy=True)
                         imp.fit(X_train[col].values.reshape(-1, 1))
-                        X_train[col+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1))
-                        X_test[col+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1))
+                        X_train[col+"_"+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1)).reshape(-1, 1)
+                        X_test[col+"_"+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1)).reshape(-1, 1)
                         self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
                     else:
                         # most frequent filling
                         algorithm = 'most_frequent'
-                        imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
+                        imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent', copy=True)
                         imp.fit(X_train[col].values.reshape(-1, 1))
-                        X_train[col+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1))
-                        X_test[col+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1))
+                        X_train[col+"_"+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1)).reshape(-1, 1)
+                        X_test[col+"_"+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1)).reshape(-1, 1)
                         self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
 
                         algorithm = 'static_filling'
-                        X_train[col+algorithm] = X_train[col].fillna('None', inplace=False)
-                        X_test[col+algorithm] = X_test[col].fillna('None', inplace=False)
+                        X_train[col+"_"+algorithm] = X_train[col].fillna('None', inplace=False)
+                        X_test[col+"_"+algorithm] = X_test[col].fillna('None', inplace=False)
 
                         # fill original column as prep for iterative filling
                         X_train[col] = X_train[col].fillna('None', inplace=False)
@@ -1690,11 +1692,11 @@ class PreProcessing:
                 for col in self.dataframe.columns:
                     if col not in self.num_columns:
                         try:
-                            self.dataframe[col] = pd.to_datetime(self.dataframe[col], infer_datetime_format=True)
+                            self.dataframe[col] = pd.to_datetime(self.dataframe[col], yearfirst=True)
                             date_columns.append(col)
                         except Exception:
                             if force_conversion:
-                                self.dataframe[col] = pd.to_datetime(self.dataframe[col], infer_datetime_format=True,
+                                self.dataframe[col] = pd.to_datetime(self.dataframe[col], yearfirst=True,
                                                                      errors='coerce')
                                 date_columns.append(col)
                 logging.info('Finished automatic datetime column detection.')
@@ -1702,7 +1704,7 @@ class PreProcessing:
             else:
                 date_columns = self.date_columns
                 for col in date_columns:
-                    self.dataframe[col] = pd.to_datetime(self.dataframe[col], infer_datetime_format=True)
+                    self.dataframe[col] = pd.to_datetime(self.dataframe[col], yearfirst=True)
 
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -1714,19 +1716,23 @@ class PreProcessing:
                 for col in X_train.columns:
                     if col not in self.num_columns:
                         try:
-                            X_train[col] = pd.to_datetime(X_train[col], infer_datetime_format=True)
-                            X_test[col] = pd.to_datetime(X_test[col], infer_datetime_format=True)
+                            X_train[col] = pd.to_datetime(X_train[col], yearfirst=True)
+                            X_test[col] = pd.to_datetime(X_test[col], yearfirst=True)
                             date_columns.append(col)
                         except Exception:
                             if force_conversion:
-                                X_train[col] = pd.to_datetime(X_train[col], infer_datetime_format=True, errors='coerce')
-                                X_test[col] = pd.to_datetime(X_test[col], infer_datetime_format=True, errors='coerce')
+                                X_train[col] = pd.to_datetime(X_train[col], yearfirst=True, errors='coerce')
+                                X_test[col] = pd.to_datetime(X_test[col], yearfirst=True, errors='coerce')
                                 date_columns.append(col)
             else:
                 date_columns = self.date_columns
                 for col in date_columns:
-                    X_train[col] = pd.to_datetime(X_train[col], infer_datetime_format=True, errors='coerce')
-                    X_test[col] = pd.to_datetime(X_test[col], infer_datetime_format=True, errors='coerce')
+                    try:
+                        X_train[col] = pd.to_datetime(X_train[col], yearfirst=True, errors='coerce')
+                        X_test[col] = pd.to_datetime(X_test[col], yearfirst=True, errors='coerce')
+                    except KeyError:
+                        # might happen if deleted due to high nulls
+                        pass
             logging.info('Finished automatic datetime column detection.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
 

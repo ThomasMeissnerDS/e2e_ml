@@ -43,9 +43,9 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.reset_dataframe_index()
         if self.blueprint_step_selection_non_nlp["fill_infinite_values"]:
             self.fill_infinite_values()
-
+        if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
+            self.delete_high_null_cols(threshold=0.95)
         self.target_skewness_handling(mode='fit')
-
         #self.fill_nulls(how='static') # can only be here when "static"
         if self.blueprint_step_selection_non_nlp["datetime_converter"]:
             self.datetime_converter(datetime_handling='all')
@@ -59,8 +59,6 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
         if self.blueprint_step_selection_non_nlp["cardinality_remover"]:
             self.cardinality_remover(threshold=100)
-        if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
-            self.delete_high_null_cols(threshold=0.95)
         if self.blueprint_step_selection_non_nlp["holistic_null_filling"]:
             self.holistic_null_filling(iterative=self.blueprint_step_selection_non_nlp["iterative_null_imputation"])
         if self.blueprint_step_selection_non_nlp["numeric_binarizer_pca"]:
