@@ -44,7 +44,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         if self.blueprint_step_selection_non_nlp["fill_infinite_values"]:
             self.fill_infinite_values()
         if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
-            self.delete_high_null_cols(threshold=0.95)
+            self.delete_high_null_cols(threshold=0.05)
         self.target_skewness_handling(mode='fit')
         #self.fill_nulls(how='static') # can only be here when "static"
         if self.blueprint_step_selection_non_nlp["datetime_converter"]:

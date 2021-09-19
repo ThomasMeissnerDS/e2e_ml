@@ -1345,7 +1345,7 @@ class PreProcessing:
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def delete_high_null_cols(self, threshold=0.80):
+    def delete_high_null_cols(self, threshold=0.05):
         """
         Takes in a dataframe and removes columns, which have more NULLs than the given threshold.
         :param threshold: Maximum percentage of NULLs in a column allowed.
