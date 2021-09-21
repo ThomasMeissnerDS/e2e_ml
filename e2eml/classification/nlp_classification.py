@@ -396,7 +396,7 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
                     }
                     torch.save(state, "model0.pth")
 
-                elif bestscore > valscore:
+                elif bestscore < valscore:
                     bestscore = valscore
                     print("found better point")
                     state = {
