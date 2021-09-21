@@ -231,7 +231,7 @@ class PreProcessing:
 
         # automatically determine batch sizes for Tabnet
 
-        rec_batch_size = (len(self.dataframe.index)*0.8)/10
+        rec_batch_size = (len(self.dataframe.index)*0.8)/20
         if int(rec_batch_size) % 2 == 0:
             rec_batch_size = int(rec_batch_size)
         else:

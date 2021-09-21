@@ -387,7 +387,10 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
 
         algorithm = 'max_voting'
         mode_cols = [alg for alg, value in self.special_blueprint_algorithms.items() if value]
-        mode_cols.remove("elasticnet")
+        try:
+            mode_cols.remove("elasticnet")
+        except Exception:
+            pass
 
         if self.prediction_mode:
             if self.special_blueprint_algorithms["lgbm"]:
