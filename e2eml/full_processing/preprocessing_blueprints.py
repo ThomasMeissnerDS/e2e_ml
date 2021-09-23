@@ -45,6 +45,10 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.fill_infinite_values()
         if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
             self.delete_high_null_cols(threshold=0.05)
+        if self.blueprint_step_selection_non_nlp["data_binning"]:
+            self.data_binning(nb_bins=10)
+        if self.blueprint_step_selection_non_nlp["regex_clean_text_data"] and len(self.nlp_transformer_columns)>0:
+            self.regex_clean_text_data()
         self.target_skewness_handling(mode='fit')
         #self.fill_nulls(how='static') # can only be here when "static"
         if self.blueprint_step_selection_non_nlp["datetime_converter"]:
@@ -55,6 +59,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.append_text_sentiment_score()
         if self.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"]:
             self.tfidf_vectorizer_to_pca(pca_pos_tags=True)
+        if self.blueprint_step_selection_non_nlp["tfidf_vectorizer"] and len(self.nlp_transformer_columns)>0:
+            self.tfidf_vectorizer_to_pca(pca_pos_tags=False)
         if self.blueprint_step_selection_non_nlp["rare_feature_processing"]:
             self.rare_feature_processor(threshold=0.005, mask_as='miscellaneous', rarity_cols=self.rarity_cols)
         if self.blueprint_step_selection_non_nlp["cardinality_remover"]:
@@ -69,8 +75,6 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.category_encoding(algorithm='target')
         if self.blueprint_step_selection_non_nlp["fill_nulls_static"]:
             self.fill_nulls(how='static') # can only be here when "static"
-        if self.blueprint_step_selection_non_nlp["data_binning"]:
-            self.data_binning(nb_bins=10)
         if self.blueprint_step_selection_non_nlp["outlier_care"]:
             self.outlier_care(method='isolation', how='append')
         if self.blueprint_step_selection_non_nlp["remove_collinearity"]:
@@ -119,6 +123,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
 
         if self.blueprint_step_selection_nlp_transformers["train_test_split"]:
             self.train_test_split(how=self.train_split_type)
+        if self.blueprint_step_selection_nlp_transformers["regex_clean_text_data"] and len(self.nlp_transformer_columns)>0:
+            self.regex_clean_text_data()
         if self.blueprint_step_selection_nlp_transformers["random_synonym_replacement"]:
             self.replace_synonyms_to_df_copy(words_to_replace=3, mode='auto')
         if self.blueprint_step_selection_nlp_transformers["oversampling"]:

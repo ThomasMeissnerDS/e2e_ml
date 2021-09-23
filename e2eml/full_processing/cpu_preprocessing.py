@@ -167,6 +167,7 @@ class PreProcessing:
             "automatic_type_detection_casting": True,
             "remove_duplicate_column_names": True,
             "reset_dataframe_index": True,
+            "regex_clean_text_data": False,
             "handle_target_skewness": False,
             "holistic_null_filling": True, # slow
             "iterative_null_imputation": False,
@@ -175,6 +176,7 @@ class PreProcessing:
             "pos_tagging_pca": True, # slow with many categories
             "append_text_sentiment_score": False,
             "tfidf_vectorizer_to_pca": True, # slow with many categories
+            "tfidf_vectorizer": False,
             "rare_feature_processing": True,
             "cardinality_remover": True,
             "delete_high_null_cols": True,
@@ -198,11 +200,41 @@ class PreProcessing:
         }
         self.blueprint_step_selection_nlp_transformers = {
             "train_test_split": True,
+            "regex_clean_text_data": False,
             "rare_feature_processing": True,
             "sort_columns_alphabetically": True,
             "random_synonym_replacement": False,
-            "oversampling": False
+            "oversampling": False,
+            "synonym_language": 'english'
         }
+
+        """
+        NLTK compatible languages
+        ['hungarian',
+         'swedish',
+         'kazakh',
+         'norwegian',
+         'finnish',
+         'arabic',
+         'indonesian',
+         'portuguese',
+         'turkish',
+         'azerbaijani',
+         'slovene',
+         'spanish',
+         'danish',
+         'nepali',
+         'romanian',
+         'greek',
+         'dutch',
+         'README',
+         'tajik',
+         'german',
+         'english',
+         'russian',
+         'french',
+         'italian']
+        """
         self.special_blueprint_algorithms = {"ridge": True,
                                              "elasticnet": True,
                                              "catboost": True,
@@ -256,6 +288,7 @@ class PreProcessing:
                                              "ridge": 100,
                                              "elasticnet": 100,
                                              "catboost": 25,
+                                             "sgd": 25,
                                              "bruteforce_random": 400}
 
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
@@ -266,6 +299,7 @@ class PreProcessing:
                                                        "ridge": 2*60*60,
                                                        "elasticnet": 2*60*60,
                                                        "catboost": 2*60*60,
+                                                       "sgd": 2*60*60,
                                                        "bruteforce_random": 2*60*60}
 
         self.brute_force_selection_sample_size = 100000
@@ -1165,14 +1199,17 @@ class PreProcessing:
 
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            for vartype in self.num_dtypes:
-                filtered_columns = X_train.loc[:, ~X_train.columns.isin(self.new_sin_cos_col_names)]
+            if len(self.num_dtypes) > 0:
+                self.blueprint_step_selection_non_nlp["data_binning"] = False
+            else:
+                for vartype in self.num_dtypes:
+                    filtered_columns = X_train.loc[:, ~X_train.columns.isin(self.new_sin_cos_col_names)]
 
-                X_train = binning_on_data(X_train, cols_to_bin=filtered_columns)
-                X_test = binning_on_data(X_test, cols_to_bin=filtered_columns)
-            logging.info('Finished numerical binning.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+                    X_train = binning_on_data(X_train, cols_to_bin=filtered_columns)
+                    X_test = binning_on_data(X_test, cols_to_bin=filtered_columns)
+                logging.info('Finished numerical binning.')
+                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def cardinality_remover(self, threshold=100):
         """
@@ -1973,6 +2010,7 @@ class PreProcessing:
                         except Exception:
                             pass
 
+                    filtered_columns = [ x for x in filtered_columns if "tfids_" not in x]
                     #filtered_columns = [ x for x in filtered_columns if "POS PC-" not in x]
                     #filtered_columns = [ x for x in filtered_columns if "textblob_sentiment_score" not in x]
                     #filtered_columns = [ x for x in filtered_columns if "TFIDF PC" not in x]

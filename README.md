@@ -87,7 +87,9 @@ Multiclass blueprints can handle binary and multiclass tasks:
 - ml_bp05_multiclass_full_processing_vowpal_wabbit
 - ml_bp06_multiclass_full_processing_bert_transformer() # for NLP specifically
 - ml_bp07_multiclass_full_processing_tabnet()
-- ml_bp08_multiclass_full_processing_ridge
+- ml_bp08_multiclass_full_processing_ridge()
+- ml_bp09_multiclass_full_processing_catboost()
+- ml_bp10_multiclass_full_processing_sgd()
 - ml_special_binary_full_processing_boosting_blender()
 - ml_special_multiclass_auto_model_exploration()
 - ml_special_multiclass_full_processing_multimodel_max_voting()
@@ -102,6 +104,8 @@ There are regression blueprints as well (in regression module):
 - ml_bp16_regressions_full_processing_bert_transformer()
 - ml_bp17_regression_full_processing_tabnet_reg()
 - ml_bp18_regression_full_processing_ridge_reg
+- ml_bp20_regression_full_processing_catboost()
+- ml_bp20_regression_full_processing_sgd()
 - ml_special_regression_multiclass_full_processing_multimodel_avg_blender()
 - ml_special_regression_auto_model_exploration()
 
@@ -200,7 +204,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 2.1.0
+* 2.1.1
  - Completely overworked preprocessing setup (changed API). Preprocessing blueprints can be customized through a class
    attribute now
  - Completely overworked special multimodel blueprints. The paricipating algorithms can be customized through a class
@@ -209,6 +213,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
  - Added Catboost & Elasticnet
  - Updated Readme
  - First unittests
+ - Added Stochastic Gradient classifier & regressor
 * 1.8.2
  - Added Ridge classifier and regression as new blueprints
 * 1.8.1

@@ -12,10 +12,11 @@ from ngboost.distns import k_categorical
 from catboost import CatBoostClassifier, cv, Pool
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.ensemble import StackingClassifier
-from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, RidgeClassifier
+from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, RidgeClassifier, SGDClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.tree import DecisionTreeRegressor
 from pytorch_tabnet.tab_model import TabNetClassifier
 from pytorch_tabnet.pretraining import TabNetPretrainer
@@ -293,6 +294,133 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             partial_probs = model.predict_proba(X_test)
+
+            if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+            else:
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+
+            if feat_importance and importance_alg == 'SHAP':
+                self.runtime_warnings(warn_about='shap_cpu')
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            elif feat_importance and importance_alg == 'permutation':
+                result = permutation_importance(
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
+                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                fig, ax = plt.subplots()
+                permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
+                ax.set_title("Feature importances using permutation on full model")
+                ax.set_ylabel("Mean accuracy decrease")
+                fig.tight_layout()
+                plt.show()
+            else:
+                pass
+        self.predicted_probs[f"{algorithm}"] = predicted_probs
+        self.predicted_classes[f"{algorithm}"] = predicted_classes
+        del model
+        _ = gc.collect()
+
+    def sgd_classifier_train(self):
+        """
+        Trains a simple sgd classifier.
+        :return: Trained model.
+        """
+        self.get_current_timestamp(task='Train SGD classifier model')
+        algorithm = 'sgd'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            metric = make_scorer(matthews_corrcoef)
+
+            def objective(trial):
+                loss = trial.suggest_categorical("loss", ["modified_huber", "log"])
+                param = {
+                    'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
+                    'l1_ratio': trial.suggest_loguniform('l1_ratio', 1e-3, 0.9999),
+                    'max_iter': trial.suggest_loguniform('max_iter', 10, 10000),
+                    'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
+                    'normalize': trial.suggest_categorical("normalize", [True, False])
+                }
+                model = SGDClassifier(alpha=param["alpha"],
+                                      max_iter=param["max_iter"],
+                                      tol=param["tol"],
+                                      l1_ratio=param["l1_ratio"],
+                                      penalty='elasticnet',
+                                      loss=loss,
+                                      early_stopping=True,
+                                      random_state=42).fit(X_train, Y_train)
+                try:
+                    scores = cross_val_score(model, X_train, Y_train, cv=10, scoring=metric)
+                    mae = np.mean(scores)
+                except Exception:
+                    mae = 0
+                return mae
+
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+            self.optuna_studies[f"{algorithm}"] = {}
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                pass
+
+            best_parameters = study.best_trial.params
+            model = SGDClassifier(alpha=best_parameters["alpha"],
+                                  max_iter=best_parameters["max_iter"],
+                                  tol=best_parameters["tol"],
+                                  l1_ratio=best_parameters["l1_ratio"],
+                                  penalty='elasticnet',
+                                  loss=best_parameters["loss"],
+                                  early_stopping=True,
+                                  random_state=42).fit(X_train, Y_train)
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
+            return self.trained_models
+
+    def sgd_classifier_predict(self, feat_importance=True, importance_alg='permutation'):
+        """
+        Loads the pretrained model from the class itself and predicts on new data.
+        :param feat_importance: Set True, if feature importance shall be calculated.
+        :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
+        GPU acceleration). (Default: 'permutation')
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp(task='Predict with SGD classifier')
+        algorithm = 'sgd'
+
+        if self.prediction_mode:
+            model = self.trained_models[f"{algorithm}"]
+            partial_probs = model.decision_function(self.dataframe)
+
+            if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+            else:
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = self.trained_models[f"{algorithm}"]
+            partial_probs = model.decision_function(X_test)
 
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])

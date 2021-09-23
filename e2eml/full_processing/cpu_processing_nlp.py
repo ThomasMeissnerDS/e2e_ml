@@ -34,7 +34,7 @@ nltk.download('punkt')
 nltk.download('averaged_perceptron_tagger')
 nltk.download('stopwords')
 nltk.download('wordnet')
-stop_words = set(stopwords.words('english'))
+#stop_words = set(stopwords.words(self.blueprint_step_selection_nlp_transformers["synonym_language"]))
 
 # TODO: Continue on NLP
 """
@@ -273,7 +273,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             # nlp = spacy.load('en_core_web_trf')
         # nlp = spacy.load('en_core_web_lg')
         with nlp.disable_pipes():
-            vectors = np.array([nlp(text).vector for text in df[text_column]])
+            vectors = np.array([nlp(text).vector for text in df[text_column]], dtype=object)
         return vectors
 
     def get_spacy_col_names(self):
@@ -408,7 +408,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                                                     pca_pos_tags=pca_pos_tags
                                                     )
             X_test = self.pos_tagging_pca_nlp_cols(X_test,
-                                                   self.nlp_columns, mode='transform',
+                                                   text_columns, mode='transform',
                                                    pca_pos_tags=pca_pos_tags
                                                    )
             logging.info('Finished spacy POS tagging loop.')
@@ -423,8 +423,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             for text_col in text_cols:
                 df[text_col].fillna('None', inplace=True)
                 tfids = self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_{text_col}"]
-                vector = list(tfids.transform(df[text_col]).toarray())
                 if pca_pos_tags:
+                    vector = list(tfids.transform(df[text_col]).toarray())
                     self.get_current_timestamp(task='PCA POS tags')
                     logging.info('Start to PCA POS tags.')
                     pca = self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_pca_{text_col}"]
@@ -434,7 +434,10 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     tfidf_df_pca = pos_df[tfidf_pca_cols]
                     df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
                 else:
-                    pass
+                    all_embeddings = tfids.transform(df[text_col]).toarray()
+                    tfidf_df = pd.DataFrame(all_embeddings, columns=tfids.get_feature_names())
+                    tfidf_df = tfidf_df.add_prefix("tfids_")
+                    df = pd.concat([df, tfidf_df], axis=1)
         elif mode == 'fit':
             if self.nlp_columns:
                 text_cols = self.nlp_columns
@@ -448,10 +451,10 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
                     if df[f'nof_words_{text_col}'].max() >= 3:
                         df[text_col].fillna('None', inplace=True)
-                        tfids = TfidfVectorizer(ngram_range=ngram_range, strip_accents="unicode", max_features=10000)
-                        vector = list(tfids.fit_transform(df[text_col]).toarray())
+                        tfids = TfidfVectorizer(ngram_range=ngram_range, strip_accents="unicode", max_features=25000)
                         self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_{text_col}"] = tfids
                         if pca_pos_tags:
+                            vector = list(tfids.fit_transform(df[text_col]).toarray())
                             self.get_current_timestamp(task='PCA TfIDF matrix')
                             logging.info('Start to PCA TfIDF matrix.')
                             pca = PCA(n_components=2)
@@ -462,7 +465,10 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                             tfidf_df_pca = pos_df[tfidf_pca_cols]
                             df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
                         else:
-                            pass
+                            all_embeddings = tfids.fit_transform(df[text_col]).toarray()
+                            tfidf_df = pd.DataFrame(all_embeddings, columns=tfids.get_feature_names())
+                            tfidf_df = tfidf_df.add_prefix("tfids_")
+                            df = pd.concat([df, tfidf_df], axis=1)
                         nlp_columns.append(text_col)
                     else:
                         pass
@@ -543,7 +549,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
     def synonym_replacement(self, words, n):
         words = words.split()
         new_words = words.copy()
-        stop_words = nltk.corpus.stopwords.words("english")
+        stop_words = nltk.corpus.stopwords.words(self.blueprint_step_selection_nlp_transformers["synonym_language"])
         random_word_list = list(set([word for word in words if word not in stop_words]))
         random.shuffle(random_word_list)
         num_replaced = 0
