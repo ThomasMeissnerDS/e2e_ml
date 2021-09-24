@@ -358,8 +358,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                                       penalty='elasticnet',
                                       loss=loss,
                                       early_stopping=True,
-                                      random_state=42,
-                                      n_jobs=2).fit(X_train, Y_train)
+                                      random_state=42).fit(X_train, Y_train)
                 try:
                     scores = cross_val_score(model, X_train, Y_train, cv=10, scoring=metric)
                     mae = np.mean(scores)
@@ -393,8 +392,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                                   loss=best_parameters["loss"],
                                   power_t=best_parameters["power_t"],
                                   early_stopping=True,
-                                  random_state=42,
-                                  n_jobs=2).fit(X_train, Y_train)
+                                  random_state=42).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
