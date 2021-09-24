@@ -141,7 +141,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 solver = trial.suggest_categorical("solver", ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"])
                 param = {
                     'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
-                    'max_iter': trial.suggest_loguniform('max_iter', 10, 10000),
+                    'max_iter': trial.suggest_int('max_iter', 10, 10000),
                     'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
                     'normalize': trial.suggest_categorical("normalize", [True, False])
                 }
@@ -247,14 +247,16 @@ class RegressionModels(postprocessing.FullPipeline):
                 param = {
                     'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
                     'l1_ratio': trial.suggest_loguniform('l1_ratio', 1e-3, 0.9999),
-                    'max_iter': trial.suggest_loguniform('max_iter', 10, 10000),
+                    'max_iter': trial.suggest_int('max_iter', 10, 30000),
                     'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
-                    'normalize': trial.suggest_categorical("normalize", [True, False])
+                    'normalize': trial.suggest_categorical("normalize", [True, False]),
+                    'power_t': trial.suggest_loguniform('power_t', 0.1, 0.7)
                 }
                 model = SGDRegressor(alpha=param["alpha"],
                                      max_iter=param["max_iter"],
                                      tol=param["tol"],
                                      l1_ratio=param["l1_ratio"],
+                                     power_t=param["power_t"],
                                      penalty='elasticnet',
                                      loss=loss,
                                      early_stopping=True,
@@ -284,13 +286,14 @@ class RegressionModels(postprocessing.FullPipeline):
 
             best_parameters = study.best_trial.params
             model = SGDRegressor(alpha=best_parameters["alpha"],
-                                  max_iter=best_parameters["max_iter"],
-                                  tol=best_parameters["tol"],
-                                  l1_ratio=best_parameters["l1_ratio"],
-                                  penalty='elasticnet',
-                                  loss=best_parameters["loss"],
-                                  early_stopping=True,
-                                  random_state=42).fit(X_train, Y_train)
+                                 max_iter=best_parameters["max_iter"],
+                                 tol=best_parameters["tol"],
+                                 l1_ratio=best_parameters["l1_ratio"],
+                                 power_t=best_parameters["power_t"],
+                                 penalty='elasticnet',
+                                 loss=best_parameters["loss"],
+                                 early_stopping=True,
+                                 random_state=42).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model

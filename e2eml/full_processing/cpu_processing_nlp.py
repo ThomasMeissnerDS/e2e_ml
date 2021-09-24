@@ -256,6 +256,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         More information:
         https://www.kaggle.com/konradb/linear-baseline-with-cv
         https://www.kaggle.com/anaverageengineer/comlrp-baseline-for-complete-beginners
+
         """
         logging.info('Download spacy language package.')
         try:
@@ -264,7 +265,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             print('Downloading language model for the spaCy POS tagger\n'
                   "(don't worry, this will only happen once)")
             from spacy.cli import download
-            download('en')
+            download('en_core_web_sm')
             nlp = spacy.load('en_core_web_sm')
             # https://spacy.io/universe/project/spacy-transformers
             # https://spacy.io/models

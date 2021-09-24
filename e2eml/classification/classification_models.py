@@ -222,7 +222,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 solver = trial.suggest_categorical("solver", ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"])
                 param = {
                     'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
-                    'max_iter': trial.suggest_loguniform('max_iter', 10, 10000),
+                    'max_iter': trial.suggest_int('max_iter', 10, 10000),
                     'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
                     'normalize': trial.suggest_categorical("normalize", [True, False])
                 }
@@ -345,18 +345,21 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 param = {
                     'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
                     'l1_ratio': trial.suggest_loguniform('l1_ratio', 1e-3, 0.9999),
-                    'max_iter': trial.suggest_loguniform('max_iter', 10, 10000),
+                    'max_iter': trial.suggest_int('max_iter', 10, 30000),
                     'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
-                    'normalize': trial.suggest_categorical("normalize", [True, False])
+                    'normalize': trial.suggest_categorical("normalize", [True, False]),
+                    'power_t': trial.suggest_loguniform('power_t', 0.1, 0.7)
                 }
                 model = SGDClassifier(alpha=param["alpha"],
                                       max_iter=param["max_iter"],
                                       tol=param["tol"],
                                       l1_ratio=param["l1_ratio"],
+                                      power_t=param["power_t"],
                                       penalty='elasticnet',
                                       loss=loss,
                                       early_stopping=True,
-                                      random_state=42).fit(X_train, Y_train)
+                                      random_state=42,
+                                      n_jobs=2).fit(X_train, Y_train)
                 try:
                     scores = cross_val_score(model, X_train, Y_train, cv=10, scoring=metric)
                     mae = np.mean(scores)
@@ -388,8 +391,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                                   l1_ratio=best_parameters["l1_ratio"],
                                   penalty='elasticnet',
                                   loss=best_parameters["loss"],
+                                  power_t=best_parameters["power_t"],
                                   early_stopping=True,
-                                  random_state=42).fit(X_train, Y_train)
+                                  random_state=42,
+                                  n_jobs=2).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
