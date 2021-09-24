@@ -23,6 +23,7 @@ import numpy as np
 import random
 import logging
 import psutil
+import gc
 
 try:
     _create_unverified_https_context = ssl._create_unverified_context
@@ -383,6 +384,14 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 # get unique original column names
                 unique_nlp_cols = list(set(nlp_columns))
                 self.nlp_columns = unique_nlp_cols
+        try:
+            del pca
+            del spacy_df
+            del temp_df
+            del comps
+            _ = gc.collect()
+        except Exception:
+            pass
         return df
 
     def pos_tagging_pca(self, pca_pos_tags=True):
@@ -482,6 +491,14 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 # get unique original column names
                 unique_nlp_cols = list(set(nlp_columns))
                 self.nlp_columns = unique_nlp_cols
+        try:
+            del tfidf_df
+            del all_embeddings
+            del tfids
+            del tfidf_df_pca
+            _ = gc.collect()
+        except Exception:
+            pass
         return df
 
     def tfidf_vectorizer_to_pca(self, pca_pos_tags=True, ngram_range=(1, 2)):
