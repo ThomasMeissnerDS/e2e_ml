@@ -15,6 +15,7 @@ from transformers import get_linear_schedule_with_warmup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import naive_bayes
 from sklearn.linear_model import Ridge, ElasticNet
+from sklearn.decomposition import TruncatedSVD
 from imblearn.over_sampling import SMOTE
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
 import lightgbm as lgb
@@ -163,6 +164,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             text_columns = []
             text_columns.append(self.nlp_transformer_columns)
             for text_col in text_columns:
+                self.dataframe[text_col] = self.dataframe[text_col].apply(lambda  x: self.utils_preprocess_text(x))
                 self.dataframe[text_col] = self.dataframe[text_col].apply(lambda x : self.remove_url(x))
                 self.dataframe[text_col] = self.dataframe[text_col].apply(lambda x : self.remove_punct(x))
                 self.dataframe[text_col] = self.dataframe[text_col].apply(lambda x : self.remove_emoji(x))
@@ -176,6 +178,10 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             text_columns.append(self.nlp_transformer_columns)
 
             for text_col in text_columns:
+                try:
+                    X_train[text_col] = X_train[text_col].apply(lambda  x: self.utils_preprocess_text(x))
+                except (TypeError, AttributeError):
+                    pass
                 try:
                     X_train[text_col] = X_train[text_col].apply(lambda x : self.remove_url(x))
                 except (TypeError, AttributeError):
@@ -198,6 +204,11 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     pass
                 try:
                     X_train[text_col] = X_train[text_col].apply(lambda x : self.unique_char(self.cont_rep_char,x))
+                except (TypeError, AttributeError):
+                    pass
+
+                try:
+                    X_test[text_col] = X_test[text_col].apply(lambda  x: self.utils_preprocess_text(x))
                 except (TypeError, AttributeError):
                     pass
 
@@ -238,14 +249,14 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         logging.info('Start sentiment polarity score.')
         algorithm = 'textblob_sentiment_score'
         if self.prediction_mode:
-            text_columns = self.nlp_columns
-            for text_col in text_columns:
+            text_columns = self.nlp_transformer_columns
+            for text_col in [text_columns]:
                 self.dataframe[f"{algorithm}_{text_col}"] = self.dataframe[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
             logging.info('Finished text cleaning.')
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            text_columns = self.nlp_columns
-            for text_col in text_columns:
+            text_columns = self.nlp_transformer_columns
+            for text_col in [text_columns]:
                 X_train[f"{algorithm}_{text_col}"] = X_train[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
                 X_test[f"{algorithm}_{text_col}"] = X_test[text_col].apply(lambda x : self.textBlob_sentiment_polarity_score(x))
             logging.info('Finished text cleaning.')
@@ -444,8 +455,15 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     tfidf_df_pca = pos_df[tfidf_pca_cols]
                     df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
                 else:
-                    all_embeddings = tfids.transform(df[text_col]).toarray()
-                    tfidf_df = pd.DataFrame(all_embeddings, columns=tfids.get_feature_names())
+                    all_embeddings = tfids.fit_transform(df[text_col]).toarray()
+                    final_components = 1000
+                    svd = TruncatedSVD(n_components=final_components)
+                    svd.fit(all_embeddings)
+                    feature_names = tfids.get_feature_names()
+                    best_features = [feature_names[i] for i in svd.components_[0].argsort()[::-1]]
+                    self.preprocess_decisions["tfidf_best_features_test"] = best_features[:final_components]
+                    svdMatrix = svd.transform(all_embeddings)
+                    tfidf_df = pd.DataFrame(svdMatrix, columns=[i for i in range(0, final_components)])
                     tfidf_df = tfidf_df.add_prefix("tfids_")
                     df = pd.concat([df, tfidf_df], axis=1)
         elif mode == 'fit':
@@ -461,7 +479,13 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
                     if df[f'nof_words_{text_col}'].max() >= 3:
                         df[text_col].fillna('None', inplace=True)
-                        tfids = TfidfVectorizer(ngram_range=ngram_range, strip_accents="unicode", max_features=25000)
+                        tfids = TfidfVectorizer(ngram_range=ngram_range,
+                                                strip_accents='unicode',
+                                                max_features=25000,
+                                                max_df=0.85,
+                                                min_df=5,
+                                                norm='l2',
+                                                sublinear_tf=True)
                         self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_{text_col}"] = tfids
                         if pca_pos_tags:
                             vector = list(tfids.fit_transform(df[text_col]).toarray())
@@ -476,7 +500,14 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                             df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
                         else:
                             all_embeddings = tfids.fit_transform(df[text_col]).toarray()
-                            tfidf_df = pd.DataFrame(all_embeddings, columns=tfids.get_feature_names())
+                            final_components = 1000
+                            svd = TruncatedSVD(n_components=final_components)
+                            svd.fit(all_embeddings)
+                            feature_names = tfids.get_feature_names()
+                            best_features = [feature_names[i] for i in svd.components_[0].argsort()[::-1]]
+                            self.preprocess_decisions["tfidf_best_features_train"] = best_features[:final_components]
+                            svdMatrix = svd.transform(all_embeddings)
+                            tfidf_df = pd.DataFrame(svdMatrix, columns=[i for i in range(0, final_components)])
                             tfidf_df = tfidf_df.add_prefix("tfids_")
                             df = pd.concat([df, tfidf_df], axis=1)
                         nlp_columns.append(text_col)
@@ -526,7 +557,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                                      ngram_range=ngram_range
                                      )
             X_test = self.tfidf_pca(X_test,
-                                    self.nlp_columns, mode='transform',
+                                    text_columns, mode='transform',
                                     pca_pos_tags=pca_pos_tags,
                                     ngram_range=ngram_range
                                     )
@@ -538,13 +569,19 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            tfids = TfidfVectorizer(strip_accents="unicode", max_features=20000)
+            tfids = TfidfVectorizer(strip_accents='unicode', max_features=25000, max_df=0.85, min_df=5, norm='l2')
             tfids.fit(X_train[self.nlp_transformer_columns])
             vectors = tfids.transform(X_train[self.nlp_transformer_columns])
             vectors_df = pd.DataFrame(vectors.todense(), columns=tfids.get_feature_names())
             smt = SMOTE(random_state=777, k_neighbors=1)
             X_SMOTE, y_SMOTE = smt.fit_sample(vectors_df, Y_train)
             X_train = pd.DataFrame(X_SMOTE.todense(), columns=tfids.get_feature_names())
+            print(X_train)
+            Y_train = y_SMOTE
+            del vectors
+            del vectors_df
+            del smt
+            _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def get_synonyms(self, word):

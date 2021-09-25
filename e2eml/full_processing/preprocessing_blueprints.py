@@ -55,7 +55,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.datetime_converter(datetime_handling='all')
         if self.blueprint_step_selection_non_nlp["pos_tagging_pca"]:
             self.pos_tagging_pca(pca_pos_tags=True)
-        if self.blueprint_step_selection_non_nlp["append_text_sentiment_score"]:
+        if self.blueprint_step_selection_non_nlp["append_text_sentiment_score"] and len(self.nlp_transformer_columns)>0:
             self.append_text_sentiment_score()
         if self.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"]:
             self.tfidf_vectorizer_to_pca(pca_pos_tags=True)

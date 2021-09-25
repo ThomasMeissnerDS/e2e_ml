@@ -18,6 +18,7 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, Gradien
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.multiclass import OneVsRestClassifier
 from pytorch_tabnet.tab_model import TabNetClassifier
 from pytorch_tabnet.pretraining import TabNetPretrainer
 from pytorch_tabnet.metrics import Metric
@@ -345,6 +346,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 param = {
                     'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
                     'l1_ratio': trial.suggest_loguniform('l1_ratio', 1e-3, 0.9999),
+                    'epsilon': trial.suggest_loguniform('epsilon', 1e-3, 0.3),
                     'max_iter': trial.suggest_int('max_iter', 10, 30000),
                     'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
                     'normalize': trial.suggest_categorical("normalize", [True, False]),
@@ -356,11 +358,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                                       l1_ratio=param["l1_ratio"],
                                       power_t=param["power_t"],
                                       penalty='elasticnet',
+                                      epsilon=param["epsilon"],
                                       loss=loss,
                                       early_stopping=True,
+                                      validation_fraction=0.2,
+                                      class_weight='balanced',
                                       random_state=42).fit(X_train, Y_train)
                 try:
-                    scores = cross_val_score(model, X_train, Y_train, cv=10, scoring=metric)
+                    scores = cross_val_score(model, X_train, Y_train, cv=5, scoring=metric)
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
@@ -391,8 +396,12 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                                   penalty='elasticnet',
                                   loss=best_parameters["loss"],
                                   power_t=best_parameters["power_t"],
+                                  epsilon=best_parameters["epsilon"],
                                   early_stopping=True,
+                                  validation_fraction=0.2,
+                                  class_weight='balanced',
                                   random_state=42).fit(X_train, Y_train)
+
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model

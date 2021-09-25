@@ -2727,9 +2727,13 @@ class PreProcessing:
             fig = optuna.visualization.plot_optimization_history(study)
             self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
             fig.show()
-            fig = optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_param_importance"] = fig
-            fig.show()
+
+            if len(X_train.columns) <= 1000:
+               fig = optuna.visualization.plot_param_importances(study)
+               self.optuna_studies[f"{algorithm}_param_importance"] = fig
+               fig.show()
+            else:
+                print("Skipped calculating feature importance due to expected runtime being too long.")
 
             best_feature_combination = study.best_trial.params
             final_features = []
