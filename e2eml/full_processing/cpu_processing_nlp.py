@@ -286,7 +286,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             # nlp = spacy.load('en_core_web_trf')
         # nlp = spacy.load('en_core_web_lg')
         with nlp.disable_pipes():
-            vectors = np.array([nlp(text).vector for text in df[text_column]], dtype=object)
+            vectors = [nlp(text).vector for text in df[text_column]]
         return vectors
 
     def get_spacy_col_names(self):
