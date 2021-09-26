@@ -455,15 +455,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     tfidf_df_pca = pos_df[tfidf_pca_cols]
                     df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
                 else:
-                    all_embeddings = tfids.fit_transform(df[text_col]).toarray()
-                    final_components = 1000
-                    svd = TruncatedSVD(n_components=final_components)
-                    svd.fit(all_embeddings)
-                    feature_names = tfids.get_feature_names()
-                    best_features = [feature_names[i] for i in svd.components_[0].argsort()[::-1]]
-                    self.preprocess_decisions["tfidf_best_features_test"] = best_features[:final_components]
-                    svdMatrix = svd.transform(all_embeddings)
-                    tfidf_df = pd.DataFrame(svdMatrix, columns=[i for i in range(0, final_components)])
+                    all_embeddings = tfids.transform(df[text_col]).toarray()
+                    tfidf_df = pd.DataFrame(all_embeddings, columns=tfids.get_feature_names())
                     tfidf_df = tfidf_df.add_prefix("tfids_")
                     df = pd.concat([df, tfidf_df], axis=1)
         elif mode == 'fit':
@@ -500,14 +493,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                             df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
                         else:
                             all_embeddings = tfids.fit_transform(df[text_col]).toarray()
-                            final_components = 1000
-                            svd = TruncatedSVD(n_components=final_components)
-                            svd.fit(all_embeddings)
-                            feature_names = tfids.get_feature_names()
-                            best_features = [feature_names[i] for i in svd.components_[0].argsort()[::-1]]
-                            self.preprocess_decisions["tfidf_best_features_train"] = best_features[:final_components]
-                            svdMatrix = svd.transform(all_embeddings)
-                            tfidf_df = pd.DataFrame(svdMatrix, columns=[i for i in range(0, final_components)])
+                            tfidf_df = pd.DataFrame(all_embeddings, columns=tfids.get_feature_names())
                             tfidf_df = tfidf_df.add_prefix("tfids_")
                             df = pd.concat([df, tfidf_df], axis=1)
                         nlp_columns.append(text_col)

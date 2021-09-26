@@ -956,10 +956,15 @@ class PreProcessing:
                 log_array = np.log1p(X_train[col])
                 log_array[np.isfinite(log_array) == False] = 0
                 if overwrite_orig_col:
+                    X_train[col] = log_array
+                else:
                     X_train[f"{col}_unskewed"] = log_array
+
                 log_array = np.log1p(X_test[col])
                 log_array[np.isfinite(log_array) == False] = 0
                 if overwrite_orig_col:
+                    X_test[col] = log_array
+                else:
                     X_test[f"{col}_unskewed"] = log_array
             logging.info('Finished skewness removal.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
