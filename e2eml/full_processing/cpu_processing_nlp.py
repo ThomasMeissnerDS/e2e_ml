@@ -464,7 +464,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 text_cols = self.nlp_columns
             else:
                 pass
-            # if self.nlp_columns
+            # if self.nlp_columnss
             nlp_columns = []
             for text_col in text_cols:
                 try:
