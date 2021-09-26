@@ -518,7 +518,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             pass
         return df
 
-    def tfidf_vectorizer_to_pca(self, pca_pos_tags=True, ngram_range=(1, 2)):
+    def tfidf_vectorizer_to_pca(self, pca_pos_tags=True, ngram_range=(1, 3)):
         self.get_current_timestamp(task='Start TFIDF to PCA loop')
         logging.info('Start TFIDF to PCA loop.')
         algorithm = 'spacy_pos'
@@ -555,7 +555,13 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            tfids = TfidfVectorizer(strip_accents='unicode', max_features=25000, max_df=0.85, min_df=5, norm='l2')
+            tfids = TfidfVectorizer(
+                                    strip_accents='unicode',
+                                    max_features=25000,
+                                    max_df=0.85,
+                                    min_df=5,
+                                    norm='l2',
+                                    sublinear_tf=True)
             tfids.fit(X_train[self.nlp_transformer_columns])
             vectors = tfids.transform(X_train[self.nlp_transformer_columns])
             vectors_df = pd.DataFrame(vectors.todense(), columns=tfids.get_feature_names())
