@@ -204,6 +204,9 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 2.1.2
+ - Improved TFIDF vectorizer performance & non transformer NLP applications
+ - Improved POS tagging stability
 * 2.1.1
  - Completely overworked preprocessing setup (changed API). Preprocessing blueprints can be customized through a class
    attribute now

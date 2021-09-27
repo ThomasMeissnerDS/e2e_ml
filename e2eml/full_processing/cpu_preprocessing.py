@@ -193,7 +193,7 @@ class PreProcessing:
             "clustering_as_a_feature_gaussian_mixture_loop": True,
             "reduce_memory_footprint": False,
             "automated_feature_selection": True,
-            "bruteforce_random_feature_selection": True, # slow
+            "bruteforce_random_feature_selection": False, # slow
             "sort_columns_alphabetically": True,
             "scale_data": False,
             "smote": False
