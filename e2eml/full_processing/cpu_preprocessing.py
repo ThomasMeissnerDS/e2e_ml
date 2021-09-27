@@ -208,6 +208,15 @@ class PreProcessing:
             "synonym_language": 'english'
         }
 
+        self.pos_tagging_languages = {
+            # https://spacy.io/models/es
+            "german": "de_core_news_sm",
+            "french": "fr_core_news_sm",
+            "english": "en_core_web_sm",
+            "italian": "it_core_news_sm",
+            "portugese": "pt_core_news_sm",
+            "spanish": "es_core_news_sm"}
+
         """
         NLTK compatible languages
         ['hungarian',
