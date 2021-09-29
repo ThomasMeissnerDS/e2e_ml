@@ -2757,8 +2757,9 @@ class PreProcessing:
                 else:
                     pass
 
-            X_train = X_train[final_features]
-            X_test = X_test[final_features]
+            X_train = X_train[final_features].copy()
+            X_test = X_test[final_features].copy()
+            _ = gc.collect()
             self.selected_feats = final_features
             for i in final_features:
                 print(f" Final features are... {i}.")
