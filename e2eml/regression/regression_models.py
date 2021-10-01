@@ -158,7 +158,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
@@ -268,7 +268,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
@@ -377,7 +377,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
@@ -487,7 +487,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
@@ -878,7 +878,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         return result['test-gamma-nloglik-mean'].mean()
 
                 algorithm = 'xgboost'
-                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
 
                 if tune_mode == 'simple':
                     study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
@@ -1028,7 +1028,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                     'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
                     'linear_lambda': trial.suggest_loguniform('linear_lambda', 1, 1e6),
-                    'max_depth': trial.suggest_int('max_depth', 2, 8),
+                    #'max_depth': trial.suggest_int('max_depth', 2, 8),
                     'num_leaves': trial.suggest_int('num_leaves', 2, 512),
                     'feature_fraction': trial.suggest_uniform('feature_fraction', 0.3, 1.0),
                     'bagging_fraction': trial.suggest_uniform('bagging_fraction', 0.1, 1),
@@ -1054,7 +1054,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     return avg_result
 
             algorithm = 'lgbm'
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
 
             study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["lgbm"], timeout=self.hyperparameter_tuning_max_runtime_secs["lgbm"], gc_after_trial=True, show_progress_bar=True)
@@ -1076,7 +1076,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 'lambda_l1': lgbm_best_param["lambda_l1"],
                 'lambda_l2': lgbm_best_param["lambda_l2"],
                 'linear_lambda': lgbm_best_param["linear_lambda"],
-                'max_depth': lgbm_best_param["max_depth"],
+                #'max_depth': lgbm_best_param["max_depth"],
                 'num_leaves': lgbm_best_param["num_leaves"],
                 'feature_fraction': lgbm_best_param["feature_fraction"],
                 'bagging_fraction': lgbm_best_param["bagging_fraction"],
@@ -1361,7 +1361,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     return mae
 
             algorithm = 'ngboost'
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm} tuning")
             study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["ngboost"],
                            timeout=self.hyperparameter_tuning_max_runtime_secs["ngboost"],

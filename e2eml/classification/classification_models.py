@@ -240,7 +240,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
@@ -371,7 +371,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
@@ -509,7 +509,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
@@ -959,7 +959,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                             return result['test-mlogloss-mean'].mean()
 
                     algorithm = 'xgboost'
-                    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+                    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
                     if tune_mode == 'simple':
                         study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm} tuning")
                         logging.info(f'Start Xgboost simple validation.')
@@ -1038,7 +1038,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                             return result['test-mlogloss-mean'].mean()
 
                     algorithm = 'xgboost'
-                    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+                    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
                     if tune_mode == 'simple':
                         logging.info(f'Start Xgboost simple validation.')
                         study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm} tuning")
@@ -1232,7 +1232,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
                         'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                         'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
-                        'max_depth': trial.suggest_int('max_depth', 2, 8),
+                        #'max_depth': trial.suggest_int('max_depth', 2, 8),
                         'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                         'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
                         'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
@@ -1258,7 +1258,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         return avg_result
 
                 algorithm = 'lgbm'
-                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
                 if tune_mode == 'simple':
                     study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm} tuning")
                 else:
@@ -1281,7 +1281,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     'objective': 'binary',
                     'metric': 'binary_logloss',
                     # 'scale_pos_weight': lgbm_best_param["scale_pos_weight"],
-                    'max_depth': lgbm_best_param["max_depth"],
+                    #'max_depth': lgbm_best_param["max_depth"],
                     'num_boost_round': lgbm_best_param["num_boost_round"],
                     'lambda_l1': lgbm_best_param["lambda_l1"],
                     'lambda_l2': lgbm_best_param["lambda_l2"],
@@ -1316,7 +1316,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         'num_class': nb_classes,
                         'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                         'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
-                        'max_depth': trial.suggest_int('max_depth', 2, 8),
+                        #'max_depth': trial.suggest_int('max_depth', 2, 8), #-1
                         'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                         'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
                         'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
@@ -1347,7 +1347,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         return avg_result
 
                 algorithm = 'lgbm'
-                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
                 if tune_mode == 'simple':
                     study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm} tuning")
                 else:
@@ -1372,7 +1372,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     'num_class': nb_classes,
                     'lambda_l1': lgbm_best_param["lambda_l1"],
                     'lambda_l2': lgbm_best_param["lambda_l2"],
-                    'max_depth': lgbm_best_param["max_depth"],
+                    #'max_depth': lgbm_best_param["max_depth"],
                     'num_leaves': lgbm_best_param["num_leaves"],
                     'feature_fraction': lgbm_best_param["feature_fraction"],
                     'bagging_freq': lgbm_best_param["bagging_freq"],
@@ -1527,7 +1527,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 matthews = matthews_corrcoef(Y_test, predicted_classes)
                 return matthews
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             study = optuna.create_study(direction="maximize", sampler=sampler, study_name=f"{algorithm} tuning")
             study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["sklearn_ensemble"], timeout=self.hyperparameter_tuning_max_runtime_secs["sklearn_ensemble"], gc_after_trial=True, show_progress_bar=True)
             best_variant = study.best_trial.params["ensemble_variant"]
