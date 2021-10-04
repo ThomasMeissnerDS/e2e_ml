@@ -107,7 +107,7 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
         pred_df = pred_df.round({"probabilities": 2})
         pred_df_gr = pred_df.groupby(by=["classes", "probabilities"]).agg({"dummy_counter": "count"}).reset_index()
         pred_df_gr = pred_df_gr.rename(columns={"dummy_counter": "nb_predictions"})
-        fig = px.line(pred_df_gr, x="probabilities", y="nb_predictions", color='classes',
+        fig = px.histogram(pred_df_gr, x="probabilities", y="nb_predictions", color='classes', nbins=10,
                       title='Distribution of predicted probabailities and classes.')
         fig.show()
 

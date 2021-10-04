@@ -191,6 +191,7 @@ class PreProcessing:
             "clustering_as_a_feature_dbscan": True,
             "clustering_as_a_feature_kmeans_loop": True,
             "clustering_as_a_feature_gaussian_mixture_loop": True,
+            "pca_clustering_results": True,
             "reduce_memory_footprint": False,
             "automated_feature_selection": True,
             "bruteforce_random_feature_selection": False, # slow
@@ -1396,13 +1397,66 @@ class PreProcessing:
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
+    def pca_clustering(self, df, mode='fit'):
+        """
+        Takes a Dataframe and searchs for features containing "clustering". Reduces these to two PCA dimensions, but keeps
+        the original colum,ns as well.
+        :param df: Pandas Dataframe
+        :param mode: "fit" and "transform"
+        :return: Returns extended Dataframe
+        """
+        if mode == 'transform':
+            all_cols = df.columns
+            cluster_columns = [x for x in all_cols if "cluster" not in x]
+            cluster_df = df[cluster_columns].copy()
+            pca = self.preprocess_decisions[f"cluster_pca"]
+            comps = pca.transform(cluster_df.values)
+            self.preprocess_decisions[f"cluster_pca"] = pca
+            cluster_pca_cols = [f'Cluster PC-1', f'Cluster PC-2']
+            pos_df = pd.DataFrame(comps, columns=cluster_pca_cols)
+            tfidf_df_pca = pos_df[cluster_pca_cols]
+            df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
+        elif mode == 'fit':
+            all_cols = df.columns
+            cluster_columns = [x for x in all_cols if "cluster" not in x]
+            cluster_df = df[cluster_columns].copy()
+            pca = PCA(n_components=2)
+            comps = pca.fit_transform(cluster_df.values)
+            self.preprocess_decisions[f"cluster_pca"] = pca
+            cluster_pca_cols = [f'Cluster PC-1', f'Cluster PC-2']
+            pos_df = pd.DataFrame(comps, columns=cluster_pca_cols)
+            tfidf_df_pca = pos_df[cluster_pca_cols]
+            df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
+        return df
+
+    def pca_clustering_results(self):
+        """
+        Adds PCA of clusterings as part of the blueprint pipeline.
+        :return: Modifies class attributes.
+        """
+        self.get_current_timestamp('PCA the clustering results.')
+        logging.info(f'Started to PCA the clustering results.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        if self.prediction_mode:
+            self.dataframe = self.pca_clustering(self.dataframe, mode='transform')
+            logging.info(f'Finished to PCA the clustering results.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            return self.dataframe
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train = self.pca_clustering(X_train, mode='fit')
+            X_test = self.pca_clustering(X_test, mode='transform')
+            logging.info(f'Finished to PCA the clustering results.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
     def delete_high_null_cols(self, threshold=0.05):
         """
         Takes in a dataframe and removes columns, which have more NULLs than the given threshold.
         :param threshold: Maximum percentage of NULLs in a column allowed.
         :return: Updates test and train class attributes.
         """
-        self.get_current_timestamp(' Delete columns with high share of NULLs')
+        self.get_current_timestamp('Delete columns with high share of NULLs')
         if self.prediction_mode:
             for high_null_col in self.preprocess_decisions["deleted_high_null_cols"]:
                 del self.dataframe[high_null_col]
@@ -2024,7 +2078,7 @@ class PreProcessing:
                         except Exception:
                             pass
 
-                    filtered_columns = [ x for x in filtered_columns if "tfids_" not in x]
+                    filtered_columns = [x for x in filtered_columns if "tfids_" not in x]
                     #filtered_columns = [ x for x in filtered_columns if "POS PC-" not in x]
                     #filtered_columns = [ x for x in filtered_columns if "textblob_sentiment_score" not in x]
                     #filtered_columns = [ x for x in filtered_columns if "TFIDF PC" not in x]

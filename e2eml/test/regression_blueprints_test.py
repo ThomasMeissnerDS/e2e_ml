@@ -67,8 +67,8 @@ def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender
                                                     "sklearn_ensemble": False
                                                     }
 
-    titanic_auto_ml.ml_special_regression_multiclass_full_processing_multimodel_avg_blender()
-    titanic_auto_ml.ml_special_regression_multiclass_full_processing_multimodel_avg_blender(val_df)
+    titanic_auto_ml.ml_special_regression_full_processing_multimodel_avg_blender()
+    titanic_auto_ml.ml_special_regression_full_processing_multimodel_avg_blender(val_df)
     val_y_hat = titanic_auto_ml.predicted_values['blended_preds']
     mae = mean_absolute_error(val_df_target, val_y_hat)
     finished = True

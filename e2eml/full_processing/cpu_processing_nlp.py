@@ -476,7 +476,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                                                 strip_accents='unicode',
                                                 max_features=25000,
                                                 max_df=0.85,
-                                                min_df=5,
+                                                min_df=3,
                                                 norm='l2',
                                                 sublinear_tf=True)
                         self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_{text_col}"] = tfids
@@ -559,7 +559,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                                     strip_accents='unicode',
                                     max_features=25000,
                                     max_df=0.85,
-                                    min_df=5,
+                                    min_df=3,
                                     norm='l2',
                                     sublinear_tf=True)
             tfids.fit(X_train[self.nlp_transformer_columns])

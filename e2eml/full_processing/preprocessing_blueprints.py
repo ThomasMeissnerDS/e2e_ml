@@ -98,6 +98,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
                     self.clustering_as_a_feature(algorithm='gaussian', nb_clusters=nb_cluster)
                 except ValueError:
                     print("Clustering as a feature skipped due to ValueError.")
+        if self.blueprint_step_selection_non_nlp["pca_clustering_results"]:
+            self.pca_clustering_results()
         if self.blueprint_step_selection_non_nlp["reduce_memory_footprint"]:
             if self.low_memory_mode:
                 self.reduce_memory_footprint()

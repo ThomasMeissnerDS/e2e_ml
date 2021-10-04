@@ -131,6 +131,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "tabnet": 3,
                                                     "ngboost": 3,
                                                     "sklearn_ensemble": 3,
+                                                    "caatboost": 3,
                                                     "ridge": 3,
                                                     "bruteforce_random": 10}
     titanic_auto_ml.special_blueprint_algorithms = {"ridge": True,
@@ -139,7 +140,8 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "lgbm": True,
                                                     "tabnet": False,
                                                     "vowpal_wabbit": False,
-                                                    "sklearn_ensemble": False
+                                                    "sklearn_ensemble": False,
+                                                    "catboost": True
                                                     }
 
 

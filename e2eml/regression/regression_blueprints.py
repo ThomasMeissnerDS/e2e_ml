@@ -376,7 +376,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
-    def ml_special_regression_multiclass_full_processing_multimodel_avg_blender(self, df=None):
+    def ml_special_regression_full_processing_multimodel_avg_blender(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
