@@ -196,6 +196,7 @@ class PreProcessing:
             "automated_feature_selection": True,
             "bruteforce_random_feature_selection": False, # slow
             "sort_columns_alphabetically": True,
+            "synthetic_data_augmentation": False,
             "scale_data": False,
             "smote": False
         }
@@ -2357,12 +2358,19 @@ class PreProcessing:
                 metric = 'neg_mean_squared_error'
                 problem = 'regression'
 
+            def create_trainers():
+                if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+                    model_1 = VWClassifier()
+                    model_2 = lgb.LGBMClassifier()
+                else:
+                    model_1 = VWRegressor()
+                    model_2 = lgb.LGBMRegressor()
+                return model_1, model_2
+
             if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-                model_1 = VWClassifier()
-                model_2 = lgb.LGBMClassifier()
+                model_1, model_2 = create_trainers()
             else:
-                model_1 = VWRegressor()
-                model_2 = lgb.LGBMRegressor()
+                model_1, model_2 = create_trainers()
                 # sort on A
                 X_train_sample.sort_values(self.target_variable, inplace=True)
                 # create bins
@@ -2374,11 +2382,27 @@ class PreProcessing:
 
             # get benchmark
             try:
+                # train scores
                 scores_1 = cross_val_score(model_1, X_train_sample, Y_train_sample, cv=10, scoring=metric)
                 scores_2 = cross_val_score(model_2, X_train_sample, Y_train_sample, cv=10, scoring=metric)
                 mae_1 = np.mean(scores_1)
                 mae_2 = np.mean(scores_2)
-                benchmark_mae = (mae_1+mae_2)/2
+                train_mae = (mae_1+mae_2)/2
+                # test scores
+                model_1.fit(X_train_sample, Y_train_sample)
+                model_2.fit(X_train_sample, Y_train_sample)
+                scores_1_test = model_1.predict(X_test)
+                scores_2_test = model_2.predict(X_test)
+                try:
+                    matthew_1 = matthews_corrcoef(Y_test, scores_1_test)
+                except Exception:
+                    matthew_1 = 0
+                try:
+                    matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
+                except Exception:
+                    matthew_2 = 0
+                test_mae = (matthew_1+matthew_2)/2
+                benchmark_mae = (train_mae+test_mae)/2-abs(train_mae-test_mae)
             except Exception:
                 benchmark_mae = 0
 
@@ -2481,14 +2505,31 @@ class PreProcessing:
                 Y_temp = temp_df[self.target_variable]
                 temp_df.drop(self.target_variable, axis=1)
 
+
+                # get train scores
+                model_1, model_2 = create_trainers()
+                scores_1 = cross_val_score(model_1, temp_df, Y_temp, cv=10, scoring=metric)
+                scores_2 = cross_val_score(model_2, temp_df, Y_temp, cv=10, scoring=metric)
+                mae_1 = np.mean(scores_1)
+                mae_2 = np.mean(scores_2)
+                train_mae = (mae_1+mae_2)/2
+                # test scores
+                model_1, model_2 = create_trainers()
+                model_1.fit(temp_df, Y_temp)
+                model_2.fit(temp_df, Y_temp)
+                scores_1_test = model_1.predict(X_test)
+                scores_2_test = model_2.predict(X_test)
                 try:
-                    scores_1 = cross_val_score(model_1, temp_df, Y_temp, cv=10, scoring=metric)
-                    scores_2 = cross_val_score(model_2, temp_df, Y_temp, cv=10, scoring=metric)
-                    mae_1 = np.mean(scores_1)
-                    mae_2 = np.mean(scores_2)
-                    mae = (mae_1+mae_2)/2
+                    matthew_1 = matthews_corrcoef(Y_test, scores_1_test)
                 except Exception:
-                    mae = 0
+                    matthew_1 = 0
+                try:
+                   matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
+                except Exception:
+                    matthew_2 = 0
+                test_mae = (matthew_1+matthew_2)/2
+                mae = (train_mae+test_mae)/2-abs(train_mae-test_mae)
+
                 return mae
 
             algorithm = 'synthetic_data_augmentation'
@@ -2619,7 +2660,9 @@ class PreProcessing:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
             for col in X_train.columns.to_list():
+                print(f"Started augmenting column {col}")
                 X_train[col] = self.synthetic_data_generator(column_name=col)
+                print(f"Finished augmenting column {col}")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def automated_feature_selection(self, metric=None):

@@ -114,7 +114,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.automated_feature_selection()
         if self.blueprint_step_selection_non_nlp["bruteforce_random_feature_selection"]:
             self.bruteforce_random_feature_selection()
-        #self.synthetic_data_augmentation()
+        if self.blueprint_step_selection_non_nlp["synthetic_data_augmentation"]:
+            self.synthetic_data_augmentation()
         if self.blueprint_step_selection_non_nlp["sort_columns_alphabetically"]:
             self.sort_columns_alphabetically()
 
