@@ -279,9 +279,9 @@ class PreProcessing:
             rec_batch_size = int(rec_batch_size)
         else:
             rec_batch_size = int(rec_batch_size)+1
-        if rec_batch_size > 8192:
-            rec_batch_size = 8192
-            virtual_batch_size = 1024
+        if rec_batch_size > 16384:
+            rec_batch_size = 16384
+            virtual_batch_size = 4096
         else:
             virtual_batch_size = int(rec_batch_size/4)
 
@@ -313,7 +313,7 @@ class PreProcessing:
                                                        "sgd": 2*60*60,
                                                        "bruteforce_random": 2*60*60}
 
-        self.brute_force_selection_sample_size = 100000
+        self.brute_force_selection_sample_size = 10000
         self.brute_force_selection_base_learner = 'double' # 'lgbm', 'vowpal_wabbit', 'auto
 
         if self.class_problem == 'regression':
@@ -2321,7 +2321,7 @@ class PreProcessing:
                 X_train.drop(self.target_variable, axis=1)
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def synthetic_data_generator(self, column_name=None, metric=None):
+    def synthetic_data_generator(self, column_name=None, metric=None, sample_size=None):
         self.get_current_timestamp('Synthetic data augmentation')
 
         if self.prediction_mode:
@@ -2330,13 +2330,9 @@ class PreProcessing:
             logging.info('Start creating synthetic data.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            data_size = len(X_train.index)
-
-            # get sample size to run brute force feature selection against
-            if self.brute_force_selection_sample_size > data_size:
-                sample_size = len(X_train.index)
-            else:
-                sample_size = self.brute_force_selection_sample_size
+            float_cols = [x for x, y in self.detected_col_types.items() if y in ['float', 'int', 'bool']]
+            X_train = X_train[float_cols]
+            X_test = X_test[float_cols]
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
@@ -2360,17 +2356,17 @@ class PreProcessing:
 
             def create_trainers():
                 if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-                    model_1 = VWClassifier()
+                    #model_1 = VWClassifier()
                     model_2 = lgb.LGBMClassifier()
                 else:
-                    model_1 = VWRegressor()
+                   # model_1 = VWRegressor()
                     model_2 = lgb.LGBMRegressor()
-                return model_1, model_2
+                return model_2
 
             if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-                model_1, model_2 = create_trainers()
+                model_2 = create_trainers()
             else:
-                model_1, model_2 = create_trainers()
+                model_2 = create_trainers()
                 # sort on A
                 X_train_sample.sort_values(self.target_variable, inplace=True)
                 # create bins
@@ -2383,25 +2379,17 @@ class PreProcessing:
             # get benchmark
             try:
                 # train scores
-                scores_1 = cross_val_score(model_1, X_train_sample, Y_train_sample, cv=10, scoring=metric)
                 scores_2 = cross_val_score(model_2, X_train_sample, Y_train_sample, cv=10, scoring=metric)
-                mae_1 = np.mean(scores_1)
                 mae_2 = np.mean(scores_2)
-                train_mae = (mae_1+mae_2)/2
+                train_mae = mae_2
                 # test scores
-                model_1.fit(X_train_sample, Y_train_sample)
                 model_2.fit(X_train_sample, Y_train_sample)
-                scores_1_test = model_1.predict(X_test)
                 scores_2_test = model_2.predict(X_test)
-                try:
-                    matthew_1 = matthews_corrcoef(Y_test, scores_1_test)
-                except Exception:
-                    matthew_1 = 0
                 try:
                     matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
                 except Exception:
                     matthew_2 = 0
-                test_mae = (matthew_1+matthew_2)/2
+                test_mae = matthew_2
                 benchmark_mae = (train_mae+test_mae)/2-abs(train_mae-test_mae)
             except Exception:
                 benchmark_mae = 0
@@ -2503,31 +2491,23 @@ class PreProcessing:
 
                 temp_df = pd.concat(temp_df_list)
                 Y_temp = temp_df[self.target_variable]
-                temp_df.drop(self.target_variable, axis=1)
-
+                temp_df = temp_df.drop(self.target_variable, axis=1)
 
                 # get train scores
-                model_1, model_2 = create_trainers()
-                scores_1 = cross_val_score(model_1, temp_df, Y_temp, cv=10, scoring=metric)
+                model_2 = create_trainers()
                 scores_2 = cross_val_score(model_2, temp_df, Y_temp, cv=10, scoring=metric)
-                mae_1 = np.mean(scores_1)
                 mae_2 = np.mean(scores_2)
-                train_mae = (mae_1+mae_2)/2
+                train_mae = mae_2
                 # test scores
-                model_1, model_2 = create_trainers()
-                model_1.fit(temp_df, Y_temp)
+                model_2 = create_trainers()
                 model_2.fit(temp_df, Y_temp)
-                scores_1_test = model_1.predict(X_test)
                 scores_2_test = model_2.predict(X_test)
-                try:
-                    matthew_1 = matthews_corrcoef(Y_test, scores_1_test)
-                except Exception:
-                    matthew_1 = 0
                 try:
                    matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
                 except Exception:
                     matthew_2 = 0
-                test_mae = (matthew_1+matthew_2)/2
+
+                test_mae = matthew_2
                 mae = (train_mae+test_mae)/2-abs(train_mae-test_mae)
 
                 return mae
@@ -2618,7 +2598,7 @@ class PreProcessing:
                     temp_df_list.append(X_train_sample_class)
 
             temp_df = pd.concat(temp_df_list)
-            temp_df.drop(self.target_variable, axis=1)
+            temp_df = temp_df.drop(self.target_variable, axis=1)
 
             # save copy of ol column
             original_col = X_train_sample[column_name].copy()
@@ -2627,17 +2607,14 @@ class PreProcessing:
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
             try:
-                scores_1 = cross_val_score(model_1, X_train_sample, Y_temp_sample, cv=10, scoring=metric)
                 scores_2 = cross_val_score(model_2, X_train_sample, Y_temp_sample, cv=10, scoring=metric)
-                mae_1 = np.mean(scores_1)
                 mae_2 = np.mean(scores_2)
-                synthetic_mae = (mae_1+mae_2)/2
+                synthetic_mae = mae_2
             except Exception:
                 synthetic_mae = 0
 
             print(f"The synthetic score is {synthetic_mae}.")
 
-            del model_1
             del model_2
             del temp_df_list
             _ = gc.collect()
@@ -2659,10 +2636,21 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
+            data_size = len(X_train.index)
+
+            # get sample size to run brute force feature selection against
+            if self.brute_force_selection_sample_size > data_size:
+                sample_size = len(X_train.index)
+            else:
+                sample_size = self.brute_force_selection_sample_size
+
             for col in X_train.columns.to_list():
-                print(f"Started augmenting column {col}")
-                X_train[col] = self.synthetic_data_generator(column_name=col)
-                print(f"Finished augmenting column {col}")
+                if self.detected_col_types[col] == 'float':
+                    print(f"Started augmenting column {col}")
+                    X_train[col] = self.synthetic_data_generator(column_name=col, sample_size=sample_size)
+                    print(f"Finished augmenting column {col}")
+                else:
+                    print(f"Skipped augmentation for column {col}, because {col} is not of type float.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def automated_feature_selection(self, metric=None):
