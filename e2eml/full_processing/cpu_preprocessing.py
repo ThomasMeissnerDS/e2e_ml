@@ -34,6 +34,9 @@ import os
 import psutil
 import time
 import random
+warnings.filterwarnings("ignore")
+from copy import deepcopy
+#from IPython.display import clear_output
 
 pd.options.display.max_colwidth = 1000
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
@@ -1668,11 +1671,11 @@ class PreProcessing:
         else:
             filler = np.nan
         if self.prediction_mode:
-            self.dataframe.replace([np.inf, -np.inf], filler)
+            self.dataframe = self.dataframe.replace([np.inf, -np.inf], filler)
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train.replace([np.inf, -np.inf], filler)
-            X_test.replace([np.inf, -np.inf], filler)
+            X_train = X_train.replace([np.inf, -np.inf], filler)
+            X_test = X_test.replace([np.inf, -np.inf], filler)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def isolation_forest_identifier(self, how='append', threshold=0):
@@ -2321,7 +2324,16 @@ class PreProcessing:
                 X_train.drop(self.target_variable, axis=1)
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def synthetic_data_generator(self, column_name=None, metric=None, sample_size=None):
+    def create_trainers(self):
+        if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+            #model_1 = VWClassifier()
+            model_2 = lgb.LGBMClassifier(random_state=42)
+        else:
+            # model_1 = VWRegressor()
+            model_2 = lgb.LGBMRegressor(random_state=42)
+        return model_2
+
+    def synthetic_floating_data_generator(self, column_name=None, metric=None, sample_size=None, eval_model=None, trial_sampler=None):
         self.get_current_timestamp('Synthetic data augmentation')
 
         if self.prediction_mode:
@@ -2331,8 +2343,8 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             float_cols = [x for x, y in self.detected_col_types.items() if y in ['float', 'int', 'bool']]
-            X_train = X_train[float_cols]
-            X_test = X_test[float_cols]
+            X_train = X_train[float_cols].copy()
+            X_test = X_test[float_cols].copy()
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
@@ -2354,19 +2366,12 @@ class PreProcessing:
                 metric = 'neg_mean_squared_error'
                 problem = 'regression'
 
-            def create_trainers():
-                if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-                    #model_1 = VWClassifier()
-                    model_2 = lgb.LGBMClassifier()
-                else:
-                   # model_1 = VWRegressor()
-                    model_2 = lgb.LGBMRegressor()
-                return model_2
+            model_2 = eval_model
+            model_2_copy = deepcopy(model_2)
 
             if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-                model_2 = create_trainers()
+                pass
             else:
-                model_2 = create_trainers()
                 # sort on A
                 X_train_sample.sort_values(self.target_variable, inplace=True)
                 # create bins
@@ -2396,6 +2401,25 @@ class PreProcessing:
 
             print(f"The benchmark score is {benchmark_mae}.")
 
+            # get core characteristics
+            dist_max = int(X_train_sample[column_name].max()*1.2)
+            dist_min = int(X_train_sample[column_name].min()/1.2)
+            dist_median = X_train_sample[column_name].median()
+            dist_median_lowq = X_train_sample[column_name].quantile(0.25)
+            dist_median_high = X_train_sample[column_name].quantile(0.75)
+
+            # make compatible with log distributions
+            if dist_max-dist_min < 1:
+                dist_max += 1
+            if dist_median_high-dist_median_lowq < 1:
+                dist_median_high += 1
+            if dist_min == 0:
+                dist_min += 1
+                dist_max += 1
+            if dist_median_lowq == 0:
+                dist_median_lowq += 1
+                dist_median_high += 1
+
             def objective(trial):
                 param = {}
 
@@ -2412,18 +2436,22 @@ class PreProcessing:
                                                                      ["Random",
                                                                       "Controlled"])
                 p_value = trial.suggest_loguniform('p_value', 0.05, 0.95)
-                mu = trial.suggest_int('mu', 1, 10000)
-                scale = trial.suggest_int('scale', 1, 10000)
-                parteo_b = trial.suggest_loguniform('parteo_b', 1e-3, 1e6)
+                mu = trial.suggest_loguniform('mu', dist_median_lowq, dist_median_high)
+                scale = trial.suggest_int('scale', dist_min, dist_max)
+                parteo_b = trial.suggest_loguniform('parteo_b', dist_min, dist_max)
+                uniformity = trial.suggest_loguniform('uniformity', dist_min, dist_max)
 
-                random_factor = trial.suggest_int('random_factor', 1, 10000)
+                random_factor = trial.suggest_int('random_factor', dist_min, dist_max)
+                location = trial.suggest_int('location', dist_min, dist_max)
 
                 param["sample_distribution"] = sample_distribution
                 param["random_or_control_factor"] = random_or_control_factor
                 param["p_value"] = p_value
                 param["mu"] = mu
                 param["scale"] = scale
-                param["random_factor"] = parteo_b
+                param["parteo_b"] = parteo_b
+                param["random_factor"] = random_factor
+                param["location"] = location
 
                 temp_df_list = []
                 X_train_sample[self.target_variable] = Y_train_sample
@@ -2432,19 +2460,19 @@ class PreProcessing:
                         X_train_sample_class = X_train_sample[(X_train_sample[self.target_variable] == class_inst)]
                         size = len(X_train_sample_class.index)
                         if sample_distribution == 'Uniform':
-                            gen_data = np.random.choice(np.arange(0, 100), size, replace=True)
+                            gen_data = np.full((size,), uniformity)
                         elif sample_distribution == 'Binomial':
                             gen_data = binom.rvs(n=random_factor, p=p_value, size=size)
                         elif sample_distribution == 'Poisson':
                             gen_data = poisson.rvs(mu=mu, size=size)
                         elif sample_distribution == 'Exponential':
-                            gen_data = expon.rvs(scale=scale, loc=0, size=size)
+                            gen_data = expon.rvs(scale=scale, loc=location, size=size)
                         elif sample_distribution == 'Gamma':
                             gen_data = gamma.rvs(a=mu, size=size)
                         elif sample_distribution == 'Uniform':
                             gen_data = class_inst
                         elif sample_distribution == 'Normal':
-                            gen_data = norm.rvs(size=size, loc=0, scale=scale)
+                            gen_data = norm.rvs(size=size, loc=location, scale=scale)
                         elif sample_distribution == "Pareto":
                             gen_data = pareto.rvs(parteo_b, size=size)
                         elif sample_distribution == "Levy":
@@ -2463,19 +2491,19 @@ class PreProcessing:
                         size = len(X_train_sample_class.index)
                         class_inst = X_train_sample_class["bin"]
                         if sample_distribution == 'Uniform':
-                            gen_data = np.random.choice(np.arange(0, 100), size, replace=True)
+                            gen_data = np.full((size,), uniformity)
                         elif sample_distribution == 'Binomial':
                             gen_data = binom.rvs(n=random_factor, p=p_value, size=size)
                         elif sample_distribution == 'Poisson':
                             gen_data = poisson.rvs(mu=mu, size=size)
                         elif sample_distribution == 'Exponential':
-                            gen_data = expon.rvs(scale=scale, loc=0, size=size)
+                            gen_data = expon.rvs(scale=scale, loc=location, size=size)
                         elif sample_distribution == 'Gamma':
                             gen_data = gamma.rvs(a=mu, size=size)
                         elif sample_distribution == 'Uniform':
                             gen_data = class_inst
                         elif sample_distribution == 'Normal':
-                            gen_data = norm.rvs(size=size, loc=0, scale=scale)
+                            gen_data = norm.rvs(size=size, loc=location, scale=scale)
                         elif sample_distribution == "Pareto":
                             gen_data = pareto.rvs(parteo_b, size=size)
                         elif sample_distribution == "Levy":
@@ -2494,14 +2522,12 @@ class PreProcessing:
                 temp_df = temp_df.drop(self.target_variable, axis=1)
 
                 # get train scores
-                model_2 = create_trainers()
-                scores_2 = cross_val_score(model_2, temp_df, Y_temp, cv=10, scoring=metric)
+                scores_2 = cross_val_score(model_2_copy, temp_df, Y_temp, cv=10, scoring=metric)
                 mae_2 = np.mean(scores_2)
                 train_mae = mae_2
                 # test scores
-                model_2 = create_trainers()
-                model_2.fit(temp_df, Y_temp)
-                scores_2_test = model_2.predict(X_test)
+                model_2_copy.fit(temp_df, Y_temp)
+                scores_2_test = model_2_copy.predict(X_test)
                 try:
                    matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
                 except Exception:
@@ -2514,7 +2540,7 @@ class PreProcessing:
 
             algorithm = 'synthetic_data_augmentation'
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            sampler = deepcopy(trial_sampler)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective,
                            n_trials=50,
@@ -2535,6 +2561,7 @@ class PreProcessing:
             best_parameters = study.best_trial.params
             temp_df_list = []
             X_train_sample[self.target_variable] = Y_train_sample
+
             if self.class_problem == 'binary' or self.class_problem == 'multiclass':
                 for class_inst in class_cats:
                     X_train_sample_class = X_train_sample[(X_train_sample[self.target_variable] == class_inst)]
@@ -2607,7 +2634,7 @@ class PreProcessing:
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
             try:
-                scores_2 = cross_val_score(model_2, X_train_sample, Y_temp_sample, cv=10, scoring=metric)
+                scores_2 = cross_val_score(model_2_copy, X_train_sample, Y_temp_sample, cv=10, scoring=metric)
                 mae_2 = np.mean(scores_2)
                 synthetic_mae = mae_2
             except Exception:
@@ -2616,6 +2643,7 @@ class PreProcessing:
             print(f"The synthetic score is {synthetic_mae}.")
 
             del model_2
+            del model_2_copy
             del temp_df_list
             _ = gc.collect()
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
@@ -2629,8 +2657,9 @@ class PreProcessing:
                 return original_col
 
     def synthetic_data_augmentation(self):
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
         if self.prediction_mode:
-            pass
+            optuna.logging.set_verbosity(optuna.logging.INFO)
         else:
             logging.info('Start creating synthetic data.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
@@ -2644,13 +2673,20 @@ class PreProcessing:
             else:
                 sample_size = self.brute_force_selection_sample_size
 
+            # create one trainer for all optimization rounds
+            model_2 = self.create_trainers()
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            # set random states for distribution samplers
+
             for col in X_train.columns.to_list():
                 if self.detected_col_types[col] == 'float':
                     print(f"Started augmenting column {col}")
-                    X_train[col] = self.synthetic_data_generator(column_name=col, sample_size=sample_size)
+                    X_train[col] = self.synthetic_floating_data_generator(column_name=col, sample_size=sample_size,
+                                                                 eval_model=model_2, trial_sampler=sampler)
                     print(f"Finished augmenting column {col}")
                 else:
                     print(f"Skipped augmentation for column {col}, because {col} is not of type float.")
+            optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def automated_feature_selection(self, metric=None):
@@ -2714,6 +2750,7 @@ class PreProcessing:
         else:
             logging.info('Start Vowpal bruteforce feature selection.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            optuna.logging.set_verbosity(optuna.logging.WARNING)
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             classes_weights = class_weight.compute_sample_weight(
                 class_weight='balanced',
@@ -2850,6 +2887,7 @@ class PreProcessing:
                 print(f" Final features are... {i}.")
             logging.info('Finished Vowpal bruteforce feature selection.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
 
 
