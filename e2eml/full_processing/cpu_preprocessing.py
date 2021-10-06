@@ -2327,13 +2327,13 @@ class PreProcessing:
     def create_trainers(self):
         if self.class_problem == 'binary' or self.class_problem == 'multiclass':
             #model_1 = VWClassifier()
-            model_2 = lgb.LGBMClassifier(random_state=42)
+            model_2 = lgb.LGBMClassifier(random_state=self.preprocess_decisions["random_state_counter"])
         else:
             # model_1 = VWRegressor()
-            model_2 = lgb.LGBMRegressor(random_state=42)
+            model_2 = lgb.LGBMRegressor(random_state=self.preprocess_decisions["random_state_counter"])
         return model_2
 
-    def synthetic_floating_data_generator(self, column_name=None, metric=None, sample_size=None, eval_model=None, trial_sampler=None):
+    def synthetic_floating_data_generator(self, column_name=None, metric=None, sample_size=None, trial_sampler=None):
         self.get_current_timestamp('Synthetic data augmentation')
 
         if self.prediction_mode:
@@ -2348,7 +2348,7 @@ class PreProcessing:
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
-            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            X_train_sample = X_train_sample.sample(sample_size, random_state=self.preprocess_decisions["random_state_counter"])
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
@@ -2366,8 +2366,9 @@ class PreProcessing:
                 metric = 'neg_mean_squared_error'
                 problem = 'regression'
 
-            model_2 = eval_model
+            model_2 = self.create_trainers()
             model_2_copy = deepcopy(model_2)
+            model_3_copy = deepcopy(model_2)
 
             if self.class_problem == 'binary' or self.class_problem == 'multiclass':
                 pass
@@ -2408,17 +2409,20 @@ class PreProcessing:
             dist_median_lowq = X_train_sample[column_name].quantile(0.25)
             dist_median_high = X_train_sample[column_name].quantile(0.75)
 
-            # make compatible with log distributions
             if dist_max-dist_min < 1:
                 dist_max += 1
             if dist_median_high-dist_median_lowq < 1:
                 dist_median_high += 1
-            if dist_min == 0:
-                dist_min += 1
-                dist_max += 1
-            if dist_median_lowq == 0:
-                dist_median_lowq += 1
+
+            if dist_median_high-dist_median_lowq < 1:
                 dist_median_high += 1
+
+            if dist_median_lowq < 0:
+                dist_median_high_inv = abs(dist_median_lowq)
+                dist_median_lowq_inv = abs(dist_median_high)
+            else:
+                dist_median_lowq_inv = dist_median_lowq
+                dist_median_high_inv = dist_median_high
 
             def objective(trial):
                 param = {}
@@ -2434,15 +2438,22 @@ class PreProcessing:
                                                                                         "Levy"])
                 random_or_control_factor = trial.suggest_categorical("random_or_control_factor",
                                                                      ["Random",
+                                                                      "Random pos",
                                                                       "Controlled"])
                 p_value = trial.suggest_loguniform('p_value', 0.05, 0.95)
-                mu = trial.suggest_loguniform('mu', dist_median_lowq, dist_median_high)
+                mu = trial.suggest_uniform('mu', dist_median_lowq_inv, dist_median_high_inv)
                 scale = trial.suggest_int('scale', dist_min, dist_max)
-                parteo_b = trial.suggest_loguniform('parteo_b', dist_min, dist_max)
-                uniformity = trial.suggest_loguniform('uniformity', dist_min, dist_max)
+                parteo_b = trial.suggest_uniform('parteo_b', dist_min, dist_max)
+                uniformity = trial.suggest_uniform('uniformity', dist_min, dist_max)
+                location = trial.suggest_int('location', dist_median_lowq_inv, dist_median_high_inv)
 
                 random_factor = trial.suggest_int('random_factor', dist_min, dist_max)
-                location = trial.suggest_int('location', dist_min, dist_max)
+                if random_factor < 0:
+                    random_factor_pos = random_factor + abs(dist_min)
+                elif random_factor == 0:
+                    random_factor_pos = random_factor + 1
+                else:
+                    random_factor_pos = random_factor
 
                 param["sample_distribution"] = sample_distribution
                 param["random_or_control_factor"] = random_or_control_factor
@@ -2462,7 +2473,7 @@ class PreProcessing:
                         if sample_distribution == 'Uniform':
                             gen_data = np.full((size,), uniformity)
                         elif sample_distribution == 'Binomial':
-                            gen_data = binom.rvs(n=random_factor, p=p_value, size=size)
+                            gen_data = binom.rvs(n=random_factor_pos, p=p_value, size=size)
                         elif sample_distribution == 'Poisson':
                             gen_data = poisson.rvs(mu=mu, size=size)
                         elif sample_distribution == 'Exponential':
@@ -2479,6 +2490,8 @@ class PreProcessing:
                             gen_data = levy.rvs(size=size)
                             if random_or_control_factor == 'Random':
                                 gen_data = gen_data*random_factor
+                            elif random_or_control_factor == "Random pos":
+                                gen_data = gen_data*random_factor_pos
                             else:
                                 gen_data += class_inst*2
                         else:
@@ -2510,6 +2523,8 @@ class PreProcessing:
                             gen_data = levy.rvs(size=size)
                             if random_or_control_factor == 'Random':
                                 gen_data = gen_data*random_factor
+                            elif random_or_control_factor == "Random pos":
+                                gen_data = gen_data*random_factor_pos
                             else:
                                 gen_data += class_inst*2
                         else:
@@ -2517,7 +2532,7 @@ class PreProcessing:
                         X_train_sample_class[column_name] = gen_data
                         temp_df_list.append(X_train_sample_class)
 
-                temp_df = pd.concat(temp_df_list)
+                temp_df = pd.concat(temp_df_list, ignore_index=False)
                 Y_temp = temp_df[self.target_variable]
                 temp_df = temp_df.drop(self.target_variable, axis=1)
 
@@ -2562,30 +2577,39 @@ class PreProcessing:
             temp_df_list = []
             X_train_sample[self.target_variable] = Y_train_sample
 
+            if best_parameters["random_factor"] < 0:
+                random_factor_pos = best_parameters["random_factor"] + abs(dist_min)
+            elif best_parameters["random_factor"] == 0:
+                random_factor_pos = best_parameters["random_factor"] + 1
+            else:
+                random_factor_pos = best_parameters["random_factor"]
+
             if self.class_problem == 'binary' or self.class_problem == 'multiclass':
                 for class_inst in class_cats:
                     X_train_sample_class = X_train_sample[(X_train_sample[self.target_variable] == class_inst)]
                     size = len(X_train_sample_class.index)
                     if best_parameters["sample_distribution"] == 'Uniform':
-                        gen_data = np.random.choice(np.arange(0, 100), size, replace=True)
+                        gen_data = np.full((size,), best_parameters["uniformity"])
                     elif best_parameters["sample_distribution"] == 'Binomial':
-                        gen_data = binom.rvs(n=best_parameters["random_factor"], p=best_parameters["p_value"], size=size)
+                        gen_data = binom.rvs(n=random_factor_pos, p=best_parameters["p_value"], size=size)
                     elif best_parameters["sample_distribution"] == 'Poisson':
                         gen_data = poisson.rvs(mu=best_parameters["mu"], size=size)
                     elif best_parameters["sample_distribution"] == 'Exponential':
-                        gen_data = expon.rvs(scale=best_parameters["scale"], loc=0, size=size)
+                        gen_data = expon.rvs(scale=best_parameters["scale"], loc=best_parameters["location"], size=size)
                     elif best_parameters["sample_distribution"] == 'Gamma':
                         gen_data = gamma.rvs(a=best_parameters["mu"], size=size)
                     elif best_parameters["sample_distribution"] == 'Uniform':
                         gen_data = class_inst
                     elif best_parameters["sample_distribution"] == 'Normal':
-                        gen_data = norm.rvs(size=size, loc=0, scale=best_parameters["scale"])
+                        gen_data = norm.rvs(size=size, loc=best_parameters["location"], scale=best_parameters["scale"])
                     elif best_parameters["sample_distribution"] == "Pareto":
                         gen_data = pareto.rvs(best_parameters["parteo_b"], size=size)
                     elif best_parameters["sample_distribution"] == "Levy":
                         gen_data = levy.rvs(size=size)
                         if best_parameters["random_or_control_factor"] == 'Random':
                             gen_data = gen_data*best_parameters["random_factor"]
+                        elif best_parameters["random_or_control_factor"] == "Random pos":
+                            gen_data = gen_data*random_factor_pos
                         else:
                             gen_data += class_inst*2
                     else:
@@ -2598,25 +2622,25 @@ class PreProcessing:
                     size = len(X_train_sample_class.index)
                     class_inst = X_train_sample_class["bin"]
                     if best_parameters["sample_distribution"] == 'Uniform':
-                        gen_data = np.random.choice(np.arange(0, 100), size, replace=True)
+                        gen_data = np.full((size,), best_parameters["uniformity"])
                     elif best_parameters["sample_distribution"] == 'Binomial':
-                        gen_data = binom.rvs(n=best_parameters["random_factor"], p=best_parameters["p_value"], size=size)
+                        gen_data = binom.rvs(n=best_parameters["random_factor_pos"], p=best_parameters["p_value"], size=size)
                     elif best_parameters["sample_distribution"] == 'Poisson':
                         gen_data = poisson.rvs(mu=best_parameters["mu"], size=size)
                     elif best_parameters["sample_distribution"] == 'Exponential':
-                        gen_data = expon.rvs(scale=best_parameters["scale"], loc=0, size=size)
+                        gen_data = expon.rvs(scale=best_parameters["scale"], loc=best_parameters["location"], size=size)
                     elif best_parameters["sample_distribution"] == 'Gamma':
                         best_parameters["sample_distribution"] = gamma.rvs(a=best_parameters["mu"], size=size)
                     elif best_parameters["sample_distribution"] == 'Uniform':
                         gen_data = class_inst
                     elif best_parameters["sample_distribution"] == 'Normal':
-                        gen_data = norm.rvs(size=size, loc=0, scale=best_parameters["scale"])
+                        gen_data = norm.rvs(size=size, loc=best_parameters["location"], scale=best_parameters["scale"])
                     elif best_parameters["sample_distribution"] == "Pareto":
                         gen_data = pareto.rvs(best_parameters["parteo_b"], size=size)
                     elif best_parameters["sample_distribution"] == "Levy":
                         gen_data = levy.rvs(size=size)
                         if best_parameters["random_or_control_factor"] == 'Random':
-                            gen_data = gen_data*best_parameters["random_factor"]
+                            gen_data = gen_data*best_parameters["random_factor_pos"]
                         else:
                             gen_data += class_inst*2
                     else:
@@ -2634,11 +2658,22 @@ class PreProcessing:
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
             try:
+                # get train scores
                 scores_2 = cross_val_score(model_2_copy, X_train_sample, Y_temp_sample, cv=10, scoring=metric)
                 mae_2 = np.mean(scores_2)
-                synthetic_mae = mae_2
+                train_mae = mae_2
             except Exception:
-                synthetic_mae = 0
+                train_mae = 0
+
+            # test scores
+            model_3_copy.fit(X_train_sample, Y_temp_sample)
+            scores_2_test = model_3_copy.predict(X_test)
+            try:
+                matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
+            except Exception:
+                matthew_2 = 0
+            test_mae = matthew_2
+            synthetic_mae = (train_mae+test_mae)/2-abs(train_mae-test_mae)
 
             print(f"The synthetic score is {synthetic_mae}.")
 
@@ -2647,6 +2682,9 @@ class PreProcessing:
             del temp_df_list
             _ = gc.collect()
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+
+            # sort by index to return in correct order
+            temp_df = temp_df.sort_index()
 
             # original data or synthetic data?
             if synthetic_mae > benchmark_mae:
@@ -2674,15 +2712,18 @@ class PreProcessing:
                 sample_size = self.brute_force_selection_sample_size
 
             # create one trainer for all optimization rounds
-            model_2 = self.create_trainers()
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            # set random states for distribution samplers
+            # sort by index so returned column can match original dataframe
+            Y_train = Y_train.sort_index()
+            X_train = X_train.sort_index()
 
+            self.preprocess_decisions["random_state_counter"] = 0
             for col in X_train.columns.to_list():
                 if self.detected_col_types[col] == 'float':
                     print(f"Started augmenting column {col}")
+                    self.preprocess_decisions["random_state_counter"] += 1
                     X_train[col] = self.synthetic_floating_data_generator(column_name=col, sample_size=sample_size,
-                                                                 eval_model=model_2, trial_sampler=sampler)
+                                                                trial_sampler=sampler)
                     print(f"Finished augmenting column {col}")
                 else:
                     print(f"Skipped augmentation for column {col}, because {col} is not of type float.")
