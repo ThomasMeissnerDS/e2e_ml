@@ -935,7 +935,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                             # maximum depth of the decision trees being trained
                             'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
                             'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
-                            'num_leaves': trial.suggest_int('num_leaves', 2, 128),
+                            'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                             'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
                             'min_child_samples': trial.suggest_int('min_child_samples', 5, 1000),
                             'eta': trial.suggest_loguniform('eta', 1e-3, 0.3),
@@ -1014,7 +1014,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                             # maximum depth of the decision trees being trained
                             'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
                             'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
-                            'num_leaves': trial.suggest_int('num_leaves', 2, 128),
+                            'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                             'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
                             'min_child_samples': trial.suggest_int('min_child_samples', 5, 1000),
                             'eta': trial.suggest_loguniform('eta', 1e-3, 0.3),  # 0.001
@@ -1233,7 +1233,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                         'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
                         #'max_depth': trial.suggest_int('max_depth', 2, 8),
-                        'num_leaves': trial.suggest_int('num_leaves', 2, 128),
+                        'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                         'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
                         'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
                         'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
@@ -1317,7 +1317,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                         'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
                         #'max_depth': trial.suggest_int('max_depth', 2, 8), #-1
-                        'num_leaves': trial.suggest_int('num_leaves', 2, 128),
+                        'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                         'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
                         'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
                         'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
