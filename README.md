@@ -106,7 +106,7 @@ There are regression blueprints as well (in regression module):
 - ml_bp18_regression_full_processing_ridge_reg
 - ml_bp20_regression_full_processing_catboost()
 - ml_bp20_regression_full_processing_sgd()
-- ml_special_regression_multiclass_full_processing_multimodel_avg_blender()
+- ml_special_regression_full_processing_multimodel_avg_blender()
 - ml_special_regression_auto_model_exploration()
 
 In ensembles algorithms can be chosen via the class attribute:
@@ -204,6 +204,9 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 2.2.0
+ - bug fixes
+ - added an experimental feature to optimize training data with synthetic data
 * 2.1.2
  - Improved TFIDF vectorizer performance & non transformer NLP applications
  - Improved POS tagging stability

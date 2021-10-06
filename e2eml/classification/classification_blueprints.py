@@ -53,8 +53,12 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
             self.xgboost_predict(feat_importance=True)
             self.classification_eval(algorithm=algorithm)
-            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+            self.classification_eval(algorithm)
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                     threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            else:
+                pass
         elif algorithm == 'ngboost':
             # train Ngboost
             if self.prediction_mode:
@@ -63,8 +67,12 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.ngboost_train(tune_mode=self.tune_mode)
             self.ngboost_predict(feat_importance=True, importance_alg='permutation')
             self.classification_eval(algorithm=algorithm)
-            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            self.classification_eval(algorithm)
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            else:
+                 pass
         elif algorithm == 'lgbm':
             # train LGBM
             if self.prediction_mode:
@@ -76,8 +84,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                     self.lgbm_train(tune_mode=self.tune_mode)
             self.lgbm_predict(feat_importance=True)
             self.classification_eval(algorithm=algorithm)
-            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                        threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            else:
+                pass
         elif algorithm == 'vowpal_wabbit':
             # train sklearn ensemble
             if self.prediction_mode:
@@ -86,8 +97,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.vowpal_wabbit_train()
             self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
             self.classification_eval(algorithm=algorithm)
-            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                        threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            else:
+                pass
         elif algorithm == 'tabnet':
             # train sklearn ensemble
             if self.prediction_mode:
@@ -96,8 +110,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.tabnet_train()
             self.tabnet_predict()
             self.classification_eval(algorithm=algorithm)
-            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                        threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            else:
+                pass
         elif algorithm == 'ridge':
             # train sklearn ensemble
             if self.prediction_mode:
@@ -106,8 +123,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.ridge_classifier_train()
             self.ridge_classifier_predict()
             self.classification_eval(algorithm=algorithm)
-            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                        threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            else:
+                pass
         elif algorithm == 'catboost':
             # train sklearn ensemble
             if self.prediction_mode:
@@ -116,8 +136,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.catboost_train()
             self.catboost_predict()
             self.classification_eval(algorithm=algorithm)
-            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                        threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            else:
+                pass
         elif algorithm == 'logistic_regression':
             # train sklearn ensemble
             if self.prediction_mode:
@@ -126,8 +149,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.logistic_regression_train()
             self.logistic_regression_predict()
             self.classification_eval(algorithm=algorithm)
-            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                        threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            else:
+                pass
         elif algorithm == 'sklearn_ensemble':
             # train sklearn ensemble
             if self.prediction_mode:
@@ -136,8 +162,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                 self.sklearn_ensemble_train()
             self.sklearn_ensemble_predict()
             self.classification_eval(algorithm=algorithm)
-            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                        threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+            else:
+                pass
 
     def ml_bp00_train_test_binary_full_processing_log_reg_prob(self, df=None):
         """
@@ -157,8 +186,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'logistic_regression'
         self.logistic_regression_predict(feat_importance=True, importance_alg='permutation')
         self.classification_eval(algorithm=algorithm)
-        self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        if self.class_problem == 'multiclass':
+            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        else:
+            pass
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -180,8 +212,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.xgboost_predict(feat_importance=True)
         algorithm = 'xgboost'
         self.classification_eval(algorithm==algorithm)
-        self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        if self.class_problem == 'multiclass':
+            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        else:
+            pass
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -203,8 +238,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.lgbm_predict(feat_importance=True)
         algorithm = 'lgbm'
         self.classification_eval(algorithm=algorithm)
-        self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        if self.class_problem == 'multiclass':
+            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        else:
+            pass
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -228,8 +266,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.sklearn_ensemble_predict(feat_importance=True, importance_alg='permutation')
         algorithm = 'sklearn_ensemble'
         self.classification_eval(algorithm=algorithm)
-        self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        if self.class_problem == 'multiclass':
+            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        else:
+            pass
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -251,8 +292,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.ngboost_predict(feat_importance=True, importance_alg='permutation')
         algorithm = 'ngboost'
         self.classification_eval(algorithm)
-        self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        if self.class_problem == 'multiclass':
+            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        else:
+            pass
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -274,8 +318,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
         algorithm = 'vowpal_wabbit'
         self.classification_eval(algorithm)
-        self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+        if self.class_problem == 'multiclass':
+            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                 threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        else:
+            pass
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -316,8 +363,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'tabnet'
         self.tabnet_predict()
         self.classification_eval(algorithm=algorithm)
-        self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        if self.class_problem == 'multiclass':
+            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        else:
+            pass
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -339,8 +389,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'ridge'
         self.ridge_classifier_predict()
         self.classification_eval(algorithm=algorithm)
-        self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        if self.class_problem == 'multiclass':
+            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        else:
+            pass
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -362,8 +415,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'catboost'
         self.catboost_predict()
         self.classification_eval(algorithm=algorithm)
-        self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        if self.class_problem == 'multiclass':
+            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        else:
+            pass
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -385,8 +441,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'sgd'
         self.sgd_classifier_predict()
         self.classification_eval(algorithm=algorithm)
-        self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
-                                                threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        if self.class_problem == 'multiclass':
+            self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
+                                                    threshold=self.preprocess_decisions["probability_threshold"][algorithm])
+        else:
+            pass
         self.prediction_mode = True
         logging.info('Finished blueprint.')
 
@@ -424,42 +483,50 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         if self.special_blueprint_algorithms["lgbm"]:
             self.lgbm_predict(feat_importance=False)
             self.classification_eval('lgbm')
-            self.visualize_probability_distribution(probabilities=self.predicted_probs["lgbm"],
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs["lgbm"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["lgbm"])
         if self.special_blueprint_algorithms["xgboost"]:
             self.xgboost_predict(feat_importance=True)
             self.classification_eval('xgboost')
-            self.visualize_probability_distribution(probabilities=self.predicted_probs["xgboost"],
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs["xgboost"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["xgboost"])
         if self.special_blueprint_algorithms["vowpal_wabbit"]:
             self.vowpal_wabbit_predict(feat_importance=True)
             self.classification_eval('vowpal_wabbit')
-            self.visualize_probability_distribution(probabilities=self.predicted_probs["vowpal_wabbit"],
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs["vowpal_wabbit"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["vowpal_wabbit"])
         if self.special_blueprint_algorithms["tabnet"]:
             self.tabnet_predict()
             self.classification_eval('tabnet')
-            self.visualize_probability_distribution(probabilities=self.predicted_probs["tabnet"],
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs["tabnet"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["tabnet"])
         if self.special_blueprint_algorithms["ridge"]:
             self.ridge_classifier_predict()
             self.classification_eval('ridge')
-            self.visualize_probability_distribution(probabilities=self.predicted_probs["ridge"],
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs["ridge"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["ridge"])
         if self.special_blueprint_algorithms["sklearn_ensemble"]:
             self.sklearn_ensemble_predict()
             self.classification_eval('sklearn_ensemble')
-            self.visualize_probability_distribution(probabilities=self.predicted_probs["sklearn_ensemble"],
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs["sklearn_ensemble"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["sklearn_ensemble"])
         if self.special_blueprint_algorithms["ngboost"]:
             self.ngboost_predict(feat_importance=False)
             self.classification_eval("ngboost")
-            self.visualize_probability_distribution(probabilities=self.predicted_probs["ngboost"],
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs["ngboost"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["ngboost"])
         if self.special_blueprint_algorithms["catboost"]:
             self.catboost_predict()
             self.classification_eval("catboost")
-            self.visualize_probability_distribution(probabilities=self.predicted_probs["catboost"],
+            if self.class_problem == 'multiclass':
+                self.visualize_probability_distribution(probabilities=self.predicted_probs["catboost"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["catboost"])
 
         algorithm = 'max_voting'
