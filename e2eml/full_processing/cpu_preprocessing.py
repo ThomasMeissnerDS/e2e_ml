@@ -855,16 +855,6 @@ class PreProcessing:
             #pandas_series = pandas_series[col]
             return pandas_series
 
-        def label_encoder_reverse_transform(pandas_series):
-            col = pandas_series.name
-            try:
-                pandas_series = pandas_series.to_frame()
-            except Exception:
-                pass
-            reverse_mapping = {value: key for key, value in self.preprocess_decisions["label_encoder_mapping"].items()}
-            pandas_series = pandas_series.replace({col: reverse_mapping})
-            return pandas_series
-
         if self.prediction_mode:
             target = label_encoder_transform(target, self.preprocess_decisions["label_encoder_mapping"])
         else:
@@ -881,6 +871,16 @@ class PreProcessing:
             target = target[self.target_variable].astype(float)
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         return target
+
+    def label_encoder_reverse_transform(self, pandas_series):
+        col = pandas_series.name
+        try:
+            pandas_series = pandas_series.to_frame()
+        except Exception:
+            pass
+        reverse_mapping = {value: key for key, value in self.preprocess_decisions["label_encoder_mapping"].items()}
+        pandas_series = pandas_series.replace({col: reverse_mapping})
+        return pandas_series
 
     def check_max_sentence_length(self):
         if self.prediction_mode:

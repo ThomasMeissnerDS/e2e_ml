@@ -204,7 +204,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 2.2.0
+* 2.2.2
  - bug fixes
  - added an experimental feature to optimize training data with synthetic data
 * 2.1.2
