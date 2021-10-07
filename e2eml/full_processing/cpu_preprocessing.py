@@ -2563,14 +2563,6 @@ class PreProcessing:
                            gc_after_trial=True,
                            show_progress_bar=True)
             self.optuna_studies[f"{algorithm}"] = {}
-            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
-            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            fig = optuna.visualization.plot_optimization_history(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-            fig.show()
-            fig = optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_param_importance"] = fig
-            fig.show()
 
             # get best logic
             best_parameters = study.best_trial.params
@@ -2679,6 +2671,7 @@ class PreProcessing:
 
             del model_2
             del model_2_copy
+            del model_3_copy
             del temp_df_list
             _ = gc.collect()
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
