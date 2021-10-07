@@ -2409,13 +2409,10 @@ class PreProcessing:
             dist_median_lowq = X_train_sample[column_name].quantile(0.25)
             dist_median_high = X_train_sample[column_name].quantile(0.75)
 
-            if dist_max-dist_min < 1:
-                dist_max += 1
-            if dist_median_high-dist_median_lowq < 1:
-                dist_median_high += 1
-
-            if dist_median_high-dist_median_lowq < 1:
-                dist_median_high += 1
+            if dist_max-dist_min <= 1:
+                dist_max += 2
+            if dist_median_high-dist_median_lowq <= 1:
+                dist_median_high += 2
 
             if dist_median_lowq < 0 and dist_median_high <= 0:
                 dist_median_high_inv = abs(dist_median_lowq)
@@ -2445,6 +2442,11 @@ class PreProcessing:
                 dist_min_inv = dist_min
                 dist_max_inv = dist_max
 
+            if dist_max_inv-dist_min_inv <= 1:
+                dist_max_inv += 2
+            if dist_median_high_inv-dist_median_lowq_inv <= 1:
+                dist_median_high_inv += 2
+
             def objective(trial):
                 param = {}
 
@@ -2465,7 +2467,7 @@ class PreProcessing:
                 mu = trial.suggest_uniform('mu', dist_median_lowq_inv, dist_median_high_inv)
                 scale = trial.suggest_int('scale', dist_min_inv, dist_max_inv)
                 parteo_b = trial.suggest_uniform('parteo_b', dist_min_inv, dist_max_inv)
-                uniformity = trial.suggest_uniform('uniformity', dist_min, dist_max)
+                uniformity = trial.suggest_uniform('uniformity', dist_min_inv, dist_max_inv)
                 location = trial.suggest_int('location', dist_median_lowq_inv, dist_median_high_inv)
 
                 random_factor = trial.suggest_int('random_factor', dist_min, dist_max)
