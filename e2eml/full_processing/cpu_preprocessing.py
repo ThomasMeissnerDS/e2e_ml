@@ -2385,11 +2385,11 @@ class PreProcessing:
             # get benchmark
             try:
                 # train scores
-                scores_2 = cross_val_score(model_2, X_train_sample, Y_train_sample, cv=10, scoring=metric)
+                scores_2 = cross_val_score(model_2, X_train, Y_train, cv=10, scoring=metric)
                 mae_2 = np.mean(scores_2)
                 train_mae = mae_2
                 # test scores
-                model_2.fit(X_train_sample, Y_train_sample)
+                model_2.fit(X_train, Y_train)
                 scores_2_test = model_2.predict(X_test)
                 try:
                     matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
@@ -2417,12 +2417,33 @@ class PreProcessing:
             if dist_median_high-dist_median_lowq < 1:
                 dist_median_high += 1
 
-            if dist_median_lowq < 0:
+            if dist_median_lowq < 0 and dist_median_high <= 0:
                 dist_median_high_inv = abs(dist_median_lowq)
                 dist_median_lowq_inv = abs(dist_median_high)
+            elif dist_median_lowq < 0 and dist_median_high > 0:
+                if abs(dist_median_lowq) < abs(dist_median_high):
+                    dist_median_high_inv = abs(dist_median_high)
+                    dist_median_lowq_inv = abs(dist_median_lowq)
+                else:
+                    dist_median_high_inv = abs(dist_median_lowq)
+                    dist_median_lowq_inv = abs(dist_median_high)
             else:
                 dist_median_lowq_inv = dist_median_lowq
                 dist_median_high_inv = dist_median_high
+
+            if dist_min < 0 and dist_max <= 0:
+                dist_max_inv = abs(dist_min)
+                dist_min_inv = abs(dist_max)
+            elif dist_min < 0 and dist_max > 0:
+                if abs(dist_min) < abs(dist_max):
+                    dist_max_inv = abs(dist_max)
+                    dist_min_inv = abs(dist_min)
+                else:
+                    dist_max_inv = abs(dist_min)
+                    dist_min_inv = abs(dist_max)
+            else:
+                dist_min_inv = dist_min
+                dist_max_inv = dist_max
 
             def objective(trial):
                 param = {}
@@ -2442,8 +2463,8 @@ class PreProcessing:
                                                                       "Controlled"])
                 p_value = trial.suggest_loguniform('p_value', 0.05, 0.95)
                 mu = trial.suggest_uniform('mu', dist_median_lowq_inv, dist_median_high_inv)
-                scale = trial.suggest_int('scale', dist_min, dist_max)
-                parteo_b = trial.suggest_uniform('parteo_b', dist_min, dist_max)
+                scale = trial.suggest_int('scale', dist_min_inv, dist_max_inv)
+                parteo_b = trial.suggest_uniform('parteo_b', dist_min_inv, dist_max_inv)
                 uniformity = trial.suggest_uniform('uniformity', dist_min, dist_max)
                 location = trial.suggest_int('location', dist_median_lowq_inv, dist_median_high_inv)
 
@@ -2560,14 +2581,14 @@ class PreProcessing:
             study.optimize(objective,
                            n_trials=50,
                            timeout=600,
-                           gc_after_trial=True,
-                           show_progress_bar=True)
+                           gc_after_trial=True
+                           )
             self.optuna_studies[f"{algorithm}"] = {}
 
             # get best logic
             best_parameters = study.best_trial.params
             temp_df_list = []
-            X_train_sample[self.target_variable] = Y_train_sample
+            X_train[self.target_variable] = Y_train
 
             if best_parameters["random_factor"] < 0:
                 random_factor_pos = best_parameters["random_factor"] + abs(dist_min)
@@ -2578,7 +2599,7 @@ class PreProcessing:
 
             if self.class_problem == 'binary' or self.class_problem == 'multiclass':
                 for class_inst in class_cats:
-                    X_train_sample_class = X_train_sample[(X_train_sample[self.target_variable] == class_inst)]
+                    X_train_sample_class = X_train[(X_train[self.target_variable] == class_inst)]
                     size = len(X_train_sample_class.index)
                     if best_parameters["sample_distribution"] == 'Uniform':
                         gen_data = np.full((size,), best_parameters["uniformity"])
@@ -2640,25 +2661,25 @@ class PreProcessing:
                     X_train_sample_class[column_name] = gen_data
                     temp_df_list.append(X_train_sample_class)
 
-            temp_df = pd.concat(temp_df_list)
+            temp_df = pd.concat(temp_df_list, ignore_index=False)
             temp_df = temp_df.drop(self.target_variable, axis=1)
 
             # save copy of ol column
-            original_col = X_train_sample[column_name].copy()
-            X_train_sample[column_name] = temp_df[column_name]
-            Y_temp_sample = X_train_sample[self.target_variable]
-            X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+            original_col = X_train[column_name].copy()
+            X_train[column_name] = temp_df[column_name]
+            Y_train = X_train[self.target_variable]
+            X_train = X_train.drop(self.target_variable, axis=1)
 
             try:
                 # get train scores
-                scores_2 = cross_val_score(model_2_copy, X_train_sample, Y_temp_sample, cv=10, scoring=metric)
+                scores_2 = cross_val_score(model_2_copy, X_train, Y_train, cv=10, scoring=metric)
                 mae_2 = np.mean(scores_2)
                 train_mae = mae_2
             except Exception:
                 train_mae = 0
 
             # test scores
-            model_3_copy.fit(X_train_sample, Y_temp_sample)
+            model_3_copy.fit(X_train, Y_train)
             scores_2_test = model_3_copy.predict(X_test)
             try:
                 matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
@@ -2673,6 +2694,8 @@ class PreProcessing:
             del model_2_copy
             del model_3_copy
             del temp_df_list
+            del X_train_sample
+            del Y_train_sample
             _ = gc.collect()
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
 
@@ -2682,6 +2705,7 @@ class PreProcessing:
             # original data or synthetic data?
             if synthetic_mae > benchmark_mae:
                 print("Keep synthetic column.")
+                self.preprocess_decisions["synthetic_augmentation_parameters"][column_name] = best_parameters
                 return temp_df[column_name]
             else:
                 print("Keep original column. No improvement found.")
@@ -2694,6 +2718,7 @@ class PreProcessing:
         else:
             logging.info('Start creating synthetic data.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            self.preprocess_decisions["synthetic_augmentation_parameters"] = {}
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
             data_size = len(X_train.index)
@@ -2704,13 +2729,15 @@ class PreProcessing:
             else:
                 sample_size = self.brute_force_selection_sample_size
 
+            # get copy of the dataframe
+            self.preprocess_decisions["random_state_counter"] = 0
+
             # create one trainer for all optimization rounds
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             # sort by index so returned column can match original dataframe
             Y_train = Y_train.sort_index()
             X_train = X_train.sort_index()
 
-            self.preprocess_decisions["random_state_counter"] = 0
             for col in X_train.columns.to_list():
                 if self.detected_col_types[col] == 'float':
                     print(f"Started augmenting column {col}")
