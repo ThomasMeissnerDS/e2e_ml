@@ -2382,25 +2382,28 @@ class PreProcessing:
                 # list comprehension to split groups into list of dataframes
                 dfs = [group.get_group(x) for x in group.groups]
 
-            # get benchmark
-            try:
-                # train scores
-                scores_2 = cross_val_score(model_2, X_train, Y_train, cv=10, scoring=metric)
-                mae_2 = np.mean(scores_2)
-                train_mae = mae_2
-                # test scores
-                model_2.fit(X_train, Y_train)
-                scores_2_test = model_2.predict(X_test)
+            if self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] == 0:
+                # get benchmark
                 try:
-                    matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
+                    # train scores
+                    scores_2 = cross_val_score(model_2, X_train, Y_train, cv=10, scoring=metric)
+                    mae_2 = np.mean(scores_2)
+                    train_mae = mae_2
+                    # test scores
+                    model_2.fit(X_train, Y_train)
+                    scores_2_test = model_2.predict(X_test)
+                    try:
+                        matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
+                    except Exception:
+                        matthew_2 = 0
+                    test_mae = matthew_2
+                    self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = (train_mae+test_mae)/2-abs(train_mae-test_mae)
                 except Exception:
-                    matthew_2 = 0
-                test_mae = matthew_2
-                benchmark_mae = (train_mae+test_mae)/2-abs(train_mae-test_mae)
-            except Exception:
-                benchmark_mae = 0
+                    self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = 0
+                else:
+                    pass
 
-            print(f"The benchmark score is {benchmark_mae}.")
+            print(f"The benchmark score is {self.preprocess_decisions['synthetic_augmentation_parameters_benchmark']}.")
 
             # get core characteristics
             dist_max = int(X_train_sample[column_name].max()*1.2)
@@ -2674,7 +2677,7 @@ class PreProcessing:
 
             try:
                 # get train scores
-                scores_2 = cross_val_score(model_2_copy, X_train, Y_train, cv=10, scoring=metric)
+                scores_2 = cross_val_score(model_3_copy, X_train, Y_train, cv=10, scoring=metric)
                 mae_2 = np.mean(scores_2)
                 train_mae = mae_2
             except Exception:
@@ -2698,17 +2701,19 @@ class PreProcessing:
             del temp_df_list
             del X_train_sample
             del Y_train_sample
+            del temp_df
             _ = gc.collect()
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
 
             # sort by index to return in correct order
-            temp_df = temp_df.sort_index()
+            X_train = X_train.sort_index()
 
             # original data or synthetic data?
-            if synthetic_mae > benchmark_mae:
+            if synthetic_mae > self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"]:
                 print("Keep synthetic column.")
                 self.preprocess_decisions["synthetic_augmentation_parameters"][column_name] = best_parameters
-                return temp_df[column_name]
+                self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = synthetic_mae
+                return X_train[column_name]
             else:
                 print("Keep original column. No improvement found.")
                 return original_col
@@ -2721,6 +2726,7 @@ class PreProcessing:
             logging.info('Start creating synthetic data.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             self.preprocess_decisions["synthetic_augmentation_parameters"] = {}
+            self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = 0
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
             data_size = len(X_train.index)
@@ -2744,8 +2750,17 @@ class PreProcessing:
                 if self.detected_col_types[col] == 'float':
                     print(f"Started augmenting column {col}")
                     self.preprocess_decisions["random_state_counter"] += 1
+                    self.set_random_seed()
+                    binom.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
+                    poisson.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
+                    expon.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
+                    gamma.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
+                    norm.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
+                    pareto.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
+                    levy.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
                     X_train[col] = self.synthetic_floating_data_generator(column_name=col, sample_size=sample_size,
                                                                 trial_sampler=sampler)
+                    self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
                     print(f"Finished augmenting column {col}")
                 else:
                     print(f"Skipped augmentation for column {col}, because {col} is not of type float.")
