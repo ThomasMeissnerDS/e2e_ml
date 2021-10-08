@@ -29,7 +29,7 @@ import torch
 import gc
 import warnings
 import logging
-import pickle
+import dill as pickle
 import os
 import psutil
 import time
@@ -2765,6 +2765,8 @@ class PreProcessing:
                     print(f"Finished augmenting column {col}")
                 else:
                     print(f"Skipped augmentation for column {col}, because {col} is not of type float.")
+            print("Export training data with synthetic optimized features.")
+            X_train.to_pickle(f"Synthetic_training_data.pkl")
             optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
