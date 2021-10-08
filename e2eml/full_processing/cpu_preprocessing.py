@@ -2584,9 +2584,10 @@ class PreProcessing:
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=self.preprocess_decisions["random_state_counter"])
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective,
-                           n_trials=50,
+                           n_trials=60,
                            timeout=600,
-                           gc_after_trial=True
+                           gc_after_trial=True,
+                           show_progress_bar=True
                            )
             self.optuna_studies[f"{algorithm}"] = {}
 
@@ -2695,16 +2696,6 @@ class PreProcessing:
 
             print(f"The synthetic score is {synthetic_mae}.")
 
-            del model_2
-            del model_2_copy
-            del model_3_copy
-            del temp_df_list
-            del X_train_sample
-            del Y_train_sample
-            del temp_df
-            del sampler
-            del study
-            _ = gc.collect()
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
 
             # sort by index to return in correct order
@@ -2747,10 +2738,12 @@ class PreProcessing:
             X_train = X_train.sort_index()
             # get columns which are floats and from the original dataset
             float_cols = [x for x, y in self.detected_col_types.items() if y in ['float', 'int', 'bool'] if x in X_train.columns.to_list()]
+            print(f"Synthetic augmentation will be executed on the following columns: {float_cols}")
+            num_float_cols = len(float_cols)
 
             for col in X_train[float_cols].columns.to_list():
                 if self.detected_col_types[col] == 'float':
-                    print(f"Started augmenting column {col}")
+                    print(f"Started augmenting column {col}. Progress: {round(((self.preprocess_decisions['random_state_counter']+1)/num_float_cols)*100, 2)}%")
                     self.preprocess_decisions["random_state_counter"] += 1
                     self.set_random_seed()
                     binom.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
