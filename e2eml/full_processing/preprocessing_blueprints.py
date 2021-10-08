@@ -41,10 +41,10 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.remove_duplicate_column_names()
         if self.blueprint_step_selection_non_nlp["reset_dataframe_index"]:
             self.reset_dataframe_index()
-        if self.blueprint_step_selection_non_nlp["synthetic_data_augmentation"]:
-            self.synthetic_data_augmentation()
         if self.blueprint_step_selection_non_nlp["fill_infinite_values"]:
             self.fill_infinite_values()
+        if self.blueprint_step_selection_non_nlp["synthetic_data_augmentation"]:
+            self.synthetic_data_augmentation()
         if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
             self.delete_high_null_cols(threshold=0.05)
         if self.blueprint_step_selection_non_nlp["data_binning"]:

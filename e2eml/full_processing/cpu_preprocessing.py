@@ -35,7 +35,7 @@ import psutil
 import time
 import random
 warnings.filterwarnings("ignore")
-from copy import deepcopy
+#from copy import deepcopy
 #from IPython.display import clear_output
 
 pd.options.display.max_colwidth = 1000
@@ -2326,14 +2326,14 @@ class PreProcessing:
 
     def create_trainers(self):
         if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-            #model_1 = VWClassifier()
+            model_1 = VWClassifier()
             model_2 = lgb.LGBMClassifier(random_state=self.preprocess_decisions["random_state_counter"])
         else:
             # model_1 = VWRegressor()
             model_2 = lgb.LGBMRegressor(random_state=self.preprocess_decisions["random_state_counter"])
         return model_2
 
-    def synthetic_floating_data_generator(self, column_name=None, metric=None, sample_size=None, trial_sampler=None):
+    def synthetic_floating_data_generator(self, column_name=None, metric=None, sample_size=None):
         self.get_current_timestamp('Synthetic data augmentation')
 
         if self.prediction_mode:
@@ -2342,7 +2342,7 @@ class PreProcessing:
             logging.info('Start creating synthetic data.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            float_cols = [x for x, y in self.detected_col_types.items() if y in ['float', 'int', 'bool']]
+            float_cols = [x for x, y in self.detected_col_types.items() if y in ['float', 'int', 'bool'] if x in X_train.columns.to_list()]
             X_train = X_train[float_cols].copy()
             X_test = X_test[float_cols].copy()
 
@@ -2367,8 +2367,8 @@ class PreProcessing:
                 problem = 'regression'
 
             model_2 = self.create_trainers()
-            model_2_copy = deepcopy(model_2)
-            model_3_copy = deepcopy(model_2)
+            model_2_copy = model_2
+            model_3_copy = model_2
 
             if self.class_problem == 'binary' or self.class_problem == 'multiclass':
                 pass
@@ -2581,7 +2581,7 @@ class PreProcessing:
 
             algorithm = 'synthetic_data_augmentation'
 
-            sampler = deepcopy(trial_sampler)
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=self.preprocess_decisions["random_state_counter"])
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective,
                            n_trials=50,
@@ -2702,6 +2702,8 @@ class PreProcessing:
             del X_train_sample
             del Y_train_sample
             del temp_df
+            del sampler
+            del study
             _ = gc.collect()
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
 
@@ -2740,13 +2742,13 @@ class PreProcessing:
             # get copy of the dataframe
             self.preprocess_decisions["random_state_counter"] = 0
 
-            # create one trainer for all optimization rounds
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             # sort by index so returned column can match original dataframe
             Y_train = Y_train.sort_index()
             X_train = X_train.sort_index()
+            # get columns which are floats and from the original dataset
+            float_cols = [x for x, y in self.detected_col_types.items() if y in ['float', 'int', 'bool'] if x in X_train.columns.to_list()]
 
-            for col in X_train.columns.to_list():
+            for col in X_train[float_cols].columns.to_list():
                 if self.detected_col_types[col] == 'float':
                     print(f"Started augmenting column {col}")
                     self.preprocess_decisions["random_state_counter"] += 1
@@ -2758,8 +2760,7 @@ class PreProcessing:
                     norm.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
                     pareto.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
                     levy.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
-                    X_train[col] = self.synthetic_floating_data_generator(column_name=col, sample_size=sample_size,
-                                                                trial_sampler=sampler)
+                    X_train[col] = self.synthetic_floating_data_generator(column_name=col, sample_size=sample_size)
                     self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
                     print(f"Finished augmenting column {col}")
                 else:
