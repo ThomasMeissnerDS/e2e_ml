@@ -43,6 +43,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.reset_dataframe_index()
         if self.blueprint_step_selection_non_nlp["fill_infinite_values"]:
             self.fill_infinite_values()
+        if self.blueprint_step_selection_non_nlp["early_numeric_only_feature_selection"]:
+            self.automated_feature_selection(numeric_only=True)
         if self.blueprint_step_selection_non_nlp["synthetic_data_augmentation"]:
             self.synthetic_data_augmentation()
         if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:

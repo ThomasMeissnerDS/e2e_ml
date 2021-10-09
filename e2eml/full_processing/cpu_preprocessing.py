@@ -168,6 +168,7 @@ class PreProcessing:
         self.df_dict = None
         self.blueprint_step_selection_non_nlp = {
             "automatic_type_detection_casting": True,
+            "early_numeric_only_feature_selection": True,
             "remove_duplicate_column_names": True,
             "reset_dataframe_index": True,
             "regex_clean_text_data": False,
@@ -2586,7 +2587,6 @@ class PreProcessing:
             study.optimize(objective,
                            n_trials=60,
                            timeout=600,
-                           gc_after_trial=True,
                            show_progress_bar=True
                            )
             self.optuna_studies[f"{algorithm}"] = {}
@@ -2763,18 +2763,22 @@ class PreProcessing:
             optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def automated_feature_selection(self, metric=None):
+    def automated_feature_selection(self, metric=None, numeric_only=False):
         """
         Uses boostaroota algorithm to automatically chose best features. boostaroota choses XGboost under
         the hood.
         :param metric: Metric to evaluate strength of features.
+        :param float_only: If True, the feature selection will consider integer, floating and boolean columns only.
         :return: Returns reduced dataframe.
         """
         self.get_current_timestamp('Select best features')
         if self.prediction_mode:
             logging.info('Start filtering for preselected columns.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            self.dataframe = self.dataframe[self.selected_feats]
+            if numeric_only:
+                self.dataframe = self.dataframe[self.preprocess_decisions["early_selected_features"]]
+            else:
+                self.dataframe = self.dataframe[self.selected_feats]
             logging.info('Finished filtering preselected columns.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe
@@ -2793,13 +2797,28 @@ class PreProcessing:
             elif self.class_problem == 'regression':
                 metric = 'mae'
             br = BoostARoota(metric=metric)
-            br.fit(X_train, Y_train)
-            selected = br.keep_vars_
-            X_train = X_train[selected]
-            X_test = X_test[selected]
-            self.selected_feats = selected
-            for i in selected:
-                print(f" Selected features are... {i}.")
+
+            if numeric_only:
+                # get columns which are floats and from the original dataset
+                float_cols = [x for x, y in self.detected_col_types.items() if y in ['float', 'int', 'bool'] if x in X_train.columns.to_list()]
+                other_cols = [x for x in X_train.columns.to_list() if x not in float_cols]
+                X_train_temp = X_train[float_cols]
+                br.fit(X_train_temp, Y_train)
+                selected = br.keep_vars_
+                all_cols = selected.values.tolist() + other_cols
+                X_train = X_train[all_cols]
+                X_test = X_test[all_cols]
+                self.preprocess_decisions["early_selected_features"] = all_cols
+                for i in selected:
+                    print(f" Selected features are... {i}.")
+            else:
+                br.fit(X_train, Y_train)
+                selected = br.keep_vars_
+                X_train = X_train[selected]
+                X_test = X_test[selected]
+                self.selected_feats = selected
+                for i in selected:
+                    print(f" Selected features are... {i}.")
             logging.info('Finished automated feature selection.')
             del br
             _ = gc.collect()
