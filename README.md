@@ -205,7 +205,8 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 
 ## Release History
 * 2.3.0
- - Changed boostaroota backend from Xgboost to LGBM
+ - Changed feature selection backend from Xgboost to LGBM
+ - POS tagging is off on default from this version
 * 2.2.9
  - bug fixes
  - added an experimental feature to optimize training data with synthetic data
