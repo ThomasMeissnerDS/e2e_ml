@@ -213,6 +213,7 @@ class PreProcessing:
             "oversampling": False,
             "synonym_language": 'english'
         }
+        self.feature_selection_backend = 'lgbm'
 
         self.pos_tagging_languages = {
             # https://spacy.io/models/es
@@ -317,6 +318,7 @@ class PreProcessing:
                                                        "sgd": 2*60*60,
                                                        "bruteforce_random": 2*60*60}
 
+        self.feature_selection_sample_size = 100000
         self.brute_force_selection_sample_size = 10000
         self.brute_force_selection_base_learner = 'double' # 'lgbm', 'vowpal_wabbit', 'auto
 
@@ -2585,7 +2587,7 @@ class PreProcessing:
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=self.preprocess_decisions["random_state_counter"])
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective,
-                           n_trials=60,
+                           n_trials=70,
                            timeout=600,
                            show_progress_bar=True
                            )
@@ -2759,11 +2761,12 @@ class PreProcessing:
                 else:
                     print(f"Skipped augmentation for column {col}, because {col} is not of type float.")
             print("Export training data with synthetic optimized features.")
-            X_train.to_pickle(f"Synthetic_training_data.pkl")
+            X_train[self.target_variable] = Y_train
+            X_train = X_train.drop(self.target_variable)
             optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def automated_feature_selection(self, metric=None, numeric_only=False):
+    def automated_feature_selection(self, model=None, metric=None, numeric_only=False):
         """
         Uses boostaroota algorithm to automatically chose best features. boostaroota choses XGboost under
         the hood.
@@ -2786,24 +2789,49 @@ class PreProcessing:
             logging.info('Start automated feature selection.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+            # get sample size to run brute force feature selection against
+            if self.feature_selection_sample_size > len(X_train.index):
+                sample_size = len(X_train.index)
+            else:
+                sample_size = self.feature_selection_sample_size
+
+            X_train_sample = X_train.copy()
+            X_train_sample[self.target_variable] = Y_train
+            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            Y_train_sample = X_train_sample[self.target_variable]
+            X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+
             for col in X_train.columns:
                 print(f"Features before selection are...{col}")
-            if metric:
+            if model:
+                model = model
                 metric = metric
             elif self.class_problem == 'binary':
-                metric = 'logloss'
+                if self.feature_selection_backend == 'lgbm':
+                    model = lgb.LGBMClassifier(random_state=42)
+                    br = BoostARoota(clf=model)
+                elif self.feature_selection_backend == 'xgboost':
+                    br = BoostARoota(metric='logloss')
             elif self.class_problem == 'multiclass':
-                metric = 'mlogloss'
+                if self.feature_selection_backend == 'lgbm':
+                    model = lgb.LGBMClassifier(random_state=42)
+                    br = BoostARoota(clf=model)
+                elif self.feature_selection_backend == 'xgboost':
+                    br = BoostARoota(metric='mlogloss')
             elif self.class_problem == 'regression':
-                metric = 'mae'
-            br = BoostARoota(metric=metric)
+                if self.feature_selection_backend == 'lgbm':
+                    model = lgb.LGBMRegressor(random_state=42)
+                    br = BoostARoota(clf=model)
+                elif self.feature_selection_backend == 'xgboost':
+                    br = BoostARoota(metric='mae')
 
             if numeric_only:
                 # get columns which are floats and from the original dataset
                 float_cols = [x for x, y in self.detected_col_types.items() if y in ['float', 'int', 'bool'] if x in X_train.columns.to_list()]
                 other_cols = [x for x in X_train.columns.to_list() if x not in float_cols]
-                X_train_temp = X_train[float_cols]
-                br.fit(X_train_temp, Y_train)
+                X_train_temp = X_train_sample[float_cols]
+                br.fit(X_train_temp, Y_train_sample)
                 selected = br.keep_vars_
                 all_cols = selected.values.tolist() + other_cols
                 X_train = X_train[all_cols]
@@ -2812,7 +2840,7 @@ class PreProcessing:
                 for i in selected:
                     print(f" Selected features are... {i}.")
             else:
-                br.fit(X_train, Y_train)
+                br.fit(X_train_sample, Y_train_sample)
                 selected = br.keep_vars_
                 X_train = X_train[selected]
                 X_test = X_test[selected]
@@ -2821,6 +2849,12 @@ class PreProcessing:
                     print(f" Selected features are... {i}.")
             logging.info('Finished automated feature selection.')
             del br
+            del X_train_sample
+            del Y_train_sample
+            try:
+                del X_train_temp
+            except Exception:
+                pass
             _ = gc.collect()
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
