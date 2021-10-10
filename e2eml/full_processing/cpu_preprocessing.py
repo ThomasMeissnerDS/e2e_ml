@@ -2579,7 +2579,7 @@ class PreProcessing:
                     matthew_2 = 0
 
                 test_mae = matthew_2
-                mae = (train_mae+test_mae)/2-abs(train_mae-test_mae)
+                mae = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
 
                 return mae
 
@@ -2695,7 +2695,7 @@ class PreProcessing:
             except Exception:
                 matthew_2 = 0
             test_mae = matthew_2
-            synthetic_mae = (train_mae+test_mae)/2-abs(train_mae-test_mae)
+            synthetic_mae = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
 
             print(f"The synthetic score is {synthetic_mae}.")
 
