@@ -2401,7 +2401,7 @@ class PreProcessing:
                     except Exception:
                         matthew_2 = 0
                     test_mae = matthew_2
-                    self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = (train_mae+test_mae)/2-abs(train_mae-test_mae)
+                    self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
                 except Exception:
                     self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = 0
                 else:
