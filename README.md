@@ -204,7 +204,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 2.3.0
+* 2.3.1
  - Changed feature selection backend from Xgboost to LGBM
  - POS tagging is off on default from this version
 * 2.2.9
