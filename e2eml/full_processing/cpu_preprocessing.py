@@ -177,7 +177,7 @@ class PreProcessing:
             "iterative_null_imputation": False,
             "fill_infinite_values": True,
             "datetime_converter": True,
-            "pos_tagging_pca": True, # slow with many categories
+            "pos_tagging_pca": False, # slow with many categories
             "append_text_sentiment_score": False,
             "tfidf_vectorizer_to_pca": True, # slow with many categories
             "tfidf_vectorizer": False,
@@ -204,6 +204,7 @@ class PreProcessing:
             "scale_data": False,
             "smote": False
         }
+
         self.blueprint_step_selection_nlp_transformers = {
             "train_test_split": True,
             "regex_clean_text_data": False,
@@ -2761,8 +2762,6 @@ class PreProcessing:
                 else:
                     print(f"Skipped augmentation for column {col}, because {col} is not of type float.")
             print("Export training data with synthetic optimized features.")
-            X_train[self.target_variable] = Y_train
-            X_train = X_train.drop(self.target_variable)
             optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
