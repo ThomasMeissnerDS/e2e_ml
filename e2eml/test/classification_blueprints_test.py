@@ -135,18 +135,23 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "ridge": 3,
                                                     "bruteforce_random": 10}
     titanic_auto_ml.special_blueprint_algorithms = {"ridge": True,
-                                                    "xgboost": True,
-                                                    "ngboost": True,
+                                                    "xgboost": False,
+                                                    "ngboost": False,
                                                     "lgbm": True,
                                                     "tabnet": False,
                                                     "vowpal_wabbit": False,
                                                     "sklearn_ensemble": False,
-                                                    "catboost": True
+                                                    "catboost": False
                                                     }
+    #titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = True
 
 
     titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
     titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting(val_df)
-    val_y_hat = titanic_auto_ml.predicted_classes['blended_preds']
+    val_y_hat = titanic_auto_ml.predicted_classes['max_voting']
     finished = True
     assert finished == True
+
+
+if __name__ == '__main__':
+    test_ml_special_multiclass_full_processing_multimodel_max_voting('synthetic_multiclass')

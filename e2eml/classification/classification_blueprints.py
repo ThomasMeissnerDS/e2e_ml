@@ -483,49 +483,49 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         if self.special_blueprint_algorithms["lgbm"]:
             self.lgbm_predict(feat_importance=False)
             self.classification_eval('lgbm')
-            if self.class_problem == 'multiclass':
+            if self.class_problem == 'binary':
                 self.visualize_probability_distribution(probabilities=self.predicted_probs["lgbm"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["lgbm"])
         if self.special_blueprint_algorithms["xgboost"]:
             self.xgboost_predict(feat_importance=True)
             self.classification_eval('xgboost')
-            if self.class_problem == 'multiclass':
+            if self.class_problem == 'binary':
                 self.visualize_probability_distribution(probabilities=self.predicted_probs["xgboost"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["xgboost"])
         if self.special_blueprint_algorithms["vowpal_wabbit"]:
             self.vowpal_wabbit_predict(feat_importance=True)
             self.classification_eval('vowpal_wabbit')
-            if self.class_problem == 'multiclass':
+            if self.class_problem == 'binary':
                 self.visualize_probability_distribution(probabilities=self.predicted_probs["vowpal_wabbit"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["vowpal_wabbit"])
         if self.special_blueprint_algorithms["tabnet"]:
             self.tabnet_predict()
             self.classification_eval('tabnet')
-            if self.class_problem == 'multiclass':
+            if self.class_problem == 'binary':
                 self.visualize_probability_distribution(probabilities=self.predicted_probs["tabnet"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["tabnet"])
         if self.special_blueprint_algorithms["ridge"]:
             self.ridge_classifier_predict()
             self.classification_eval('ridge')
-            if self.class_problem == 'multiclass':
+            if self.class_problem == 'binary':
                 self.visualize_probability_distribution(probabilities=self.predicted_probs["ridge"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["ridge"])
         if self.special_blueprint_algorithms["sklearn_ensemble"]:
             self.sklearn_ensemble_predict()
             self.classification_eval('sklearn_ensemble')
-            if self.class_problem == 'multiclass':
+            if self.class_problem == 'binary':
                 self.visualize_probability_distribution(probabilities=self.predicted_probs["sklearn_ensemble"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["sklearn_ensemble"])
         if self.special_blueprint_algorithms["ngboost"]:
             self.ngboost_predict(feat_importance=False)
             self.classification_eval("ngboost")
-            if self.class_problem == 'multiclass':
+            if self.class_problem == 'binary':
                 self.visualize_probability_distribution(probabilities=self.predicted_probs["ngboost"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["ngboost"])
         if self.special_blueprint_algorithms["catboost"]:
             self.catboost_predict()
             self.classification_eval("catboost")
-            if self.class_problem == 'multiclass':
+            if self.class_problem == 'binary':
                 self.visualize_probability_distribution(probabilities=self.predicted_probs["catboost"],
                                                     threshold=self.preprocess_decisions["probability_threshold"]["catboost"])
 

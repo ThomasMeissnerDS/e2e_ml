@@ -6,6 +6,7 @@ from sklearn.model_selection import TimeSeriesSplit
 import numpy as np
 import pandas as pd
 from category_encoders import *
+from category_encoders.wrapper import NestedCVWrapper
 from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import IsolationForest
 from sklearn.cluster import DBSCAN, KMeans
@@ -2163,7 +2164,8 @@ class PreProcessing:
             self.cat_columns_encoded = cat_columns
             self.preprocess_decisions[f"category_encoders"] = {}
             if algorithm == 'target':
-                enc = TargetEncoder(cols=cat_columns)
+                enc_enc = TargetEncoder(cols=cat_columns)
+                enc = NestedCVWrapper(enc_enc, random_state=42)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
@@ -2178,7 +2180,8 @@ class PreProcessing:
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
             elif algorithm == 'GLMM':
-                enc = GLMMEncoder(cols=cat_columns)
+                enc_enc = GLMMEncoder(cols=cat_columns)
+                enc = NestedCVWrapper(enc_enc, random_state=42)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
@@ -2188,7 +2191,8 @@ class PreProcessing:
                 X_test = enc.transform(X_test)
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
             elif algorithm == 'leaveoneout':
-                enc = LeaveOneOutEncoder(cols=cat_columns)
+                enc_enc = LeaveOneOutEncoder(cols=cat_columns)
+                enc = NestedCVWrapper(enc_enc, random_state=42)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
@@ -2392,7 +2396,7 @@ class PreProcessing:
                     # train scores
                     scores_2 = cross_val_score(model_2, X_train, Y_train, cv=10, scoring=metric)
                     mae_2 = np.mean(scores_2)
-                    train_mae = mae_2
+                    train_mae = mae_2*100
                     # test scores
                     model_2.fit(X_train, Y_train)
                     scores_2_test = model_2.predict(X_test)
@@ -2400,7 +2404,7 @@ class PreProcessing:
                         matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
                     except Exception:
                         matthew_2 = 0
-                    test_mae = matthew_2
+                    test_mae = matthew_2*100
                     self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
                 except Exception:
                     self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = 0
@@ -2569,7 +2573,7 @@ class PreProcessing:
                 # get train scores
                 scores_2 = cross_val_score(model_2_copy, temp_df, Y_temp, cv=10, scoring=metric)
                 mae_2 = np.mean(scores_2)
-                train_mae = mae_2
+                train_mae = mae_2*100
                 # test scores
                 model_2_copy.fit(temp_df, Y_temp)
                 scores_2_test = model_2_copy.predict(X_test)
@@ -2578,7 +2582,7 @@ class PreProcessing:
                 except Exception:
                     matthew_2 = 0
 
-                test_mae = matthew_2
+                test_mae = matthew_2*100
                 mae = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
 
                 return mae
@@ -2683,7 +2687,7 @@ class PreProcessing:
                 # get train scores
                 scores_2 = cross_val_score(model_3_copy, X_train, Y_train, cv=10, scoring=metric)
                 mae_2 = np.mean(scores_2)
-                train_mae = mae_2
+                train_mae = mae_2*100
             except Exception:
                 train_mae = 0
 
@@ -2694,7 +2698,7 @@ class PreProcessing:
                 matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
             except Exception:
                 matthew_2 = 0
-            test_mae = matthew_2
+            test_mae = matthew_2*100
             synthetic_mae = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
 
             print(f"The synthetic score is {synthetic_mae}.")

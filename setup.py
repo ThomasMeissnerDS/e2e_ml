@@ -6,7 +6,7 @@ with open("README.md", "r") as readme_file:
 requirements = ["babel>=2.9.0",
                 "boostaroota>=1.3",
                 "catboost>=0.21",
-                "category_encoders==2.2.2",
+                "category_encoders==2.3.0", # changed to also include newer versions
                 "dill>=0.3.3",
                 "imblearn>=0.0",
                 "imgaug==0.2.5",
@@ -18,7 +18,7 @@ requirements = ["babel>=2.9.0",
                 "optuna>=2.5.0",
                 "pandas==1.1.5",
                 "pip>=21.0.1",
-                "plotly>=4.14.3",
+                "plotly==5.3.1",
                 "psutil==5.8.0",
                 "pytorch_tabnet>=3.1.1",
                 "seaborn>=0.11.1",
@@ -42,7 +42,7 @@ extras_require = {
 
 setup(
     name="e2eml",
-    version="2.3.1",
+    version="2.4.4",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",
