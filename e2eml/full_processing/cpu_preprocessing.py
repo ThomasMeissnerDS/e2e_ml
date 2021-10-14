@@ -18,7 +18,7 @@ from sklearn.model_selection import cross_val_score
 from sklearn.utils import class_weight
 from sklearn.metrics import make_scorer
 from sklearn.metrics import matthews_corrcoef
-from scipy.stats import bernoulli, norm, poisson, uniform,  gamma, expon, binom, pareto, levy
+from scipy.stats import bernoulli, norm, poisson, uniform,  gamma, expon, binom, pareto, levy, dweibull, halfcauchy, halfnorm, powernorm, semicircular, tukeylambda, rdist
 from boostaroota import BoostARoota
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
 from catboost import CatBoostClassifier
@@ -2469,7 +2469,14 @@ class PreProcessing:
                                                                                         "Normal",
                                                                                         "Uniform",
                                                                                         "Pareto",
-                                                                                        "Levy"])
+                                                                                        "Levy",
+                                                                                        "dweibull",
+                                                                                        "halfcauchy",
+                                                                                        "halfnorm",
+                                                                                        "powernorm",
+                                                                                        "semicircular",
+                                                                                        "tukeylambda",
+                                                                                        "rdist"])
                 random_or_control_factor = trial.suggest_categorical("random_or_control_factor",
                                                                      ["Random",
                                                                       "Random pos",
@@ -2480,6 +2487,8 @@ class PreProcessing:
                 parteo_b = trial.suggest_uniform('parteo_b', dist_min_inv, dist_max_inv)
                 uniformity = trial.suggest_uniform('uniformity', dist_min_inv, dist_max_inv)
                 location = trial.suggest_int('location', dist_median_lowq_inv, dist_median_high_inv)
+                lambda_value = trial.suggest_uniform('lambda_value', 1e-3, 10)
+                c_value = trial.suggest_uniform('c_value', 1e-3, 10)
 
                 random_factor = trial.suggest_int('random_factor', dist_min, dist_max)
                 if random_factor < 0:
@@ -2497,6 +2506,8 @@ class PreProcessing:
                 param["parteo_b"] = parteo_b
                 param["random_factor"] = random_factor
                 param["location"] = location
+                param["lambda_value"] = lambda_value
+                param["c_value"] = c_value
 
                 temp_df_list = []
                 X_train_sample[self.target_variable] = Y_train_sample
@@ -2528,6 +2539,20 @@ class PreProcessing:
                                 gen_data = gen_data*random_factor_pos
                             else:
                                 gen_data += class_inst*2
+                        elif sample_distribution == "dweibull":
+                            gen_data = dweibull.rvs(location, size=size)
+                        elif sample_distribution == 'halfcauchy':
+                            gen_data = halfcauchy.rvs(loc=location, scale=scale, size=size)
+                        elif sample_distribution == 'halfnorm':
+                            gen_data = halfnorm.rvs(loc=location, scale=scale, size=size)
+                        elif sample_distribution == 'powernorm':
+                            gen_data = powernorm.rvs(c_value, loc=location, scale=scale, size=size)
+                        elif sample_distribution == 'semicircular':
+                            gen_data = semicircular.rvs(loc=location, scale=scale, size=size)
+                        elif sample_distribution == 'tukeylambda':
+                            gen_data = tukeylambda.rvs(lambda_value, loc=location, scale=scale, size=size)
+                        elif sample_distribution == 'rdist':
+                            gen_data = rdist.rvs(c_value, loc=location, scale=scale, size=size)
                         else:
                             gen_data = random_factor
                         X_train_sample_class[column_name] = gen_data
@@ -2561,6 +2586,20 @@ class PreProcessing:
                                 gen_data = gen_data*random_factor_pos
                             else:
                                 gen_data += class_inst*2
+                        elif sample_distribution == "dweibull":
+                            gen_data = dweibull.rvs(loc=location, size=size)
+                        elif sample_distribution == 'halfcauchy':
+                            gen_data = halfcauchy.rvs(loc=location, scale=scale, size=size)
+                        elif sample_distribution == 'halfnorm':
+                            gen_data = halfnorm.rvs(loc=location, scale=scale, size=size)
+                        elif sample_distribution == 'powernorm':
+                            gen_data = powernorm.rvs(c=c_value, loc=location, scale=scale, size=size)
+                        elif sample_distribution == 'semicircular':
+                            gen_data = semicircular.rvs(loc=location, scale=scale, size=size)
+                        elif sample_distribution == 'tukeylambda':
+                            gen_data = tukeylambda.rvs(lambda_value, loc=location, scale=scale, size=size)
+                        elif sample_distribution == 'rdist':
+                            gen_data = rdist.rvs(c_value, loc=location, scale=scale, size=size)
                         else:
                             gen_data = random_factor
                         X_train_sample_class[column_name] = gen_data
@@ -2638,6 +2677,20 @@ class PreProcessing:
                             gen_data = gen_data*random_factor_pos
                         else:
                             gen_data += class_inst*2
+                    elif best_parameters["sample_distribution"] == "dweibull":
+                        gen_data = dweibull.rvs(best_parameters["location"], size=size)
+                    elif best_parameters["sample_distribution"] == 'halfcauchy':
+                        gen_data = halfcauchy.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                    elif best_parameters["sample_distribution"] == 'halfnorm':
+                        gen_data = halfnorm.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                    elif best_parameters["sample_distribution"] == 'powernorm':
+                        gen_data = powernorm.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                    elif best_parameters["sample_distribution"] == 'semicircular':
+                        gen_data = semicircular.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                    elif best_parameters["sample_distribution"] == 'tukeylambda':
+                        gen_data = tukeylambda.rvs(best_parameters["lambda_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                    elif best_parameters["sample_distribution"] == 'rdist':
+                        gen_data = rdist.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
                     else:
                         gen_data = best_parameters["random_factor"]
                     X_train_sample_class[column_name] = gen_data
@@ -2669,6 +2722,20 @@ class PreProcessing:
                             gen_data = gen_data*best_parameters["random_factor_pos"]
                         else:
                             gen_data += class_inst*2
+                    elif best_parameters["sample_distribution"] == "dweibull":
+                        gen_data = dweibull.rvs(best_parameters["location"], size=size)
+                    elif best_parameters["sample_distribution"] == 'halfcauchy':
+                        gen_data = halfcauchy.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                    elif best_parameters["sample_distribution"] == 'halfnorm':
+                        gen_data = halfnorm.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                    elif best_parameters["sample_distribution"] == 'powernorm':
+                        gen_data = powernorm.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                    elif best_parameters["sample_distribution"] == 'semicircular':
+                        gen_data = semicircular.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                    elif best_parameters["sample_distribution"] == 'tukeylambda':
+                        gen_data = tukeylambda.rvs(best_parameters["lambda_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                    elif best_parameters["sample_distribution"] == 'rdist':
+                        gen_data = rdist.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
                     else:
                         gen_data = best_parameters["random_factor"]
                     X_train_sample_class[column_name] = gen_data

@@ -143,7 +143,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "sklearn_ensemble": False,
                                                     "catboost": False
                                                     }
-    #titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = True
+    titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = True
 
 
     titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
