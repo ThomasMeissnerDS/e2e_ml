@@ -2470,7 +2470,7 @@ class PreProcessing:
                                                                                         "Uniform",
                                                                                         "Pareto",
                                                                                         "Levy",
-                                                                                        "dweibull",
+                                                                                        #"dweibull",
                                                                                         "halfcauchy",
                                                                                         "halfnorm",
                                                                                         "powernorm",
@@ -2539,8 +2539,8 @@ class PreProcessing:
                                 gen_data = gen_data*random_factor_pos
                             else:
                                 gen_data += class_inst*2
-                        elif sample_distribution == "dweibull":
-                            gen_data = dweibull.rvs(location, size=size)
+                        #elif sample_distribution == "dweibull":
+                        #    gen_data = dweibull.rvs(location, size=size)
                         elif sample_distribution == 'halfcauchy':
                             gen_data = halfcauchy.rvs(loc=location, scale=scale, size=size)
                         elif sample_distribution == 'halfnorm':
@@ -2586,8 +2586,8 @@ class PreProcessing:
                                 gen_data = gen_data*random_factor_pos
                             else:
                                 gen_data += class_inst*2
-                        elif sample_distribution == "dweibull":
-                            gen_data = dweibull.rvs(loc=location, size=size)
+                        #elif sample_distribution == "dweibull":
+                        #   gen_data = dweibull.rvs(loc=location, size=size)
                         elif sample_distribution == 'halfcauchy':
                             gen_data = halfcauchy.rvs(loc=location, scale=scale, size=size)
                         elif sample_distribution == 'halfnorm':
@@ -2677,8 +2677,8 @@ class PreProcessing:
                             gen_data = gen_data*random_factor_pos
                         else:
                             gen_data += class_inst*2
-                    elif best_parameters["sample_distribution"] == "dweibull":
-                        gen_data = dweibull.rvs(best_parameters["location"], size=size)
+                    #elif best_parameters["sample_distribution"] == "dweibull":
+                    #    gen_data = dweibull.rvs(best_parameters["location"], size=size)
                     elif best_parameters["sample_distribution"] == 'halfcauchy':
                         gen_data = halfcauchy.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
                     elif best_parameters["sample_distribution"] == 'halfnorm':
@@ -2686,7 +2686,7 @@ class PreProcessing:
                     elif best_parameters["sample_distribution"] == 'powernorm':
                         gen_data = powernorm.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
                     elif best_parameters["sample_distribution"] == 'semicircular':
-                        gen_data = semicircular.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                        gen_data = semicircular.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
                     elif best_parameters["sample_distribution"] == 'tukeylambda':
                         gen_data = tukeylambda.rvs(best_parameters["lambda_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
                     elif best_parameters["sample_distribution"] == 'rdist':
@@ -2722,8 +2722,8 @@ class PreProcessing:
                             gen_data = gen_data*best_parameters["random_factor_pos"]
                         else:
                             gen_data += class_inst*2
-                    elif best_parameters["sample_distribution"] == "dweibull":
-                        gen_data = dweibull.rvs(best_parameters["location"], size=size)
+                    #elif best_parameters["sample_distribution"] == "dweibull":
+                    #    gen_data = dweibull.rvs(best_parameters["location"], size=size)
                     elif best_parameters["sample_distribution"] == 'halfcauchy':
                         gen_data = halfcauchy.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
                     elif best_parameters["sample_distribution"] == 'halfnorm':

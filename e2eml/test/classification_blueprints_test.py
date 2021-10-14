@@ -154,4 +154,4 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
 
 
 if __name__ == '__main__':
-    test_ml_special_multiclass_full_processing_multimodel_max_voting('synthetic_multiclass')
+    test_ml_special_multiclass_full_processing_multimodel_max_voting('titanic')
