@@ -149,6 +149,24 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
     titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
     titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting(val_df)
     val_y_hat = titanic_auto_ml.predicted_classes['max_voting']
+
+    algorithms = [alg for alg, value in titanic_auto_ml.special_blueprint_algorithms.items() if value]
+
+    def get_matthews(algorithm):
+        # Assess prediction quality on holdout data
+        print(classification_report(pd.Series(val_df_target).astype(bool),
+                                    titanic_auto_ml.predicted_classes[algorithm]))
+        try:
+            matthews = matthews_corrcoef(pd.Series(val_df_target).astype(bool),
+                                         titanic_auto_ml.predicted_classes[algorithm])
+        except Exception:
+            print("Matthew failed.")
+            matthews = 0
+        print(matthews)
+
+    for i in algorithms:
+        print(f"---------Start evaluating {i}----------")
+        get_matthews(i)
     finished = True
     assert finished == True
 
