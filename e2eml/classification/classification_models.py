@@ -701,7 +701,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
                     matthew = matthews_corrcoef(Y_test_num, predicted_classes)
                     mean_matthew_corr.append(matthew)
-                cv_matthew = np.mean(mean_matthew_corr)
+                mean_matthew_corr = np.array(mean_matthew_corr)*100
+                cv_matthew = np.power(np.mean(mean_matthew_corr)**3 - (np.sum(abs(mean_matthew_corr-mean_matthew_corr-np.std(mean_matthew_corr))))**3, 1/3)
                 return cv_matthew
 
             study = optuna.create_study(direction='maximize', study_name=f"{algorithm} tuning")
