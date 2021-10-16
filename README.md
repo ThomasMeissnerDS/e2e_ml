@@ -204,7 +204,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 2.5.5
+* 2.5.9
  - optimized loss function for TabNet
 * 2.5.1
  - Optimized loss function for synthetic data augmentation
