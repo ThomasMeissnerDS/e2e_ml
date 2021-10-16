@@ -2341,6 +2341,25 @@ class PreProcessing:
             model_2 = lgb.LGBMRegressor(random_state=self.preprocess_decisions["random_state_counter"])
         return model_2
 
+    def meissner_cv_score(self, matthew_scores, penality_is_deducted=True):
+        """
+        Takes in a list of scores from a crossvalidation and returns the Meißner CV score.
+        The Meißner CV score will penalize, if the cross validation scores have higher variance. It scales from minus
+        infinity to 100. The Meißner CV score is intended to be used with matthew correlation scores, but could also be
+        used for other metrics.
+        :param matthew_scores: List of cross validation scores
+        :param penality_is_deducted: If true, penality of higher variance shall be deducted from the cross validation scores.
+        :return: Returns the Meißner CV score.
+        """
+        mean_matthew_corr = np.array(matthew_scores) * 100
+        if penality_is_deducted:
+            meissner_cv = np.power(np.mean(mean_matthew_corr) ** 3 - (
+            np.sum(abs(mean_matthew_corr - mean_matthew_corr - np.std(mean_matthew_corr)))) ** 3, 1 / 3)
+        else:
+            meissner_cv = np.power(np.mean(mean_matthew_corr) ** 3 + (
+            np.sum(abs(mean_matthew_corr - mean_matthew_corr - np.std(mean_matthew_corr)))) ** 3, 1 / 3)
+        return meissner_cv
+
     def synthetic_floating_data_generator(self, column_name=None, metric=None, sample_size=None):
         self.get_current_timestamp('Synthetic data augmentation')
 

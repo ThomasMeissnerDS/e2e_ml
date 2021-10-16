@@ -127,7 +127,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                      )
 
     titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 3,
-                                                    "lgbm": 3,
+                                                    "lgbm": 25,
                                                     "tabnet": 3,
                                                     "ngboost": 3,
                                                     "sklearn_ensemble": 3,
@@ -137,13 +137,13 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
     titanic_auto_ml.special_blueprint_algorithms = {"ridge": True,
                                                     "xgboost": False,
                                                     "ngboost": False,
-                                                    "lgbm": False,
-                                                    "tabnet": True,
+                                                    "lgbm": True,
+                                                    "tabnet": False,
                                                     "vowpal_wabbit": False,
                                                     "sklearn_ensemble": False,
                                                     "catboost": False
                                                     }
-    titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = False
+    titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = True
 
 
     titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
@@ -172,4 +172,4 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
 
 
 if __name__ == '__main__':
-    test_ml_special_multiclass_full_processing_multimodel_max_voting('synthetic_multiclass')
+    test_ml_special_multiclass_full_processing_multimodel_max_voting('titanic')

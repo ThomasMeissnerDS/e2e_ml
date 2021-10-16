@@ -45,8 +45,6 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.fill_infinite_values()
         if self.blueprint_step_selection_non_nlp["early_numeric_only_feature_selection"]:
             self.automated_feature_selection(numeric_only=True)
-        if self.blueprint_step_selection_non_nlp["synthetic_data_augmentation"]:
-            self.synthetic_data_augmentation()
         if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
             self.delete_high_null_cols(threshold=0.05)
         if self.blueprint_step_selection_non_nlp["data_binning"]:
@@ -118,6 +116,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.automated_feature_selection()
         if self.blueprint_step_selection_non_nlp["bruteforce_random_feature_selection"]:
             self.bruteforce_random_feature_selection()
+        if self.blueprint_step_selection_non_nlp["synthetic_data_augmentation"]:
+            self.synthetic_data_augmentation()
         if self.blueprint_step_selection_non_nlp["sort_columns_alphabetically"]:
             self.sort_columns_alphabetically()
 

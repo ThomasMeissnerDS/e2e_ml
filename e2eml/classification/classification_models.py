@@ -701,9 +701,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
                     matthew = matthews_corrcoef(Y_test_num, predicted_classes)
                     mean_matthew_corr.append(matthew)
-                mean_matthew_corr = np.array(mean_matthew_corr)*100
-                cv_matthew = np.power(np.mean(mean_matthew_corr)**3 - (np.sum(abs(mean_matthew_corr-mean_matthew_corr-np.std(mean_matthew_corr))))**3, 1/3)
-                return cv_matthew
+                meissner_cv = self.meissner_cv_score(mean_matthew_corr)
+                return meissner_cv
 
             study = optuna.create_study(direction='maximize', study_name=f"{algorithm} tuning")
             logging.info(f'Start Tabnet validation.')
@@ -1233,7 +1232,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
                         'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                         'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
-                        #'max_depth': trial.suggest_int('max_depth', 2, 8),
+                        # 'max_depth': trial.suggest_int('max_depth', 2, 8),
                         'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                         'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
                         'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
@@ -1264,7 +1263,6 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm} tuning")
                 else:
                     study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
-
 
                 study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["lgbm"], timeout=self.hyperparameter_tuning_max_runtime_secs["lgbm"], gc_after_trial=True, show_progress_bar=True)
                 self.optuna_studies[f"{algorithm}"] = {}
@@ -1341,8 +1339,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                             result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
                                             early_stopping_rounds=10, callbacks=[pruning_callback], seed=42,
                                             verbose_eval=False)
-                            # fobj=lgb_matth_score)
-                            avg_result = np.mean(np.array(result["multi_logloss-mean"]))  # Planned: matthew-mean
+                            avg_result = np.mean(np.array(result["multi_logloss-mean"]))
+                            #avg_result = self.meissner_cv_score(result["multi_logloss-mean"], penality_is_deducted=False)
+                            return avg_result
                         except Exception:
                             avg_result = 100
                         return avg_result
