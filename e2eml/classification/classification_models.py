@@ -1251,7 +1251,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         matthew = matthews_corrcoef(Y_test, pred_labels)
                         return matthew
                     else:
-                        result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
+                        result = lgb.cv(param, train_set=dtrain,  nfold=10, num_boost_round=param['num_boost_round'],
                                         early_stopping_rounds=10, callbacks=[pruning_callback], seed=42,
                                         verbose_eval=False)
                         avg_result = np.mean(np.array(result["binary_logloss-mean"]))

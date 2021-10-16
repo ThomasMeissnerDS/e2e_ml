@@ -1087,7 +1087,7 @@ class PreProcessing:
                 pass
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.80):
+    def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.70):
         """
         This method splits the dataframe either as a simple or as a time split.
         :param how: 'cross' for cross validation, 'time' for time validation.
@@ -3105,6 +3105,44 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
+
+    def delete_bad_rows(self):
+        if self.prediction_mode:
+            pass
+        else:
+            from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, RidgeClassifier, SGDClassifier
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+                model = lgb.LGBMClassifier()
+                model_2 = VWClassifier()
+                model_3 = Ridge()
+            else:
+                model = lgb.LGBMRegressor()
+                model_2 = VWRegressor()
+                model_3 = RidgeClassifier()
+            model.fit(X_test, Y_test)
+            preds = model.predict(X_train)
+            model_2.fit(X_test, Y_test)
+            preds_2 = model_2.predict(X_train)
+            model_3.fit(X_test, Y_test)
+            preds_3 = model_3.predict(X_train)
+
+            X_train[self.target_variable] = Y_train
+            X_train["lgbm_temp_preds"] = preds
+            X_train["vowpal_temp_preds"] = preds_2
+            X_train["ridge_temp_preds"] = preds_3
+            X_train["bad_row"] = ((X_train[self.target_variable] != X_train["lgbm_temp_preds"]) &
+                                  (X_train[self.target_variable] != X_train["vowpal_temp_preds"]) &
+                                  (X_train[self.target_variable] != X_train["ridge_temp_preds"]))
+            X_train = X_train[(X_train["bad_row"] == False)]
+            Y_train = X_train[self.target_variable]
+            X_train = X_train.drop(self.target_variable, axis=1)
+            X_train = X_train.drop("lgbm_temp_preds", axis=1)
+            X_train = X_train.drop("vowpal_temp_preds", axis=1)
+            X_train = X_train.drop("ridge_temp_preds", axis=1)
+            X_train = X_train.drop("bad_row", axis=1)
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
 
 
 

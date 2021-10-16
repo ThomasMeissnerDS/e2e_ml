@@ -126,7 +126,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                      nlp_transformer_columns='OriginalTweet'
                                                      )
 
-    titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 3,
+    titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 25,
                                                     "lgbm": 25,
                                                     "tabnet": 3,
                                                     "ngboost": 3,
@@ -134,7 +134,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "catboost": 3,
                                                     "ridge": 3,
                                                     "bruteforce_random": 10}
-    titanic_auto_ml.special_blueprint_algorithms = {"ridge": True,
+    titanic_auto_ml.special_blueprint_algorithms = {"ridge": False,
                                                     "xgboost": False,
                                                     "ngboost": False,
                                                     "lgbm": True,
@@ -143,7 +143,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "sklearn_ensemble": False,
                                                     "catboost": False
                                                     }
-    titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = True
+    titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = False
 
 
     titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
