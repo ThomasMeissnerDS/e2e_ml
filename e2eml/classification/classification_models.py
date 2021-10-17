@@ -217,6 +217,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
             metric = make_scorer(matthews_corrcoef)
 
             def objective(trial):
@@ -339,6 +340,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
             metric = make_scorer(matthews_corrcoef)
 
             def objective(trial):
@@ -480,6 +482,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
             eval_dataset = Pool(X_test, Y_test)
 
             def objective(trial):
@@ -613,6 +616,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
             X_train[X_train.columns.to_list()] = X_train[X_train.columns.to_list()].astype(float)
             X_test[X_test.columns.to_list()] = X_test[X_test.columns.to_list()].astype(float)
 
@@ -916,6 +920,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
         else:
             if autotune:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+                X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+                # get sample size to run brute force feature selection against
+
+                # TODO: Add sampling to speed up hyperparameter optimization
                 classes_weights = class_weight.compute_sample_weight(
                     class_weight='balanced',
                     y=Y_train
@@ -1218,6 +1226,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             classes_weights = class_weight.compute_sample_weight(
                 class_weight='balanced',
                 y=Y_train)
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
 
             if self.class_problem == 'binary':
                 weights_for_lgb = self.calc_scale_pos_weight()
@@ -1467,6 +1476,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
                 ensemble_variation = trial.suggest_categorical("ensemble_variant", ["2_boosters",
@@ -1650,6 +1660,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
             classes_weights = class_weight.compute_sample_weight(
                 class_weight='balanced',
                 y=Y_train)

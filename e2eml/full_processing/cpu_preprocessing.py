@@ -76,7 +76,7 @@ class PreProcessing:
                  nlp_transformer_columns=None, transformer_chosen='bert-base-uncased', transformer_model_load_from_path=None,
                  transformer_model_save_states_path=None, transformer_epochs=25, prediction_mode=False, preferred_training_mode='auto',
                  preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
-                 logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross'):
+                 logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross', rapids_acceleration=False):
 
         self.dataframe = datasource
         self.kfolds_column = None
@@ -147,6 +147,7 @@ class PreProcessing:
             print('No preferred_training_mode chosen. Fallback to CPU.')
         self.tune_mode = tune_mode
         self.train_split_type = train_split_type
+        self.rapids_acceleration = rapids_acceleration
         self.date_columns = date_columns
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
@@ -202,6 +203,7 @@ class PreProcessing:
             "bruteforce_random_feature_selection": False, # slow
             "sort_columns_alphabetically": True,
             "synthetic_data_augmentation": False,
+            "delete_unpredictable_training_rows": False,
             "scale_data": False,
             "smote": False
         }
@@ -321,6 +323,7 @@ class PreProcessing:
                                                        "bruteforce_random": 2*60*60}
 
         self.feature_selection_sample_size = 100000
+        self.hyperparameter_tuning_sample_size = 10000
         self.brute_force_selection_sample_size = 10000
         self.brute_force_selection_base_learner = 'double' # 'lgbm', 'vowpal_wabbit', 'auto
 
@@ -1332,35 +1335,77 @@ class PreProcessing:
         """
         self.get_current_timestamp('Execute clustering as a feature')
 
-        def add_dbscan_clusters(dataframe, eps=eps, n_jobs=n_jobs, min_samples=min_samples):
-            dataframe_red = dataframe.loc[:, dataframe.columns.isin(self.num_columns)].copy()
-            db = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=n_jobs).fit(dataframe_red)
-            labels = db.labels_
-            dataframe[f'dbscan_cluster_{eps}'] = labels
-            del db
-            del labels
-            _ = gc.collect()
-            return dataframe
+        if self.rapids_acceleration:
+            import cudf
+            from cuml import KMeans as RapidsKMeans
+            from cuml import DBSCAN as RapidsDBSCAN
+            from cuml import AgglomerativeClustering as RapidsAgglomerativeClustering
 
-        def add_gaussian_mixture_clusters(dataframe, n_components=nb_clusters):
-            gaussian = GaussianMixture(n_components=n_components)
-            gaussian.fit(dataframe)
-            gaussian_clusters = gaussian.predict(dataframe)
-            dataframe[f"gaussian_clusters_{n_components}"] = gaussian_clusters
-            del gaussian
-            del gaussian_clusters
-            _ = gc.collect()
-            return dataframe
+            def add_dbscan_clusters(dataframe, eps=eps, n_jobs=n_jobs, min_samples=min_samples):
+                dataframe_red = dataframe.loc[:, dataframe.columns.isin(self.num_columns)].copy()
+                dataframe_red = cudf.from_pandas(dataframe_red)
+                db = RapidsDBSCAN(eps=eps, min_samples=min_samples).fit(dataframe_red)
+                labels = db.labels_
+                dataframe[f'dbscan_cluster_{eps}'] = labels
+                del db
+                del labels
+                _ = gc.collect()
+                dataframe = dataframe_red.to_pandas()
+                return dataframe
 
-        def add_kmeans_clusters(dataframe, n_components=nb_clusters):
-            kmeans = KMeans(n_clusters=n_components, random_state=42, n_init=20, max_iter=500)
-            kmeans.fit(dataframe)
-            kmeans_clusters = kmeans.predict(dataframe)
-            dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
-            del kmeans
-            del kmeans_clusters
-            _ = gc.collect()
-            return dataframe
+            def add_gaussian_mixture_clusters(dataframe, n_components=nb_clusters):
+                dataframe = cudf.from_pandas(dataframe)
+                kmeans = RapidsKMeans(n_clusters=n_components, random_state=42, n_init=20, max_iter=500)
+                kmeans.fit(dataframe)
+                kmeans_clusters = kmeans.predict(dataframe)
+                dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
+                del kmeans
+                del kmeans_clusters
+                _ = gc.collect()
+                dataframe = dataframe.to_pandas()
+                return dataframe
+
+            def add_kmeans_clusters(dataframe, n_components=nb_clusters):
+                dataframe = cudf.from_pandas(dataframe)
+                kmeans = RapidsKMeans(n_clusters=n_components, random_state=42, n_init=20, max_iter=500)
+                kmeans.fit(dataframe)
+                kmeans_clusters = kmeans.predict(dataframe)
+                dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
+                del kmeans
+                del kmeans_clusters
+                _ = gc.collect()
+                dataframe = dataframe.to_pandas()
+                return dataframe
+        else:
+            def add_dbscan_clusters(dataframe, eps=eps, n_jobs=n_jobs, min_samples=min_samples):
+                dataframe_red = dataframe.loc[:, dataframe.columns.isin(self.num_columns)].copy()
+                db = DBSCAN(eps=eps, min_samples=min_samples).fit(dataframe_red)
+                labels = db.labels_
+                dataframe[f'dbscan_cluster_{eps}'] = labels
+                del db
+                del labels
+                _ = gc.collect()
+                return dataframe
+
+            def add_gaussian_mixture_clusters(dataframe, n_components=nb_clusters):
+                gaussian = GaussianMixture(n_components=n_components)
+                gaussian.fit(dataframe)
+                gaussian_clusters = gaussian.predict(dataframe)
+                dataframe[f"gaussian_clusters_{n_components}"] = gaussian_clusters
+                del gaussian
+                del gaussian_clusters
+                _ = gc.collect()
+                return dataframe
+
+            def add_kmeans_clusters(dataframe, n_components=nb_clusters):
+                kmeans = KMeans(n_clusters=n_components, random_state=42, n_init=20, max_iter=500)
+                kmeans.fit(dataframe)
+                kmeans_clusters = kmeans.predict(dataframe)
+                dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
+                del kmeans
+                del kmeans_clusters
+                _ = gc.collect()
+                return dataframe
 
         logging.info('Start adding clusters as additional features.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
@@ -2164,8 +2209,8 @@ class PreProcessing:
             self.cat_columns_encoded = cat_columns
             self.preprocess_decisions[f"category_encoders"] = {}
             if algorithm == 'target':
-                enc_enc = TargetEncoder(cols=cat_columns)
-                enc = NestedCVWrapper(enc_enc, random_state=42)
+                enc = TargetEncoder(cols=cat_columns)
+                #enc = NestedCVWrapper(enc_enc, random_state=42)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
@@ -2180,8 +2225,8 @@ class PreProcessing:
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
             elif algorithm == 'GLMM':
-                enc_enc = GLMMEncoder(cols=cat_columns)
-                enc = NestedCVWrapper(enc_enc, random_state=42)
+                enc = GLMMEncoder(cols=cat_columns)
+                #enc = NestedCVWrapper(enc_enc, random_state=42)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
@@ -2191,8 +2236,8 @@ class PreProcessing:
                 X_test = enc.transform(X_test)
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
             elif algorithm == 'leaveoneout':
-                enc_enc = LeaveOneOutEncoder(cols=cat_columns)
-                enc = NestedCVWrapper(enc_enc, random_state=42)
+                enc = LeaveOneOutEncoder(cols=cat_columns)
+                #enc = NestedCVWrapper(enc_enc, random_state=42)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
@@ -3106,42 +3151,73 @@ class PreProcessing:
             optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
 
-    def delete_bad_rows(self):
+    def delete_unpredictable_training_rows(self):
         if self.prediction_mode:
             pass
         else:
-            from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, RidgeClassifier, SGDClassifier
+            from sklearn.linear_model import LogisticRegression, LinearRegression, RidgeClassifier, SGDClassifier, SGDRegressor
+            from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             if self.class_problem == 'binary' or self.class_problem == 'multiclass':
                 model = lgb.LGBMClassifier()
                 model_2 = VWClassifier()
-                model_3 = Ridge()
+                model_3 = RidgeClassifier()
+                model_4 = SGDClassifier()
+                model_5 = GradientBoostingClassifier()
             else:
                 model = lgb.LGBMRegressor()
                 model_2 = VWRegressor()
-                model_3 = RidgeClassifier()
+                model_3 = Ridge()
+                model_4 = SGDRegressor()
+                model_5 = GradientBoostingRegressor
             model.fit(X_test, Y_test)
             preds = model.predict(X_train)
             model_2.fit(X_test, Y_test)
             preds_2 = model_2.predict(X_train)
             model_3.fit(X_test, Y_test)
             preds_3 = model_3.predict(X_train)
+            model_4.fit(X_test, Y_test)
+            preds_4 = model_4.predict(X_train)
+            model_5.fit(X_test, Y_test)
+            preds_5 = model_5.predict(X_train)
 
             X_train[self.target_variable] = Y_train
             X_train["lgbm_temp_preds"] = preds
             X_train["vowpal_temp_preds"] = preds_2
             X_train["ridge_temp_preds"] = preds_3
+            X_train["sgd_temp_preds"] = preds_4
+            X_train["gradient_boosting_temp_preds"] = preds_5
             X_train["bad_row"] = ((X_train[self.target_variable] != X_train["lgbm_temp_preds"]) &
                                   (X_train[self.target_variable] != X_train["vowpal_temp_preds"]) &
-                                  (X_train[self.target_variable] != X_train["ridge_temp_preds"]))
+                                  (X_train[self.target_variable] != X_train["ridge_temp_preds"]) &
+                                  (X_train[self.target_variable] != X_train["sgd_temp_preds"]) &
+                                  (X_train[self.target_variable] != X_train["gradient_boosting_temp_preds"]))
             X_train = X_train[(X_train["bad_row"] == False)]
             Y_train = X_train[self.target_variable]
             X_train = X_train.drop(self.target_variable, axis=1)
             X_train = X_train.drop("lgbm_temp_preds", axis=1)
             X_train = X_train.drop("vowpal_temp_preds", axis=1)
             X_train = X_train.drop("ridge_temp_preds", axis=1)
+            X_train = X_train.drop("sgd_temp_preds", axis=1)
+            X_train = X_train.drop("gradient_boosting_temp_preds", axis=1)
             X_train = X_train.drop("bad_row", axis=1)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def get_hyperparameter_tuning_sample_df(self):
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            if self.hyperparameter_tuning_sample_size > len(X_train.index):
+                sample_size = len(X_train.index)
+            else:
+                sample_size = self.hyperparameter_tuning_sample_size
+
+            X_train[self.target_variable] = Y_train
+            X_train_sample = X_train.sample(sample_size, random_state=42).copy()
+            Y_train_sample = X_train_sample[self.target_variable].copy()
+            X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+            return X_train_sample, Y_train_sample
 
 
 

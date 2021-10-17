@@ -204,6 +204,11 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 2.6.0
+ - Hyperparameter tuning does happen on a sample of the train data from now on (sample size can be controlled)
+ - An experimental feature has been added, which tries to find unpredictable training data rows to delete them from the training
+   (this accelerates training, but costs a bit model performance)
+ - Blueprints can be accelerated with Nvidia RAPIDS (works on clustering only for now)
 * 2.5.9
  - optimized loss function for TabNet
 * 2.5.1

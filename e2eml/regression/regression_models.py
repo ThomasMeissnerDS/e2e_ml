@@ -137,6 +137,8 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+
             def objective(trial):
                 solver = trial.suggest_categorical("solver", ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"])
                 param = {
@@ -241,6 +243,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
                 loss = trial.suggest_categorical("loss", ["huber", "squared_loss"])
@@ -354,6 +357,8 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+
             def objective(trial):
                 param = {
                     'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
@@ -462,6 +467,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
             eval_dataset = Pool(X_test, Y_test)
 
             def objective(trial):
@@ -573,6 +579,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
 
             # load settings
             batch_size = self.tabnet_settings["batch_size"]
@@ -843,6 +850,7 @@ class RegressionModels(postprocessing.FullPipeline):
         else:
             if autotune:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+                X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
                 D_train = xgb.DMatrix(X_train, label=Y_train)
                 D_test = xgb.DMatrix(X_test, label=Y_test)
 
@@ -1017,6 +1025,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
                 dtrain = lgb.Dataset(X_train, label=Y_train)
@@ -1148,6 +1157,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
                 ensemble_variation = trial.suggest_categorical("ensemble_variant", ["2_boosters",
@@ -1299,6 +1309,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
                 base_learner_choice = trial.suggest_categorical("base_learner", ["DecTree_depth2",
