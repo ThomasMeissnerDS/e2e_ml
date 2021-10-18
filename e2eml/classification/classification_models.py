@@ -651,7 +651,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         mode=mode, patience=30, min_lr=1e-5, factor=factor),
                     scheduler_fn=ReduceLROnPlateau,
                     seed=42,
-                    verbose=1
+                    verbose=1,
+                    #device_name='gpu'
                 )
                 mean_matthew_corr = []
                 from sklearn.model_selection import StratifiedKFold
