@@ -2379,11 +2379,25 @@ class PreProcessing:
 
     def create_trainers(self):
         if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-            model_1 = VWClassifier()
-            model_2 = lgb.LGBMClassifier(random_state=self.preprocess_decisions["random_state_counter"])
+            if self.rapids_acceleration:
+                from cuml.ensemble import RandomForestClassifier
+                model_2 = RandomForestClassifier(max_features=1.0,
+                                                 max_depth=8,
+                                                 output_type='numpy',
+                                                 random_state=self.preprocess_decisions["random_state_counter"])
+            else:
+                model_1 = VWClassifier()
+                model_2 = lgb.LGBMClassifier(random_state=self.preprocess_decisions["random_state_counter"])
         else:
-            # model_1 = VWRegressor()
-            model_2 = lgb.LGBMRegressor(random_state=self.preprocess_decisions["random_state_counter"])
+            if self.rapids_acceleration:
+                from cuml.ensemble import RandomForestRegressor
+                model_2 = RandomForestRegressor(max_features=1.0,
+                                                 max_depth=8,
+                                                 output_type='numpy',
+                                                 random_state=self.preprocess_decisions["random_state_counter"])
+            else:
+                # model_1 = VWRegressor()
+                model_2 = lgb.LGBMRegressor(random_state=self.preprocess_decisions["random_state_counter"])
         return model_2
 
     def meissner_cv_score(self, matthew_scores, penality_is_deducted=True):
@@ -2423,6 +2437,12 @@ class PreProcessing:
             X_train_sample = X_train_sample.sample(sample_size, random_state=self.preprocess_decisions["random_state_counter"])
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+
+            if self.rapids_acceleration:
+                X_train = X_train.astype('float32')
+                X_train_sample = X_train_sample.astype('float32')
+                X_test = X_test.astype('float32')
+
 
             if metric:
                 metric = metric
@@ -2672,6 +2692,9 @@ class PreProcessing:
                 temp_df = pd.concat(temp_df_list, ignore_index=False)
                 Y_temp = temp_df[self.target_variable]
                 temp_df = temp_df.drop(self.target_variable, axis=1)
+                if self.rapids_acceleration:
+                    temp_df = temp_df.astype('float32')
+
 
                 # get train scores
                 scores_2 = cross_val_score(model_2_copy, temp_df, Y_temp, cv=10, scoring=metric)
@@ -2813,6 +2836,8 @@ class PreProcessing:
             X_train[column_name] = temp_df[column_name]
             Y_train = X_train[self.target_variable]
             X_train = X_train.drop(self.target_variable, axis=1)
+            if self.rapids_acceleration:
+                X_train = X_train.astype('float32')
 
             try:
                 # get train scores
