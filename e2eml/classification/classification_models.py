@@ -617,6 +617,21 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+
+            """# test
+            categorical_columns = []
+            categorical_dims =  {}
+            for col in X_train.columns[X_train.dtypes == object]:
+                from sklearn.preprocessing import LabelEncoder
+                l_enc = LabelEncoder()
+                X_train[col] = X_train[col].fillna("VV_likely")
+                X_train[col] = l_enc.fit_transform(X_train[col].values)
+                X_test[col] = l_enc.transform(X_test[col].values)
+                categorical_columns.append(col)
+                categorical_dims[col] = len(l_enc.classes_)
+            cat_idxs = [i for i, f in enumerate(X_train.columns.to_list()) if f in categorical_columns]
+            cat_dims = [categorical_dims[f] for i, f in enumerate(X_train.columns.to_list()) if f in categorical_columns]"""
+
             X_train[X_train.columns.to_list()] = X_train[X_train.columns.to_list()].astype(float)
             X_test[X_test.columns.to_list()] = X_test[X_test.columns.to_list()].astype(float)
 
@@ -639,6 +654,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
 
                 param = dict(
                     gamma=gamma,
+                    #cat_idxs=cat_idxs,
+                    #cat_dims=cat_dims,
                     lambda_sparse=lambda_sparse,
                     n_d=depths,
                     n_a=depths,
@@ -709,7 +726,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     except Exception:
                         matthew = 0
                     mean_matthew_corr.append(matthew)
-                    #print(mean_matthew_corr)
+                    print(mean_matthew_corr)
                 meissner_cv = self.meissner_cv_score(mean_matthew_corr)
                 return meissner_cv
 
@@ -1228,10 +1245,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
             classes_weights = class_weight.compute_sample_weight(
                 class_weight='balanced',
                 y=Y_train)
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
 
             if self.class_problem == 'binary':
                 weights_for_lgb = self.calc_scale_pos_weight()

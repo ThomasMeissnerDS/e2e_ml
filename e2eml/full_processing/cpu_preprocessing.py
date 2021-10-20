@@ -2967,19 +2967,19 @@ class PreProcessing:
                 metric = metric
             elif self.class_problem == 'binary':
                 if self.feature_selection_backend == 'lgbm':
-                    model = lgb.LGBMClassifier(random_state=42)
+                    model = lgb.LGBMClassifier(random_state=42, objective='binary')
                     br = BoostARoota(clf=model)
                 elif self.feature_selection_backend == 'xgboost':
                     br = BoostARoota(metric='logloss')
             elif self.class_problem == 'multiclass':
                 if self.feature_selection_backend == 'lgbm':
-                    model = lgb.LGBMClassifier(random_state=42)
+                    model = lgb.LGBMClassifier(random_state=42, objective='multiclass')
                     br = BoostARoota(clf=model)
                 elif self.feature_selection_backend == 'xgboost':
                     br = BoostARoota(metric='mlogloss')
             elif self.class_problem == 'regression':
                 if self.feature_selection_backend == 'lgbm':
-                    model = lgb.LGBMRegressor(random_state=42)
+                    model = lgb.LGBMRegressor(random_state=42, objective='regression')
                     br = BoostARoota(clf=model)
                 elif self.feature_selection_backend == 'xgboost':
                     br = BoostARoota(metric='mae')
