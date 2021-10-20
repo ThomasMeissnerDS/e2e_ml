@@ -59,6 +59,7 @@ from classification import classification_blueprints # regression bps are availa
 test_class = classification_blueprints.ClassificationBluePrint(datasource=train_df, 
                         target_variable=target,
                         train_split_type='cross',
+                        rapids_acceleration=True, # if installed into a conda environment with NVIDIA Rapids, this can be used to accelerate preprocessing with GPU
                         preferred_training_mode='auto', # Auto will automatically identify, if LGBM & Xgboost can use GPU acceleration*
                         tune_mode='accurate' # hyperparameter sets will be validated with 10-fold CV Set this to 'simple' for 1-fold CV
                         #categorical_columns=cat_columns # you can define categorical columns, otherwise e2e does this automatically
@@ -122,15 +123,19 @@ test_class.special_blueprint_algorithms = {"ridge": True,
 Also preprocessing steps can be selected:
 test_class.blueprint_step_selection_non_nlp = {
             "automatic_type_detection_casting": True,
+            "early_numeric_only_feature_selection": True,
             "remove_duplicate_column_names": True,
             "reset_dataframe_index": True,
-            "handle_target_skewness": True,
-            "holistic_null_filling": True,
+            "regex_clean_text_data": False,
+            "handle_target_skewness": False,
+            "holistic_null_filling": True, # slow
+            "iterative_null_imputation": False, # very slow
             "fill_infinite_values": True,
             "datetime_converter": True,
-            "pos_tagging_pca": True,
+            "pos_tagging_pca": False, # slow with many categories
             "append_text_sentiment_score": False,
-            "tfidf_vectorizer_to_pca": True,
+            "tfidf_vectorizer_to_pca": True, # slow with many categories
+            "tfidf_vectorizer": False,
             "rare_feature_processing": True,
             "cardinality_remover": True,
             "delete_high_null_cols": True,
@@ -143,17 +148,22 @@ test_class.blueprint_step_selection_non_nlp = {
             "remove_collinearity": True,
             "skewness_removal": True,
             "clustering_as_a_feature_dbscan": True,
-            "clustering_as_a_feature_kmeans_loop": True,
-            "clustering_as_a_feature_gaussian_mixture_loop": True,
+            "clustering_as_a_feature_kmeans_loop": True, # slow for big data, but can be heavily accelerated using rapids_acceleration=True during class instantiation
+            "clustering_as_a_feature_gaussian_mixture_loop": True, # slow for big data, but can be heavily accelerated using rapids_acceleration=True during class instantiation (will run a Kmeans on GPU)
+            "pca_clustering_results": True,
             "reduce_memory_footprint": False,
             "automated_feature_selection": True,
-            "bruteforce_random_feature_selection": True, # This might run to long runtimes, but usually improves performance
+            "bruteforce_random_feature_selection": False, # slow, this feature is experimental!
             "sort_columns_alphabetically": True,
+            "synthetic_data_augmentation": False, # this feature is experimental, can be heavily accelerated using rapids_acceleration=True during class instantiation
+            "delete_unpredictable_training_rows": False, # this feature is experimental!
             "scale_data": False,
             "smote": False
         }
         
-The bruteforce_random_feature_selection step is experimental. It showed promising results. The number of trials can be controlled 
+The bruteforce_random_feature_selection step is experimental. It showed promising results. The number of trials can be controlled.
+This step is useful, if the model overfitted (which should happen rarely), because too many features with too little
+feature importance have been considered. 
 like test_class.hyperparameter_tuning_rounds["bruteforce_random"] = 400 .
 
 Generally the class instance is a control center and gives room for plenty of customization:
@@ -170,15 +180,37 @@ test_class.hyperparameter_tuning_rounds = {"xgboost": 100,
                                              "ngboost": 25,
                                              "sklearn_ensemble": 10,
                                              "ridge": 100,
+                                             "elasticnet": 100,
+                                             "catboost": 25,
+                                             "sgd": 25,
                                              "bruteforce_random": 400}
 
-test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 24*60*60,
-                                             "lgbm": 24*60*60,
-                                             "tabnet": 24*60*60,
-                                             "ngboost": 24*60*60,
-                                             "sklearn_ensemble": 24*60*60,
-                                             "ridge": 24*60*60,
-                                             "bruteforce_random": 24*60*60}
+test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
+                                                       "lgbm": 2*60*60,
+                                                       "tabnet": 2*60*60,
+                                                       "ngboost": 2*60*60,
+                                                       "sklearn_ensemble": 2*60*60,
+                                                       "ridge": 2*60*60,
+                                                       "elasticnet": 2*60*60,
+                                                       "catboost": 2*60*60,
+                                                       "sgd": 2*60*60,
+                                                       "bruteforce_random": 2*60*60}
+
+Working with big data can bring all hardware to it's needs. e2eml has been tested with:
+- Ryzen 5950x (16 cores CPU)
+- Geforce RTX 3090 (24GB VRAM)
+- 32GB RAM                                                      
+e2eml has been able to process 100k rows with 200 columns approximately using these specs stable for non-blended 
+blueprints. Blended blueprints consume more resources as e2eml keep the trained models in memory as of now.
+
+For data bigger than 100k rows it is possible to limit the amount of data for various preprocessing steps:
+- test_class.feature_selection_sample_size = 100000 # for feature selection
+- test_class.hyperparameter_tuning_sample_size = 100000 # for model hyperparameter optimization
+- test_class.brute_force_selection_sample_size = 15000 # for an experimental feature selection
+
+However during our internal tests, we achieved better results, using 100k rows and tune hyperparameters using all of them,
+than using 600k rows and tuning hyperparameters on a sample of 50k. This has been the case, because e2eml will use a broad
+parameter space during hyperparameter tuning.
 """
 # After running the blueprint the pipeline is done. I can be saved with:
 save_to_production(test_class, file_name='automl_instance')
@@ -204,7 +236,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 2.6.0
+* 2.6.1
  - Hyperparameter tuning does happen on a sample of the train data from now on (sample size can be controlled)
  - An experimental feature has been added, which tries to find unpredictable training data rows to delete them from the training
    (this accelerates training, but costs a bit model performance)

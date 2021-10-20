@@ -296,7 +296,6 @@ class PreProcessing:
 
         self.tabnet_settings = {f"batch_size": rec_batch_size,
                                 "virtual_batch_size": virtual_batch_size,
-                                # pred batch size?
                                 "num_workers": 0,
                                 "max_epochs": 1000}
 

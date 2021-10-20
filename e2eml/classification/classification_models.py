@@ -704,8 +704,12 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     else:
                         predicted_probs = partial_probs
                         predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
-                    matthew = matthews_corrcoef(Y_test_num, predicted_classes)
+                    try:
+                        matthew = matthews_corrcoef(Y_test_num, predicted_classes)
+                    except Exception:
+                        matthew = 0
                     mean_matthew_corr.append(matthew)
+                    #print(mean_matthew_corr)
                 meissner_cv = self.meissner_cv_score(mean_matthew_corr)
                 return meissner_cv
 
