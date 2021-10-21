@@ -942,16 +942,19 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
         else:
             if autotune:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-                X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
-                # get sample size to run brute force feature selection against
-
-                # TODO: Add sampling to speed up hyperparameter optimization
                 classes_weights = class_weight.compute_sample_weight(
                     class_weight='balanced',
-                    y=Y_train
-                )
+                    y=Y_train)
                 D_train = xgb.DMatrix(X_train, label=Y_train, weight=classes_weights)
                 D_test = xgb.DMatrix(X_test, label=Y_test)
+
+                x_train, y_train = self.get_hyperparameter_tuning_sample_df()
+                classes_weights_sample = class_weight.compute_sample_weight(
+                    class_weight='balanced',
+                    y=y_train)
+                d_train = xgb.DMatrix(x_train, label=y_train, weight=classes_weights_sample)
+                d_test = xgb.DMatrix(X_test, label=Y_test)
+                # get sample size to run brute force feature selection against
 
                 if self.class_problem == 'binary':
                     def objective(trial):
@@ -974,15 +977,15 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         }
                         pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-mlogloss")
                         if tune_mode == 'simple':
-                            eval_set = [(D_train, 'train'), (D_test, 'test')]
-                            model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
+                            eval_set = [(d_train, 'train'), (d_test, 'test')]
+                            model = xgb.train(param, d_train, num_boost_round=param['steps'], early_stopping_rounds=10,
                                               evals=eval_set, callbacks=[pruning_callback])
                             preds = model.predict(D_test)
                             pred_labels = np.asarray([np.argmax(line) for line in preds])
                             matthew = matthews_corrcoef(Y_test, pred_labels)
                             return matthew
                         else:
-                            result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'],
+                            result = xgb.cv(params=param, dtrain=d_train, num_boost_round=param['steps'],
                                             early_stopping_rounds=10, nfold=10,
                                             as_pandas=True, seed=42, callbacks=[pruning_callback])
                             # avg_result = (result['train-mlogloss-mean'].mean() + result['test-mlogloss-mean'].mean())/2
@@ -1245,18 +1248,20 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
             classes_weights = class_weight.compute_sample_weight(
                 class_weight='balanced',
                 y=Y_train)
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
+            classes_weights_sample = class_weight.compute_sample_weight(
+                class_weight='balanced',
+                y=y_train)
 
             if self.class_problem == 'binary':
                 weights_for_lgb = self.calc_scale_pos_weight()
 
                 def objective(trial):
-                    dtrain = lgb.Dataset(X_train, label=Y_train)
+                    dtrain = lgb.Dataset(x_train, label=y_train, weight=classes_weights_sample)
                     param = {
-                        # TODO: Move to additional folder with pyfile "constants" (use OS absolute path)
                         'objective': 'binary',
                         'metric': 'binary_logloss',
                         # 'scale_pos_weight': trial.suggest_loguniform('scale_pos_weight', 1e-3, 1e3),
@@ -1324,7 +1329,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     'device': train_on,
                     'gpu_use_dp': gpu_use_dp
                 }
-                dtrain = lgb.Dataset(X_train, label=Y_train)
+                try:
+                    X_train = X_train.drop(self.target_variable, axis=1)
+                except Exception:
+                    pass
+                dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
                 dtest = lgb.Dataset(X_test, label=Y_test)
                 model = lgb.train(param, dtrain, valid_sets=[dtrain, dtest], valid_names=['train', 'valid'],
                                   early_stopping_rounds=10)
@@ -1338,7 +1347,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 nb_classes = self.num_classes
 
                 def objective(trial):
-                    dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
+                    dtrain = lgb.Dataset(x_train, label=y_train, weight=classes_weights_sample)
                     param = {
                         'objective': 'multiclass',
                         'metric': 'multi_logloss',
@@ -1398,7 +1407,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 param = {
                     'objective': 'multiclass',
                     'metric': 'multi_logloss',
-                    'class_weight': classes_weights,
+                    #'class_weight': classes_weights,
                     'num_boost_round': lgbm_best_param["num_boost_round"],
                     'num_class': nb_classes,
                     'lambda_l1': lgbm_best_param["lambda_l1"],
@@ -1414,7 +1423,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     'device': train_on,
                     'gpu_use_dp': gpu_use_dp
                 }
-                dtrain = lgb.Dataset(X_train, label=Y_train)
+                try:
+                    X_train = X_train.drop(self.target_variable, axis=1)
+                except Exception:
+                    pass
+                dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
                 dtest = lgb.Dataset(X_test, label=Y_test)
                 model = lgb.train(param, dtrain, valid_sets=[dtrain, dtest], valid_names=['train', 'valid'],
                                   early_stopping_rounds=10)
