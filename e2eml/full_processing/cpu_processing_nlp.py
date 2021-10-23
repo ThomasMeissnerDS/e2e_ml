@@ -470,7 +470,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 try:
                     # do we have at least 1 word?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
-                    if df[f'nof_words_{text_col}'].max() >= 3:
+                    if df[f'nof_words_{text_col}'].max() >= 2:
                         df[text_col].fillna('None', inplace=True)
                         tfids = TfidfVectorizer(ngram_range=ngram_range,
                                                 strip_accents='unicode',

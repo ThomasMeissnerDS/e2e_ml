@@ -1412,40 +1412,61 @@ class PreProcessing:
             self.data_scaling()
         if algorithm == 'dbscan':
             if self.prediction_mode:
-                self.dataframe = add_dbscan_clusters(self.dataframe)
+                try:
+                    self.dataframe = add_dbscan_clusters(self.dataframe)
+                except ValueError:
+                    self.dataframe[f"kmeans_clusters_{nb_clusters}"] = 0
                 logging.info('Finished adding clusters as additional features.')
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.dataframe
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-                X_train = add_dbscan_clusters(X_train)
-                X_test = add_dbscan_clusters(X_test)
+                try:
+                    X_train = add_dbscan_clusters(X_train)
+                    X_test = add_dbscan_clusters(X_test)
+                except ValueError:
+                    X_train[f"kmeans_clusters_{nb_clusters}"] = 0
+                    X_test[f"kmeans_clusters_{nb_clusters}"] = 0
                 logging.info('Finished adding clusters as additional features.')
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         elif algorithm == 'gaussian':
             if self.prediction_mode:
-                self.dataframe = add_gaussian_mixture_clusters(self.dataframe)
+                try:
+                    self.dataframe = add_gaussian_mixture_clusters(self.dataframe)
+                except ValueError:
+                    self.dataframe[f"kmeans_clusters_{nb_clusters}"] = 0
                 logging.info('Finished adding clusters as additional features.')
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.dataframe
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-                X_train = add_gaussian_mixture_clusters(X_train)
-                X_test = add_gaussian_mixture_clusters(X_test)
+                try:
+                    X_train = add_gaussian_mixture_clusters(X_train)
+                    X_test = add_gaussian_mixture_clusters(X_test)
+                except ValueError:
+                    X_train[f"kmeans_clusters_{nb_clusters}"] = 0
+                    X_test[f"kmeans_clusters_{nb_clusters}"] = 0
                 logging.info('Finished adding clusters as additional features.')
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         elif algorithm == 'kmeans':
             if self.prediction_mode:
-                self.dataframe = add_kmeans_clusters(self.dataframe)
+                try:
+                    self.dataframe = add_kmeans_clusters(self.dataframe)
+                except ValueError:
+                    self.dataframe[f"kmeans_clusters_{nb_clusters}"] = 0
                 logging.info('Finished adding clusters as additional features.')
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.dataframe
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-                X_train = add_kmeans_clusters(X_train)
-                X_test = add_kmeans_clusters(X_test)
+                try:
+                    X_train = add_kmeans_clusters(X_train)
+                    X_test = add_kmeans_clusters(X_test)
+                except ValueError:
+                    X_train[f"kmeans_clusters_{nb_clusters}"] = 0
+                    X_test[f"kmeans_clusters_{nb_clusters}"] = 0
                 logging.info('Finished adding clusters as additional features.')
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
