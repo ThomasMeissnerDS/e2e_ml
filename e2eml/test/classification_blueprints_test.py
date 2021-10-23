@@ -4,6 +4,7 @@ from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import classification_report
 from sklearn.utils import shuffle
 import re
+#import pytest
 
 
 def load_titanic_data():
@@ -111,6 +112,8 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                        categorical_columns=test_categorical_cols,
                                                      preferred_training_mode='auto',
                                                      tune_mode='accurate')
+        titanic_auto_ml.hyperparameter_tuning_sample_size = 400
+
     elif dataset == 'synthetic_multiclass':
         test_df, test_target, val_df, val_df_target, test_categorical_cols = steel_fault_multiclass_data()
         titanic_auto_ml = cb.ClassificationBluePrint(datasource=test_df,
@@ -126,21 +129,21 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                      nlp_transformer_columns='OriginalTweet'
                                                      )
 
-    titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 25,
-                                                    "lgbm": 25,
+    titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 10,
+                                                    "lgbm": 10,
                                                     "tabnet": 3,
-                                                    "ngboost": 3,
+                                                    "ngboost": 10,
                                                     "sklearn_ensemble": 3,
                                                     "catboost": 3,
                                                     "ridge": 3,
                                                     "bruteforce_random": 10}
-    titanic_auto_ml.special_blueprint_algorithms = {"ridge": False,
-                                                    "xgboost": False,
-                                                    "ngboost": False,
-                                                    "lgbm": True,
-                                                    "tabnet": False,
+    titanic_auto_ml.special_blueprint_algorithms = {"ridge": False, #titanic, #synthetic_multiclass
+                                                    "xgboost": False, #titanic
+                                                    "ngboost": True, #titanic, #synthetic_multiclass
+                                                    "lgbm": False, #titanic
+                                                    "tabnet": False, #titanic
                                                     "vowpal_wabbit": False,
-                                                    "sklearn_ensemble": False,
+                                                    "sklearn_ensemble": False, #titanic, #synthetic_multiclass
                                                     "catboost": False
                                                     }
     titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = False
@@ -172,4 +175,4 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
 
 
 if __name__ == '__main__':
-    test_ml_special_multiclass_full_processing_multimodel_max_voting('titanic')
+    test_ml_special_multiclass_full_processing_multimodel_max_voting('synthetic_multiclass')

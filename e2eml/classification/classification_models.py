@@ -217,7 +217,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
             metric = make_scorer(matthews_corrcoef)
 
             def objective(trial):
@@ -233,9 +233,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                               tol=param["tol"],
                               normalize=param["normalize"],
                               solver=solver,
-                              random_state=42).fit(X_train, Y_train)
+                              random_state=42)#.fit(x_train, y_train)
                 try:
-                    scores = cross_val_score(model, X_train, Y_train, cv=10, scoring=metric)
+                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring=metric)
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
@@ -256,6 +256,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 self.optuna_studies[f"{algorithm}_param_importance"] = fig
                 fig.show()
             except ZeroDivisionError:
+                pass
+
+            try:
+                X_train = X_train.drop(self.target_variable, axis=1)
+            except Exception:
                 pass
 
             best_parameters = study.best_trial.params
@@ -340,7 +345,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
             metric = make_scorer(matthews_corrcoef)
 
             def objective(trial):
@@ -365,9 +370,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                                       early_stopping=True,
                                       validation_fraction=0.2,
                                       class_weight='balanced',
-                                      random_state=42).fit(X_train, Y_train)
+                                      random_state=42)#.fit(X_train, Y_train)
                 try:
-                    scores = cross_val_score(model, X_train, Y_train, cv=5, scoring=metric)
+                    scores = cross_val_score(model, x_train, y_train, cv=5, scoring=metric)
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
@@ -388,6 +393,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 self.optuna_studies[f"{algorithm}_param_importance"] = fig
                 fig.show()
             except ZeroDivisionError:
+                pass
+
+            try:
+                X_train = X_train.drop(self.target_variable, axis=1)
+            except Exception:
                 pass
 
             best_parameters = study.best_trial.params
@@ -482,7 +492,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
             eval_dataset = Pool(X_test, Y_test)
 
             def objective(trial):
@@ -502,11 +512,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                                           #eval_metric=["MultiClass"],
                                           auto_class_weights=class_weighting,
                                           verbose=500,
-                                          random_state=42).fit(X_train, Y_train,
-                                                               eval_set=eval_dataset,
-                                                               early_stopping_rounds=10)
+                                          random_state=42)#.fit(x_train, y_train,
+                                                          #     eval_set=eval_dataset,
+                                                          #     early_stopping_rounds=10)
                 try:
-                    scores = cross_val_score(model, X_train, Y_train, cv=10, scoring=metric)
+                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring=metric)
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
@@ -526,6 +536,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 self.optuna_studies[f"{algorithm}_param_importance"] = fig
                 fig.show()
             except ZeroDivisionError:
+                pass
+
+            try:
+                X_train = X_train.drop(self.target_variable, axis=1)
+            except Exception:
                 pass
 
             best_parameters = study.best_trial.params
@@ -616,7 +631,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            print(X_train.columns)
+            x_train_sample, y_train_sample = self.get_hyperparameter_tuning_sample_df()
+            print(X_train.columns)
 
             """# test
             categorical_columns = []
@@ -634,6 +651,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
 
             X_train[X_train.columns.to_list()] = X_train[X_train.columns.to_list()].astype(float)
             X_test[X_test.columns.to_list()] = X_test[X_test.columns.to_list()].astype(float)
+            x_train_sample[x_train_sample.columns.to_list()] = x_train_sample[x_train_sample.columns.to_list()].astype(float)
 
             # load settings
             batch_size = self.tabnet_settings["batch_size"]
@@ -675,7 +693,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 from sklearn.model_selection import StratifiedKFold
                 skf = StratifiedKFold(n_splits=10, random_state=42, shuffle=True)
 
-                for train_index, test_index in skf.split(X_train, Y_train):
+                for train_index, test_index in skf.split(x_train_sample, y_train_sample):
                     x_train, x_test = X_train.iloc[train_index], X_train.iloc[test_index]
                     y_train, y_test = Y_train.iloc[train_index], Y_train.iloc[test_index]
                     # numpy conversion
@@ -684,9 +702,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     x_train = x_train.to_numpy()
                     x_test = x_test.to_numpy()
 
-                    Y_train_num = Y_train.values.reshape(-1)
+                    Y_train_num = y_train_sample.values.reshape(-1)
                     Y_test_num = Y_test.values.reshape(-1)
-                    X_train_num = X_train.to_numpy()
+                    X_train_num = x_train_sample.to_numpy()
                     X_test_num = X_test.to_numpy()
 
                     pretrainer = TabNetPretrainer(**param)
@@ -743,6 +761,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             fig = optuna.visualization.plot_param_importances(study)
             self.optuna_studies[f"{algorithm}_param_importance"] = fig
             fig.show()
+
+            try:
+                X_train = X_train.drop(self.target_variable, axis=1)
+            except Exception:
+                pass
 
             Y_train = Y_train.values.reshape(-1)
             Y_test = Y_test.values.reshape(-1)
@@ -964,16 +987,16 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                             'verbose': 0,
                             'tree_method': train_on,  # use GPU for training
                             'num_class': Y_train.nunique(),
-                            'max_depth': trial.suggest_int('max_depth', 2, 10),
+                            'max_depth': trial.suggest_int('max_depth', 2, 10), #4
                             # maximum depth of the decision trees being trained
                             'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
                             'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
-                            'num_leaves': trial.suggest_int('num_leaves', 2, 256),
+                            'num_leaves': trial.suggest_int('num_leaves', 2, 256), #8
                             'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
                             'min_child_samples': trial.suggest_int('min_child_samples', 5, 1000),
                             'eta': trial.suggest_loguniform('eta', 1e-3, 0.3),
-                            'steps': trial.suggest_int('steps', 2, 70000),
-                            'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 5)
+                            'steps': trial.suggest_int('steps', 2, 70000), #100
+                            'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 5) #2
                         }
                         pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-mlogloss")
                         if tune_mode == 'simple':
@@ -1027,8 +1050,15 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         'steps': lgbm_best_param["steps"],
                         'num_parallel_tree': lgbm_best_param["num_parallel_tree"]
                     }
+                    try:
+                        X_train = X_train.drop(self.target_variable, axis=1)
+                    except Exception:
+                        pass
+                    D_train = xgb.DMatrix(X_train, label=Y_train, weight=classes_weights)
+                    D_test = xgb.DMatrix(X_test, label=Y_test)
                     eval_set = [(D_train, 'train'), (D_test, 'test')]
                     logging.info(f'Start Xgboost final model training with optimized hyperparamers.')
+
                     model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
                                       evals=eval_set)
                     self.trained_models[f"{algorithm}"] = {}
@@ -1056,15 +1086,15 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         }
                         pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-mlogloss")
                         if tune_mode == 'simple':
-                            eval_set = [(D_train, 'train'), (D_test, 'test')]
-                            model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
+                            eval_set = [(d_train, 'train'), (d_test, 'test')]
+                            model = xgb.train(param, d_train, num_boost_round=param['steps'], early_stopping_rounds=10,
                                               evals=eval_set, callbacks=[pruning_callback])
                             preds = model.predict(D_test)
                             pred_labels = np.asarray([np.argmax(line) for line in preds])
                             matthew = matthews_corrcoef(Y_test, pred_labels)
                             return matthew
                         else:
-                            result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'],
+                            result = xgb.cv(params=param, dtrain=d_train, num_boost_round=param['steps'],
                                             early_stopping_rounds=10, nfold=10,
                                             as_pandas=True, seed=42, callbacks=[pruning_callback])
                             # avg_result = (result['train-mlogloss-mean'].mean() + result['test-mlogloss-mean'].mean())/2
@@ -1106,6 +1136,12 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         'steps': lgbm_best_param["steps"],
                         'num_parallel_tree': lgbm_best_param["num_parallel_tree"]
                     }
+                    try:
+                        X_train = X_train.drop(self.target_variable, axis=1)
+                    except Exception:
+                        pass
+                    D_train = xgb.DMatrix(X_train, label=Y_train, weight=classes_weights)
+                    D_test = xgb.DMatrix(X_test, label=Y_test)
                     eval_set = [(D_train, 'train'), (D_test, 'test')]
                     logging.info(f'Start Xgboost final model training with optimized hyperparamers.')
                     model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
@@ -1149,6 +1185,13 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     steps = 10000
                 else:
                     steps = steps
+
+                try:
+                    X_train = X_train.drop(self.target_variable, axis=1)
+                except Exception:
+                    pass
+                D_train = xgb.DMatrix(X_train, label=Y_train, weight=classes_weights)
+                D_test = xgb.DMatrix(X_test, label=Y_test)
                 eval_set = [(D_train, 'train'), (D_test, 'test')]
                 logging.info(f'Start Xgboost simple model training with predefined hyperparamers.')
                 model = xgb.train(param, D_train, num_boost_round=50000, early_stopping_rounds=10,
@@ -1251,16 +1294,21 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             classes_weights = class_weight.compute_sample_weight(
                 class_weight='balanced',
                 y=Y_train)
+
             x_train, y_train = self.get_hyperparameter_tuning_sample_df()
             classes_weights_sample = class_weight.compute_sample_weight(
                 class_weight='balanced',
                 y=y_train)
+            try:
+                x_train = x_train.drop(self.target_variable, axis=1)
+            except Exception:
+                pass
+            dtrain = lgb.Dataset(x_train, label=y_train, weight=classes_weights_sample)
 
             if self.class_problem == 'binary':
                 weights_for_lgb = self.calc_scale_pos_weight()
 
                 def objective(trial):
-                    dtrain = lgb.Dataset(x_train, label=y_train, weight=classes_weights_sample)
                     param = {
                         'objective': 'binary',
                         'metric': 'binary_logloss',
@@ -1333,9 +1381,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     X_train = X_train.drop(self.target_variable, axis=1)
                 except Exception:
                     pass
-                dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
-                dtest = lgb.Dataset(X_test, label=Y_test)
-                model = lgb.train(param, dtrain, valid_sets=[dtrain, dtest], valid_names=['train', 'valid'],
+                Dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
+                Dtest = lgb.Dataset(X_test, label=Y_test)
+                model = lgb.train(param, Dtrain, valid_sets=[Dtrain, Dtest], valid_names=['train', 'valid'],
                                   early_stopping_rounds=10)
                 self.trained_models[f"{algorithm}"] = {}
                 self.trained_models[f"{algorithm}"] = model
@@ -1347,7 +1395,6 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 nb_classes = self.num_classes
 
                 def objective(trial):
-                    dtrain = lgb.Dataset(x_train, label=y_train, weight=classes_weights_sample)
                     param = {
                         'objective': 'multiclass',
                         'metric': 'multi_logloss',
@@ -1427,9 +1474,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     X_train = X_train.drop(self.target_variable, axis=1)
                 except Exception:
                     pass
-                dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
-                dtest = lgb.Dataset(X_test, label=Y_test)
-                model = lgb.train(param, dtrain, valid_sets=[dtrain, dtest], valid_names=['train', 'valid'],
+                Dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
+                Dtest = lgb.Dataset(X_test, label=Y_test)
+                model = lgb.train(param, Dtrain, valid_sets=[Dtrain, Dtest], valid_names=['train', 'valid'],
                                   early_stopping_rounds=10)
                 self.trained_models[f"{algorithm}"] = {}
                 self.trained_models[f"{algorithm}"] = model
@@ -1511,7 +1558,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
                 ensemble_variation = trial.suggest_categorical("ensemble_variant", ["2_boosters",
@@ -1561,7 +1608,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
 
                 # Step 3: Scoring method:
-                model.fit(X_train, Y_train)
+                model.fit(x_train, y_train)
                 predicted_probs = model.predict_proba(X_test)
                 if self.class_problem == 'binary':
                     self.threshold_refiner(predicted_probs, Y_test, algorithm)
@@ -1615,6 +1662,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 level1 = GradientBoostingClassifier()
                 # define the stacking ensemble
                 model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+
+            try:
+                X_train = X_train.drop(self.target_variable, axis=1)
+            except Exception:
+                pass
             model.fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -1695,16 +1747,20 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
             classes_weights = class_weight.compute_sample_weight(
                 class_weight='balanced',
                 y=Y_train)
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
+            classes_weights_sample = class_weight.compute_sample_weight(
+                class_weight='balanced',
+                y=y_train)
             nb_classes = k_categorical(Y_train.nunique())
             try:
                 Y_train = Y_train.astype(int)
+                y_train = y_train.astype(int)
                 Y_test = Y_test.astype(int)
             except Exception:
-                Y_train = np.int(Y_train)
+                y_train = np.int(y_train)
                 Y_test = np.int(Y_test)
 
             def objective(trial):
@@ -1740,11 +1796,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                                           minibatch_frac=param["minibatch_frac"],
                                           Dist=nb_classes,
                                           Base=base_learner_choice,
-                                          learning_rate=param["learning_rate"]).fit(X_train,
-                                                                                    Y_train,
+                                          learning_rate=param["learning_rate"]).fit(x_train,
+                                                                                    y_train,
                                                                                     X_val=X_test,
                                                                                     Y_val=Y_test,
-                                                                                    sample_weight=classes_weights,
+                                                                                    sample_weight=classes_weights_sample,
                                                                                     early_stopping_rounds=10)
                     pred_labels = model.predict(X_test)
                     try:
@@ -1760,10 +1816,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                                           learning_rate=param["learning_rate"],
                                           random_state=42)
                     try:
-                        scores = cross_val_score(model, X_train, Y_train, cv=10, scoring='f1_weighted',
+                        scores = cross_val_score(model, x_train, y_train, cv=10, scoring='f1_weighted',
                                                  fit_params={'X_val': X_test,
                                                              'Y_val': Y_test,
-                                                             'sample_weight': classes_weights,
+                                                             'sample_weight': classes_weights_sample,
                                                              'early_stopping_rounds': 10})
                         mae = np.mean(scores)
                     except Exception:
@@ -1813,6 +1869,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                 'minibatch_frac': lgbm_best_param["minibatch_frac"],
                 'learning_rate': lgbm_best_param["learning_rate"]
             }
+            try:
+                X_train = X_train.drop(self.target_variable, axis=1)
+            except Exception:
+                pass
             model = NGBClassifier(n_estimators=param["n_estimators"],
                                   minibatch_frac=param["minibatch_frac"],
                                   Dist=nb_classes,

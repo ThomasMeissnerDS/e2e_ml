@@ -3232,15 +3232,16 @@ class PreProcessing:
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
             if self.hyperparameter_tuning_sample_size > len(X_train.index):
                 sample_size = len(X_train.index)
             else:
                 sample_size = self.hyperparameter_tuning_sample_size
-
             X_train[self.target_variable] = Y_train
-            X_train_sample = X_train.sample(sample_size, random_state=42).copy()
-            Y_train_sample = X_train_sample[self.target_variable].copy()
+            X_train_sample = X_train.sample(sample_size, random_state=42)
+            Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+            del X_train[self.target_variable]
             return X_train_sample, Y_train_sample
 
 

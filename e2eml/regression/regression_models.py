@@ -137,7 +137,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
                 solver = trial.suggest_categorical("solver", ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"])
@@ -154,7 +154,7 @@ class RegressionModels(postprocessing.FullPipeline):
                               solver=solver,
                               random_state=42).fit(X_train, Y_train)
                 try:
-                    scores = cross_val_score(model, X_train, Y_train, cv=10, scoring='neg_mean_squared_error')
+                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error')
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
@@ -243,7 +243,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
                 loss = trial.suggest_categorical("loss", ["huber", "squared_loss"])
@@ -263,9 +263,9 @@ class RegressionModels(postprocessing.FullPipeline):
                                      penalty='elasticnet',
                                      loss=loss,
                                      early_stopping=True,
-                                     random_state=42).fit(X_train, Y_train)
+                                     random_state=42)#.fit(X_train, Y_train)
                 try:
-                    scores = cross_val_score(model, X_train, Y_train, cv=10, scoring='neg_mean_squared_error')
+                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error')
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
@@ -357,7 +357,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
                 param = {
@@ -376,7 +376,7 @@ class RegressionModels(postprocessing.FullPipeline):
                                    warm_start=param["warm_start"],
                                    random_state=42).fit(X_train, Y_train)
                 try:
-                    scores = cross_val_score(model, X_train, Y_train, cv=10, scoring='neg_mean_squared_error')
+                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error')
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
@@ -467,7 +467,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
             eval_dataset = Pool(X_test, Y_test)
 
             def objective(trial):
@@ -483,11 +483,11 @@ class RegressionModels(postprocessing.FullPipeline):
                                           max_depth=param["max_depth"],
                                           early_stopping_rounds=10,
                                           verbose=500,
-                                          random_state=42).fit(X_train, Y_train,
-                                                               eval_set=eval_dataset,
-                                                               early_stopping_rounds=10)
+                                          random_state=42)#.fit(X_train, Y_train,
+                                                          #     eval_set=eval_dataset,
+                                                          #     early_stopping_rounds=10)
                 try:
-                    scores = cross_val_score(model, X_train, Y_train, cv=10, scoring='neg_mean_squared_error')
+                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error')
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
@@ -579,7 +579,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            X_train_sample, Y_train_sample = self.get_hyperparameter_tuning_sample_df()
 
             # load settings
             batch_size = self.tabnet_settings["batch_size"]
@@ -619,18 +619,18 @@ class RegressionModels(postprocessing.FullPipeline):
                 mean_abs_errors = []
                 skf = KFold(n_splits=10, random_state=42, shuffle=True)
 
-                for train_index, test_index in skf.split(X_train):
-                    x_train, x_test = X_train.iloc[train_index], X_train.iloc[test_index]
-                    y_train, y_test = Y_train.iloc[train_index], Y_train.iloc[test_index]
+                for train_index, test_index in skf.split(X_train_sample):
+                    x_train, x_test = X_train_sample.iloc[train_index], X_train_sample.iloc[test_index]
+                    y_train, y_test = Y_train_sample.iloc[train_index], Y_train_sample.iloc[test_index]
                     # numpy conversion
                     y_train = y_train.values.reshape(-1, 1)
                     y_test = y_test.values.reshape(-1, 1)
                     x_train = x_train.to_numpy()
                     x_test = x_test.to_numpy()
 
-                    Y_train_num = Y_train.values.reshape(-1, 1)
+                    Y_train_num = Y_train_sample.values.reshape(-1, 1)
                     Y_test_num = Y_test.values.reshape(-1, 1)
-                    X_train_num = X_train.to_numpy()
+                    X_train_num = X_train_sample.to_numpy()
                     X_test_num = X_test.to_numpy()
 
                     pretrainer = TabNetPretrainer(**param)
@@ -850,9 +850,11 @@ class RegressionModels(postprocessing.FullPipeline):
         else:
             if autotune:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-                X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
                 D_train = xgb.DMatrix(X_train, label=Y_train)
                 D_test = xgb.DMatrix(X_test, label=Y_test)
+
+                x_train, y_train = self.get_hyperparameter_tuning_sample_df()
+                d_train = xgb.DMatrix(x_train, label=Y_train)
 
                 def objective(trial):
                     param = {
@@ -873,14 +875,14 @@ class RegressionModels(postprocessing.FullPipeline):
                     }
                     pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-gamma-nloglik")
                     if tune_mode == 'simple':
-                        eval_set = [(D_train, 'train'), (D_test, 'test')]
-                        model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
+                        eval_set = [(d_train, 'train'), (d_test, 'test')]
+                        model = xgb.train(param, d_train, num_boost_round=param['steps'], early_stopping_rounds=10,
                                           evals=eval_set, callbacks=[pruning_callback])
                         preds = model.predict(D_test)
                         mae = mean_absolute_error(Y_test, preds)
                         return mae
                     else:
-                        result = xgb.cv(params=param, dtrain=D_train, num_boost_round=param['steps'],
+                        result = xgb.cv(params=param, dtrain=d_train, num_boost_round=param['steps'],
                                         early_stopping_rounds=10,
                                         as_pandas=True, seed=42, callbacks=[pruning_callback], nfold=10)
                         return result['test-gamma-nloglik-mean'].mean()
@@ -922,6 +924,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     'steps': lgbm_best_param["steps"],
                     'num_parallel_tree': lgbm_best_param["num_parallel_tree"]
                 }
+                try:
+                    X_train = X_train.drop(self.target_variable, axis=1)
+                except Exception:
+                    pass
+                D_train = xgb.DMatrix(X_train, label=Y_train)
+                D_test = xgb.DMatrix(X_test, label=Y_test)
                 eval_set = [(D_train, 'train'), (D_test, 'test')]
                 model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
                                   evals=eval_set)
@@ -1025,10 +1033,10 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
+            dtrain = lgb.Dataset(x_train, label=Y_train)
 
             def objective(trial):
-                dtrain = lgb.Dataset(X_train, label=Y_train)
                 param = {
                     # TODO: Move to additional folder with pyfile "constants" (use OS absolute path)
                     'objective': 'regression',
@@ -1096,9 +1104,13 @@ class RegressionModels(postprocessing.FullPipeline):
                 'device': train_on,
                 'gpu_use_dp': gpu_use_dp
             }
-            dtrain = lgb.Dataset(X_train, label=Y_train)
-            dtest = lgb.Dataset(X_test, label=Y_test)
-            model = lgb.train(param, dtrain, valid_sets=[dtrain, dtest], valid_names=['train', 'valid'],
+            try:
+                X_train = X_train.drop(self.target_variable, axis=1)
+            except Exception:
+                pass
+            Dtrain = lgb.Dataset(X_train, label=Y_train)
+            Dtest = lgb.Dataset(X_test, label=Y_test)
+            model = lgb.train(param, Dtrain, valid_sets=[Dtrain, Dtest], valid_names=['train', 'valid'],
                               early_stopping_rounds=10)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -1157,7 +1169,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
                 ensemble_variation = trial.suggest_categorical("ensemble_variant", ["2_boosters",
@@ -1202,7 +1214,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
 
                 # Step 3: Scoring method:
-                model.fit(X_train, Y_train)
+                model.fit(x_train, y_train)
                 preds = model.predict(X_test)
                 mae = mean_absolute_error(Y_test, preds)
                 return mae
@@ -1309,7 +1321,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, Y_train = self.get_hyperparameter_tuning_sample_df()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
                 base_learner_choice = trial.suggest_categorical("base_learner", ["DecTree_depth2",
@@ -1353,7 +1365,7 @@ class RegressionModels(postprocessing.FullPipeline):
                                          minibatch_frac=param["minibatch_frac"],
                                          Dist=dist_choice,
                                          Base=base_learner_choice,
-                                         learning_rate=param["learning_rate"]).fit(X_train, Y_train, X_val=X_test,
+                                         learning_rate=param["learning_rate"]).fit(x_train, y_train, X_val=X_test,
                                                                                    Y_val=Y_test,
                                                                                    early_stopping_rounds=10)
                     preds = model.predict(X_test)
@@ -1366,7 +1378,7 @@ class RegressionModels(postprocessing.FullPipeline):
                                          Base=base_learner_choice,
                                          learning_rate=param["learning_rate"],
                                          random_state=42)
-                    scores = cross_val_score(model, X_train, Y_train, cv=10, scoring='neg_mean_squared_error',
+                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error',
                                              fit_params={'X_val': X_test, 'Y_val': Y_test, 'early_stopping_rounds': 10})
                     mae = np.mean(scores)
                     return mae
@@ -1421,6 +1433,10 @@ class RegressionModels(postprocessing.FullPipeline):
                 'learning_rate': lgbm_best_param["learning_rate"],
                 'random_state': 42
             }
+            try:
+                X_train = X_train.drop(self.target_variable, axis=1)
+            except Exception:
+                pass
             model = NGBRegressor(n_estimators=param["n_estimators"],
                                  minibatch_frac=param["minibatch_frac"],
                                  Dist=dist_choice,
