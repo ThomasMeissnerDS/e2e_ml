@@ -58,7 +58,8 @@ def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender
                                                     "sklearn_ensemble": 3,
                                                     "catboost": 10,
                                                     "ridge": 3,
-                                                    "bruteforce_random": 10}
+                                                    "bruteforce_random": 10,
+                                                    "elasticnet": 10}
     titanic_auto_ml.special_blueprint_algorithms = {"ridge": True,
                                                     "xgboost": True,
                                                     "ngboost": True,
@@ -66,8 +67,10 @@ def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender
                                                     "tabnet": False,
                                                     "vowpal_wabbit": True,
                                                     "sklearn_ensemble": True,
-                                                    "catboost": True
+                                                    "catboost": True,
+                                                    "elasticnet": True
                                                     }
+    titanic_auto_ml.hyperparameter_tuning_sample_size = 800
 
     titanic_auto_ml.ml_special_regression_full_processing_multimodel_avg_blender()
     titanic_auto_ml.ml_special_regression_full_processing_multimodel_avg_blender(val_df)
