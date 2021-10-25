@@ -2192,19 +2192,30 @@ class PreProcessing:
             logging.info('Finished to binarize numeric columns + PCA binarized features.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def target_encode_multiclass(self, X, y, cat_columns):
-        # TODO: COMPLETE
-        enc = OneHotEncoder().fit(y)
-        y_onehot = enc.transform(y)
-        class_names = y_onehot.columns
-        X_obj = X.select_dtypes('object')
+    def target_encode_multiclass(self, X, y=None, mode='fit'):
+        algorithm = 'multiclass_target_encoding_onehotter'
+        if mode == 'transform':
+            enc = self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"]
+            class_names = self.preprocess_decisions[f"category_encoders"][f"seen_targets"]
+        else:
+            enc = OneHotEncoder()
+            enc.fit(y)
+            y_onehot = enc.transform(y)
+            class_names = y_onehot.columns
+            self.preprocess_decisions[f"category_encoders"][f"seen_targets"] = class_names
+        X_obj = X.select_dtypes('object').copy()
         X = X.select_dtypes(exclude='object')
         for class_ in class_names:
-            enc = TargetEncoder()
-            enc.fit(X_obj, y_onehot[class_])
-            temp = enc.transform(X_obj)
+            if mode == 'transform':
+                target_enc = self.preprocess_decisions[f"category_encoders"][f"multiclass_target_encoder_all_cols_{class_}"]
+            else:
+                target_enc = TargetEncoder()
+                target_enc.fit(X_obj, y_onehot[class_])
+                self.preprocess_decisions[f"category_encoders"][f"multiclass_target_encoder_all_cols_{class_}"] = target_enc
+            temp = target_enc.transform(X_obj)
             temp.columns = [str(x)+'_'+str(class_) for x in temp.columns]
             X = pd.concat([X, temp], axis=1)
+        self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
         return X
 
     def category_encoding(self, algorithm='target'):
@@ -2229,11 +2240,14 @@ class PreProcessing:
             self.cat_columns_encoded = cat_columns
             self.preprocess_decisions[f"category_encoders"] = {}
             if algorithm == 'target':
-                enc = TargetEncoder(cols=cat_columns)
-                #enc = NestedCVWrapper(enc_enc, random_state=42)
-                X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
-                X_test[cat_columns] = enc.transform(X_test[cat_columns])
-                self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
+                if self.class_problem == 'binary':
+                    enc = TargetEncoder(cols=cat_columns)
+                    X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
+                    X_test[cat_columns] = enc.transform(X_test[cat_columns])
+                    self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
+                else:
+                    X_train[cat_columns] = self.target_encode_multiclass(X_train[cat_columns], Y_train, mode='fit')
+                    X_test[cat_columns] = self.target_encode_multiclass(X_test[cat_columns], mode='transform')
             elif algorithm == 'onehot':
                 enc = OneHotEncoder(handle_unknown='ignore')
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
@@ -2265,8 +2279,11 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             X_train.drop(cat_columns, axis=1)
             X_test.drop(cat_columns, axis=1)
-            del enc
-            _ = gc.collect()
+            try:
+                del enc
+                _ = gc.collect()
+            except UnboundLocalError:
+                pass
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def remove_collinearity(self, threshold=0.8):

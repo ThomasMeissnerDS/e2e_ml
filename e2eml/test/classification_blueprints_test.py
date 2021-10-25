@@ -77,6 +77,8 @@ def load_titanic_data():
 def steel_fault_multiclass_data():
     data = pd.read_csv("faults.csv")
     data = shuffle(data)
+    data["leakage"] = data["target"]
+    print(data.info())
     #from sklearn.preprocessing import LabelEncoder
     #le = LabelEncoder()
     #X = data.drop('target', axis=1)
@@ -112,7 +114,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                        categorical_columns=test_categorical_cols,
                                                      preferred_training_mode='auto',
                                                      tune_mode='accurate')
-        titanic_auto_ml.hyperparameter_tuning_sample_size = 400
+        titanic_auto_ml.hyperparameter_tuning_sample_size = 1100
 
     elif dataset == 'synthetic_multiclass':
         test_df, test_target, val_df, val_df_target, test_categorical_cols = steel_fault_multiclass_data()
@@ -130,7 +132,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                      )
 
     titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 10,
-                                                    "lgbm": 10,
+                                                    "lgbm": 30,
                                                     "tabnet": 3,
                                                     "ngboost": 10,
                                                     "sklearn_ensemble": 3,
@@ -144,7 +146,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "tabnet": False, #titanic
                                                     "vowpal_wabbit": True,
                                                     "sklearn_ensemble": False, #titanic, #synthetic_multiclass
-                                                    "catboost": True
+                                                    "catboost": False
                                                     }
     titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = False
 

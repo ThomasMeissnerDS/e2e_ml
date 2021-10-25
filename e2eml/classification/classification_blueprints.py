@@ -212,7 +212,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.xgboost_predict(feat_importance=True)
         algorithm = 'xgboost'
         self.classification_eval(algorithm==algorithm)
-        if self.class_problem == 'multiclass':
+        if self.class_problem == 'binary':
             self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                     threshold=self.preprocess_decisions["probability_threshold"][algorithm])
         else:

@@ -79,11 +79,18 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             to_pred = X_test
         if explainer == 'tree':
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(to_pred)
-            shap.summary_plot(shap_values, to_pred, plot_type="bar", show=False)
-            plt.savefig(f'{algorithm}Shap_feature_importance.png')
-            plt.show()
+            try:
+                explainer = shap.TreeExplainer(model)
+                shap_values = explainer.shap_values(to_pred)
+                shap.summary_plot(shap_values, to_pred, plot_type="bar", show=False)
+                plt.savefig(f'{algorithm}Shap_feature_importance.png')
+                plt.show()
+            except AssertionError:
+                model_shap_explainer = shap.KernelExplainer(model.predict, to_pred)
+                model_shap_values = model_shap_explainer.shap_values(to_pred)
+                shap.summary_plot(model_shap_values, to_pred, show=False)
+                plt.savefig(f'{algorithm}Shap_feature_importance.png')
+                plt.show()
         else:
             model_shap_explainer = shap.KernelExplainer(model.predict, to_pred)
             model_shap_values = model_shap_explainer.shap_values(to_pred)

@@ -443,22 +443,25 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         if mode == 'transform':
             for text_col in text_cols:
                 df[text_col].fillna('None', inplace=True)
-                tfids = self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_{text_col}"]
-                if pca_pos_tags:
-                    vector = list(tfids.transform(df[text_col]).toarray())
-                    self.get_current_timestamp(task='PCA POS tags')
-                    logging.info('Start to PCA POS tags.')
-                    pca = self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_pca_{text_col}"]
-                    comps = pca.transform(vector)
-                    tfidf_pca_cols = [f'TFIDF PC-1 {text_col}', f'TFIDF PC-2 {text_col}']
-                    pos_df = pd.DataFrame(comps, columns=tfidf_pca_cols)
-                    tfidf_df_pca = pos_df[tfidf_pca_cols]
-                    df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
-                else:
-                    all_embeddings = tfids.transform(df[text_col]).toarray()
-                    tfidf_df = pd.DataFrame(all_embeddings, columns=tfids.get_feature_names())
-                    tfidf_df = tfidf_df.add_prefix("tfids_")
-                    df = pd.concat([df, tfidf_df], axis=1)
+                try:
+                    tfids = self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_{text_col}"]
+                    if pca_pos_tags:
+                        vector = list(tfids.transform(df[text_col]).toarray())
+                        self.get_current_timestamp(task='PCA POS tags')
+                        logging.info('Start to PCA POS tags.')
+                        pca = self.preprocess_decisions[f"tfidf_vectorizer"][f"tfidf_pca_{text_col}"]
+                        comps = pca.transform(vector)
+                        tfidf_pca_cols = [f'TFIDF PC-1 {text_col}', f'TFIDF PC-2 {text_col}']
+                        pos_df = pd.DataFrame(comps, columns=tfidf_pca_cols)
+                        tfidf_df_pca = pos_df[tfidf_pca_cols]
+                        df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
+                    else:
+                        all_embeddings = tfids.transform(df[text_col]).toarray()
+                        tfidf_df = pd.DataFrame(all_embeddings, columns=tfids.get_feature_names())
+                        tfidf_df = tfidf_df.add_prefix("tfids_")
+                        df = pd.concat([df, tfidf_df], axis=1)
+                except KeyError:
+                    pass
         elif mode == 'fit':
             if self.nlp_columns:
                 text_cols = self.nlp_columns
@@ -470,7 +473,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 try:
                     # do we have at least 1 word?
                     df[f'nof_words_{text_col}'] = df[text_col].apply(lambda s: len(s.split(' ')))
-                    if df[f'nof_words_{text_col}'].max() >= 2:
+                    if df[f'nof_words_{text_col}'].max() >= 3:
                         df[text_col].fillna('None', inplace=True)
                         tfids = TfidfVectorizer(ngram_range=ngram_range,
                                                 strip_accents='unicode',

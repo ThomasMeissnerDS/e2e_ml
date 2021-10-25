@@ -1070,14 +1070,17 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         param = {
                             'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                             'eval_metric': 'mlogloss',
+                            'booster': 'dart',
+                            'skip_drop': trial.suggest_uniform('skip_drop', 0.1, 1.0),
+                            'rate_drop': trial.suggest_uniform('rate_drop', 0.1, 1.0),
                             'verbose': 0,
                             'tree_method': train_on,  # use GPU for training
                             'num_class': Y_train.nunique(),
-                            'max_depth': trial.suggest_int('max_depth', 2, 10),
+                            'max_depth': trial.suggest_int('max_depth', 2, 8),
                             # maximum depth of the decision trees being trained
                             'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
                             'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
-                            'num_leaves': trial.suggest_int('num_leaves', 2, 256),
+                            'num_leaves': trial.suggest_int('num_leaves', 2, 80),
                             'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
                             'min_child_samples': trial.suggest_int('min_child_samples', 5, 1000),
                             'eta': trial.suggest_loguniform('eta', 1e-3, 0.3),  # 0.001
@@ -1123,6 +1126,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     param = {
                         'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                         'eval_metric': 'mlogloss',
+                        'booster': 'dart',
+                        'skip_drop': lgbm_best_param["skip_drop"],
+                        'rate_drop': lgbm_best_param["rate_drop"],
                         'verbose': 0,
                         'tree_method': train_on,  # use GPU for training
                         'num_class': Y_train.nunique(),
@@ -1244,13 +1250,23 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
 
                 if feat_importance and importance_alg == 'auto':
                     if self.preprocess_decisions[f"gpu_support"]["xgboost"] == 'gpu_hist':
-                        self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
+                        if self.class_problem == 'binary':
+                            self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
+                        else:
+                            xgb.plot_importance(model)
+                        plt.figure(figsize=(16, 12))
+                        plt.show()
                     else:
                         xgb.plot_importance(model)
                         plt.figure(figsize=(16, 12))
                         plt.show()
                 elif feat_importance and importance_alg == 'SHAP':
-                    self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
+                    if self.class_problem == 'binary':
+                        self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
+                    else:
+                        xgb.plot_importance(model)
+                    plt.figure(figsize=(16, 12))
+                    plt.show()
                 elif feat_importance and importance_alg == 'inbuilt':
                     xgb.plot_importance(model)
                     plt.figure(figsize=(16, 12))
@@ -1398,16 +1414,19 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     param = {
                         'objective': 'multiclass',
                         'metric': 'multi_logloss',
+                        'boosting': 'dart',
+                        'drop_rate': trial.suggest_uniform('drop_rate', 0.1, 1.0),
+                        'skip_drop': trial.suggest_uniform('skip_drop', 0.1, 1.0),
                         'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
                         'num_class': nb_classes,
                         'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                         'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
                         #'max_depth': trial.suggest_int('max_depth', 2, 8), #-1
-                        'num_leaves': trial.suggest_int('num_leaves', 2, 256),
-                        'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
+                        'num_leaves': trial.suggest_int('num_leaves', 2, 50),
+                        'feature_fraction': trial.suggest_uniform('feature_fraction', 0.2, 1.0),
                         'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
-                        'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
-                        'min_gain_to_split': trial.suggest_uniform('min_gain_to_split', 0, 1),
+                        #'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
+                        'min_gain_to_split': trial.suggest_uniform('min_gain_to_split', 0, 15),
                         'learning_rate': trial.suggest_loguniform('learning_rate', 1e-5, 0.1),
                         'verbose': -1,
                         'device': train_on,
@@ -1455,6 +1474,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     'objective': 'multiclass',
                     'metric': 'multi_logloss',
                     #'class_weight': classes_weights,
+                    'boosting': 'dart',
+                    'drop_rate': lgbm_best_param["drop_rate"],
+                    'skip_drop': lgbm_best_param["skip_drop"],
                     'num_boost_round': lgbm_best_param["num_boost_round"],
                     'num_class': nb_classes,
                     'lambda_l1': lgbm_best_param["lambda_l1"],
@@ -1463,7 +1485,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     'num_leaves': lgbm_best_param["num_leaves"],
                     'feature_fraction': lgbm_best_param["feature_fraction"],
                     'bagging_freq': lgbm_best_param["bagging_freq"],
-                    'min_child_samples': lgbm_best_param["min_child_samples"],
+                    #'min_child_samples': lgbm_best_param["min_child_samples"],
                     'min_gain_to_split': lgbm_best_param["min_gain_to_split"],
                     'learning_rate': lgbm_best_param["learning_rate"],
                     'verbose': -1,
@@ -1476,7 +1498,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     pass
                 Dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
                 Dtest = lgb.Dataset(X_test, label=Y_test)
-                model = lgb.train(param, Dtrain, valid_sets=[Dtrain, Dtest], valid_names=['train', 'valid'],
+                model = lgb.train(param, Dtrain, valid_sets=[Dtest], valid_names=['valid'],
                                   early_stopping_rounds=10)
                 self.trained_models[f"{algorithm}"] = {}
                 self.trained_models[f"{algorithm}"] = model
@@ -1516,13 +1538,28 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
 
             if feat_importance and importance_alg == 'auto':
                 if self.preprocess_decisions[f"gpu_support"]["lgbm"] == 'gpu':
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+                    if self.class_problem == 'binary':
+                        self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+                    else:
+                        lgb.plot_importance(model)
+                    plt.figure(figsize=(16, 12))
+                    plt.show()
                 else:
                     lgb.plot_importance(model)
                     plt.figure(figsize=(16, 12))
                     plt.show()
             elif feat_importance and importance_alg == 'SHAP':
-                self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+                if self.preprocess_decisions[f"gpu_support"]["lgbm"] == 'gpu':
+                    if self.class_problem == 'binary':
+                        self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+                    else:
+                        lgb.plot_importance(model)
+                    plt.figure(figsize=(16, 12))
+                    plt.show()
+                else:
+                    lgb.plot_importance(model)
+                    plt.figure(figsize=(16, 12))
+                    plt.show()
             elif feat_importance and importance_alg == 'inbuilt':
                 lgb.plot_importance(model)
                 plt.figure(figsize=(16, 12))
