@@ -2229,8 +2229,11 @@ class PreProcessing:
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
             cat_columns = self.cat_columns_encoded
-            enc = self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"]
-            self.dataframe[cat_columns] = enc.transform(self.dataframe[cat_columns])
+            if algorithm == 'target' and self.class_problem == 'multiclass':
+                self.dataframe[cat_columns] = self.target_encode_multiclass(self.dataframe[cat_columns], mode='transform')
+            else:
+                enc = self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"]
+                self.dataframe[cat_columns] = enc.transform(self.dataframe[cat_columns])
             logging.info('Finished category encoding.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.dataframe

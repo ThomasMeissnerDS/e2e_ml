@@ -132,7 +132,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                      )
 
     titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 10,
-                                                    "lgbm": 30,
+                                                    "lgbm": 8,
                                                     "tabnet": 3,
                                                     "ngboost": 10,
                                                     "sklearn_ensemble": 3,
