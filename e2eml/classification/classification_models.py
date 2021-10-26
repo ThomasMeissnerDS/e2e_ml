@@ -1567,14 +1567,6 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             else:
                 pass
 
-            if feat_importance:
-                try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns)
-                except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
-            else:
-                pass
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs

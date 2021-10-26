@@ -77,7 +77,7 @@ def load_titanic_data():
 def steel_fault_multiclass_data():
     data = pd.read_csv("faults.csv")
     data = shuffle(data)
-    data["leakage"] = data["target"]
+    #data["leakage"] = data["target"]
     print(data.info())
     #from sklearn.preprocessing import LabelEncoder
     #le = LabelEncoder()

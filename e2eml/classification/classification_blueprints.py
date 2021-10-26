@@ -186,7 +186,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'logistic_regression'
         self.logistic_regression_predict(feat_importance=True, importance_alg='permutation')
         self.classification_eval(algorithm=algorithm)
-        if self.class_problem == 'multiclass':
+        if self.class_problem == 'binary':
             self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                     threshold=self.preprocess_decisions["probability_threshold"][algorithm])
         else:
@@ -238,7 +238,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.lgbm_predict(feat_importance=True)
         algorithm = 'lgbm'
         self.classification_eval(algorithm=algorithm)
-        if self.class_problem == 'multiclass':
+        if self.class_problem == 'binary':
             self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                     threshold=self.preprocess_decisions["probability_threshold"][algorithm])
         else:
@@ -266,7 +266,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.sklearn_ensemble_predict(feat_importance=True, importance_alg='permutation')
         algorithm = 'sklearn_ensemble'
         self.classification_eval(algorithm=algorithm)
-        if self.class_problem == 'multiclass':
+        if self.class_problem == 'binary':
             self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                     threshold=self.preprocess_decisions["probability_threshold"][algorithm])
         else:
@@ -292,7 +292,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.ngboost_predict(feat_importance=True, importance_alg='permutation')
         algorithm = 'ngboost'
         self.classification_eval(algorithm)
-        if self.class_problem == 'multiclass':
+        if self.class_problem == 'binary':
             self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                     threshold=self.preprocess_decisions["probability_threshold"][algorithm])
         else:
@@ -318,7 +318,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
         algorithm = 'vowpal_wabbit'
         self.classification_eval(algorithm)
-        if self.class_problem == 'multiclass':
+        if self.class_problem == 'binary':
             self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                 threshold=self.preprocess_decisions["probability_threshold"][algorithm])
         else:
@@ -363,7 +363,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'tabnet'
         self.tabnet_predict()
         self.classification_eval(algorithm=algorithm)
-        if self.class_problem == 'multiclass':
+        if self.class_problem == 'binary':
             self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                     threshold=self.preprocess_decisions["probability_threshold"][algorithm])
         else:
@@ -389,7 +389,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'ridge'
         self.ridge_classifier_predict()
         self.classification_eval(algorithm=algorithm)
-        if self.class_problem == 'multiclass':
+        if self.class_problem == 'binary':
             self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                     threshold=self.preprocess_decisions["probability_threshold"][algorithm])
         else:
@@ -415,7 +415,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'catboost'
         self.catboost_predict()
         self.classification_eval(algorithm=algorithm)
-        if self.class_problem == 'multiclass':
+        if self.class_problem == 'binary':
             self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                     threshold=self.preprocess_decisions["probability_threshold"][algorithm])
         else:
@@ -441,7 +441,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         algorithm = 'sgd'
         self.sgd_classifier_predict()
         self.classification_eval(algorithm=algorithm)
-        if self.class_problem == 'multiclass':
+        if self.class_problem == 'binary':
             self.visualize_probability_distribution(probabilities=self.predicted_probs[algorithm],
                                                     threshold=self.preprocess_decisions["probability_threshold"][algorithm])
         else:
