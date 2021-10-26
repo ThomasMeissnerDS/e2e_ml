@@ -631,9 +631,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            print(X_train.columns)
             x_train_sample, y_train_sample = self.get_hyperparameter_tuning_sample_df()
-            print(X_train.columns)
 
             """# test
             categorical_columns = []
@@ -652,6 +650,22 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             X_train[X_train.columns.to_list()] = X_train[X_train.columns.to_list()].astype(float)
             X_test[X_test.columns.to_list()] = X_test[X_test.columns.to_list()].astype(float)
             x_train_sample[x_train_sample.columns.to_list()] = x_train_sample[x_train_sample.columns.to_list()].astype(float)
+
+            if len(x_train_sample.index) < len(X_train.index):
+                rec_batch_size = (len(x_train_sample.index)*0.8)/20
+                if int(rec_batch_size) % 2 == 0:
+                    rec_batch_size = int(rec_batch_size)
+                else:
+                    rec_batch_size = int(rec_batch_size)+1
+                if rec_batch_size > 16384:
+                    rec_batch_size = 16384
+                    virtual_batch_size = 4096
+                else:
+                    virtual_batch_size = int(rec_batch_size/4)
+
+                # update batch sizes in case hyperparameter tuning happens on samples
+                self.tabnet_settings["batch_size"] = rec_batch_size
+                self.tabnet_settings["virtual_batch_size"] = virtual_batch_size
 
             # load settings
             batch_size = self.tabnet_settings["batch_size"]

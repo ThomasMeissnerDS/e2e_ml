@@ -3001,11 +3001,13 @@ class PreProcessing:
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
+
             for col in X_train.columns:
                 print(f"Features before selection are...{col}")
             if model:
                 model = model
                 metric = metric
+                br = BoostARoota(clf=model)
             elif self.class_problem == 'binary':
                 if self.feature_selection_backend == 'lgbm':
                     model = lgb.LGBMClassifier(random_state=42, objective='binary')
@@ -3278,11 +3280,23 @@ class PreProcessing:
                 sample_size = len(X_train.index)
             else:
                 sample_size = self.hyperparameter_tuning_sample_size
+
             X_train[self.target_variable] = Y_train
             X_train_sample = X_train.sample(sample_size, random_state=42)
+            X_train_sample = X_train_sample.reset_index(drop=True)
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
-            del X_train[self.target_variable]
+
+            try:
+                del X_train[self.target_variable]
+            except KeyError:
+                pass
+
+            #X_test[self.target_variable] = Y_test
+            #X_test = X_test.reset_index(drop=True)
+            #Y_test = X_test[self.target_variable]
+            #del X_test[self.target_variable]
+            #self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
             return X_train_sample, Y_train_sample
 
 

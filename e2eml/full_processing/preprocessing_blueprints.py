@@ -113,7 +113,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             else:
                 pass
         if self.blueprint_step_selection_non_nlp["automated_feature_selection"]:
-            self.automated_feature_selection()
+            self.automated_feature_selection(numeric_only=False)
         if self.blueprint_step_selection_non_nlp["bruteforce_random_feature_selection"]:
             self.bruteforce_random_feature_selection()
         if self.blueprint_step_selection_non_nlp["synthetic_data_augmentation"]:
