@@ -5,6 +5,8 @@
 
 Welcome to e2eml's documentation!
 =================================
+..  automodule:: cpu_preprocessing.py
+       :members:
 
 .. toctree::
    :maxdepth: 2
