@@ -1321,19 +1321,15 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            classes_weights = class_weight.compute_sample_weight(
-                class_weight='balanced',
-                y=Y_train)
+
 
             x_train, y_train = self.get_hyperparameter_tuning_sample_df()
-            classes_weights_sample = class_weight.compute_sample_weight(
-                class_weight='balanced',
-                y=y_train)
+
             try:
                 x_train = x_train.drop(self.target_variable, axis=1)
             except Exception:
                 pass
-            dtrain = lgb.Dataset(x_train, label=y_train, weight=classes_weights_sample)
+            dtrain = lgb.Dataset(x_train, label=y_train)
 
             if self.class_problem == 'binary':
                 weights_for_lgb = self.calc_scale_pos_weight()
@@ -1350,7 +1346,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                         'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
                         'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
-                        'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
+                        #'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
                         'learning_rate': trial.suggest_loguniform('learning_rate', 1e-5, 0.1),
                         'verbose': -1,
                         'device': train_on,
@@ -1401,7 +1397,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     'num_leaves': lgbm_best_param["num_leaves"],
                     'feature_fraction': lgbm_best_param["feature_fraction"],
                     'bagging_freq': lgbm_best_param["bagging_freq"],
-                    'min_child_samples': lgbm_best_param["min_child_samples"],
+                    #'min_child_samples': lgbm_best_param["min_child_samples"],
                     'learning_rate': lgbm_best_param["learning_rate"],
                     'verbose': -1,
                     'device': train_on,
@@ -1411,7 +1407,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     X_train = X_train.drop(self.target_variable, axis=1)
                 except Exception:
                     pass
-                Dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
+                Dtrain = lgb.Dataset(X_train, label=Y_train)
                 Dtest = lgb.Dataset(X_test, label=Y_test)
                 model = lgb.train(param, Dtrain, valid_sets=[Dtrain, Dtest], valid_names=['train', 'valid'],
                                   early_stopping_rounds=10)
@@ -1510,9 +1506,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     X_train = X_train.drop(self.target_variable, axis=1)
                 except Exception:
                     pass
-                Dtrain = lgb.Dataset(X_train, label=Y_train, weight=classes_weights)
+                Dtrain = lgb.Dataset(X_train, label=Y_train)
                 Dtest = lgb.Dataset(X_test, label=Y_test)
-                model = lgb.train(param, Dtrain, valid_sets=[Dtest], valid_names=['valid'],
+                model = lgb.train(param, Dtrain, valid_sets=[Dtrain, Dtest], valid_names=['train', 'valid'],
                                   early_stopping_rounds=10)
                 self.trained_models[f"{algorithm}"] = {}
                 self.trained_models[f"{algorithm}"] = model
