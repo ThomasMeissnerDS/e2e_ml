@@ -126,6 +126,8 @@ class PreProcessing:
                 self.num_classes = 2
         print(f"Ml task is {self.class_problem}")
 
+        self.binary_unbalanced = False
+
         if preferred_training_mode == 'cpu':
             message = """
             CPU mode has been chosen. Installing e2eml into an environment where LGBM and Xgboost have been installed with GPU acceleration
@@ -561,6 +563,27 @@ class PreProcessing:
                     self.detected_col_types[col] = 'object'
             logging.info('Finished column type detection and casting.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def binary_imbalance(self):
+        """
+        Measures the percentage of minority class. If the minority class consists of less than 3%, inbalance will be flagged.
+        This will lead some algorithms to use class weights to adjust for that.
+        :return: Updates class attribute binary_unbalanced
+        """
+        if self.prediction_mode:
+            pass
+        else:
+            if self.class_problem == 'binary':
+                X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+                total_labels = len(Y_train.index)
+                majority_class = Y_train.value_counts().sum()
+                minority_class = total_labels-majority_class
+                if minority_class/total_labels < 0.03:
+                    self.binary_unbalanced = True
+                else:
+                    self.binary_unbalanced = False
+            else:
+                pass
 
     def remove_duplicate_column_names(self):
         """

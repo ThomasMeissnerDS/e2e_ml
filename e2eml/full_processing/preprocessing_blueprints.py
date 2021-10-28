@@ -35,6 +35,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         self.check_prediction_mode(df)
 
         self.train_test_split(how=self.train_split_type)
+        self.binary_imbalance()
         if self.blueprint_step_selection_non_nlp["automatic_type_detection_casting"]:
             self.automatic_type_detection_casting()
         if self.blueprint_step_selection_non_nlp["remove_duplicate_column_names"]:

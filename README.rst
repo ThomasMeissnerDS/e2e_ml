@@ -236,7 +236,7 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 2.7.1
+* 2.7.3
  - fixed target encoding for multiclass classification
  - improved performance on multiclass tasks
 * 2.6.3

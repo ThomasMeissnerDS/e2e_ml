@@ -868,6 +868,9 @@ class RegressionModels(postprocessing.FullPipeline):
                         'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
                         'num_leaves': trial.suggest_int('num_leaves', 2, 256),
                         'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
+                        'colsample_bytree': trial.suggest_uniform('colsample_bytree', 0.5, 1.0),
+                        'colsample_bylevel': trial.suggest_uniform('colsample_bylevel', 0.5, 1.0),
+                        'colsample_bynode': trial.suggest_uniform('colsample_bynode', 0.5, 1.0),
                         'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
                         'eta': trial.suggest_loguniform('eta', 1e-3, 0.3),
                         'steps': trial.suggest_int('steps', 2, 70000),
@@ -875,7 +878,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     }
                     pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-gamma-nloglik")
                     if tune_mode == 'simple':
-                        eval_set = [(d_train, 'train'), (d_test, 'test')]
+                        eval_set = [(d_train, 'train'), (D_test, 'test')]
                         model = xgb.train(param, d_train, num_boost_round=param['steps'], early_stopping_rounds=10,
                                           evals=eval_set, callbacks=[pruning_callback])
                         preds = model.predict(D_test)
@@ -919,6 +922,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     'lambda': lgbm_best_param["lambda"],
                     'num_leaves': lgbm_best_param["num_leaves"],
                     'subsample': lgbm_best_param["subsample"],
+                    'colsample_bytree': lgbm_best_param["colsample_bytree"],
+                    'colsample_bylevel': lgbm_best_param["colsample_bylevel"],
+                    'colsample_bynode': lgbm_best_param["colsample_bynode"],
                     'min_child_samples': lgbm_best_param["min_child_samples"],
                     'eta': lgbm_best_param["eta"],
                     'steps': lgbm_best_param["steps"],
@@ -1047,7 +1053,8 @@ class RegressionModels(postprocessing.FullPipeline):
                     'linear_lambda': trial.suggest_loguniform('linear_lambda', 1, 1e6),
                     #'max_depth': trial.suggest_int('max_depth', 2, 8),
                     'num_leaves': trial.suggest_int('num_leaves', 2, 256),
-                    'feature_fraction': trial.suggest_uniform('feature_fraction', 0.3, 1.0),
+                    'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
+                    'feature_fraction_bynode': trial.suggest_uniform('feature_fraction_bynode', 0.4, 1.0),
                     'bagging_fraction': trial.suggest_uniform('bagging_fraction', 0.1, 1),
                     #'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
                     'min_gain_to_split': trial.suggest_uniform('min_gain_to_split', 0, 1),
@@ -1096,6 +1103,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 #'max_depth': lgbm_best_param["max_depth"],
                 'num_leaves': lgbm_best_param["num_leaves"],
                 'feature_fraction': lgbm_best_param["feature_fraction"],
+                'feature_fraction_bynode': lgbm_best_param["feature_fraction_bynode"],
                 'bagging_fraction': lgbm_best_param["bagging_fraction"],
                 #'min_child_samples': lgbm_best_param["min_child_samples"],
                 'min_gain_to_split': lgbm_best_param["min_gain_to_split"],
