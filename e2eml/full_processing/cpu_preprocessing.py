@@ -196,6 +196,7 @@ class PreProcessing:
             "outlier_care": True,
             "remove_collinearity": True,
             "skewness_removal": True,
+            "autotuned_clustering": True,
             "clustering_as_a_feature_dbscan": True,
             "clustering_as_a_feature_kmeans_loop": True,
             "clustering_as_a_feature_gaussian_mixture_loop": True,
@@ -1344,6 +1345,118 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
+    def auto_tuned_clustering(self):
+        """
+        Takes a dataframe and optimizes for best clustering hyperparameters and columns to be used.
+        :return: Updates class attributes/dataframes.
+        """
+        from sklearn.metrics import silhouette_score
+        algorithm = 'autotuned_clustering'
+        logging.info('Start adding autotuned clusters as additional features.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        if not self.data_scaled:
+            self.data_scaling()
+
+        if self.prediction_mode:
+            chosen_cols = self.preprocess_decisions["autotuned_cluster_pcolumns"]
+            kmeans_parameters = self.preprocess_decisions["autotuned_cluster_hyperparameters"]
+
+            #cluster based on all data
+            kmeans = KMeans(n_clusters=kmeans_parameters["clusters"],
+                            n_init=kmeans_parameters["n_init"],
+                            tol=kmeans_parameters["tol"],
+                            max_iter=kmeans_parameters["max_iter"])
+            kmeans.fit(self.dataframe[chosen_cols])
+            y_kmeans = kmeans.predict(self.dataframe[chosen_cols])
+            self.dataframe[algorithm] = y_kmeans
+            return self.dataframe
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+            if self.hyperparameter_tuning_sample_size > len(X_train.index):
+                cluster_sample_size = len(X_train.index)
+            else:
+                cluster_sample_size = self.hyperparameter_tuning_sample_size
+
+            if 1000 > len(X_train.index):
+                eval_sample_size = len(X_train.index)
+            else:
+                eval_sample_size = 2000
+
+            X_train_cluster_sample = X_train.sample(cluster_sample_size, random_state=42)
+            X_train_eval_sample = X_train.sample(eval_sample_size, random_state=42)
+
+            try:
+                del X_train[self.target_variable]
+            except KeyError:
+                pass
+
+            def objective(trial):
+                param = {}
+                for col in X_train_cluster_sample.columns:
+                    param[col] = trial.suggest_int(col, 0, 1)
+                temp_features = []
+                for k, v in param.items():
+                    if v == 1:
+                        temp_features.append(k)
+                    else:
+                        pass
+                param['clusters'] =  trial.suggest_int('clusters', 2, 30),
+                param['max_iter'] = trial.suggest_int('max_iter', 10, 20),
+                param['n_init'] = trial.suggest_int('n_init', 10, 500),
+                param['tol'] = trial.suggest_loguniform('tol', 1e-5, 1e-1)
+                kmeans = KMeans(n_clusters=param["clusters"][0],
+                                n_init=param["n_init"][0],
+                                tol=param["tol"],
+                                max_iter=param["max_iter"][0])
+                try:
+                    kmeans.fit(X_train_cluster_sample[temp_features])
+                    y_kmeans = kmeans.predict(X_train_eval_sample[temp_features])
+                    s_score = silhouette_score(X_train_eval_sample[temp_features], y_kmeans)
+                except Exception:
+                    s_score = 0
+                return s_score
+
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"autotuned kmeans")
+            study.optimize(objective, n_trials=50, gc_after_trial=True, show_progress_bar=True)
+            try:
+                #fig = optuna.visualization.plot_optimization_history(study)
+                #fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                fig.show()
+            except ZeroDivisionError:
+                pass
+
+            chosen_cols = []
+            kmeans_parameters = {}
+            for key, value in study.best_trial.params.items():
+                if key in X_train.columns.to_list() and value == 1:
+                    chosen_cols.append(key)
+                elif key not in X_train.columns.to_list():
+                    kmeans_parameters[key] = value
+                else:
+                    pass
+            self.preprocess_decisions["autotuned_cluster_pcolumns"] = chosen_cols
+            self.preprocess_decisions["autotuned_cluster_hyperparameters"] = kmeans_parameters
+
+            #cluster based on all data
+            kmeans = KMeans(n_clusters=kmeans_parameters["clusters"],
+                            n_init=kmeans_parameters["n_init"],
+                            tol=kmeans_parameters["tol"],
+                            max_iter=kmeans_parameters["max_iter"])
+            kmeans.fit(X_train[chosen_cols])
+            y_kmeans = kmeans.predict(X_train[chosen_cols])
+            X_train[algorithm] = y_kmeans
+            kmeans.fit(X_test[chosen_cols])
+            y_kmeans = kmeans.predict(X_test[chosen_cols])
+            X_test[algorithm] = y_kmeans
+
+            logging.info('Finished adding autotuned clusters as additional features.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+
     def clustering_as_a_feature(self, algorithm='dbscan', nb_clusters=2, eps=0.3, n_jobs=-1, min_samples=50):
         """
         Takes the numerical columns of a dataframe and performs clustering via the chosen algorithm.
@@ -1361,7 +1474,6 @@ class PreProcessing:
             import cudf
             from cuml import KMeans as RapidsKMeans
             from cuml import DBSCAN as RapidsDBSCAN
-            from cuml import AgglomerativeClustering as RapidsAgglomerativeClustering
 
             def add_dbscan_clusters(dataframe, eps=eps, n_jobs=n_jobs, min_samples=min_samples):
                 dataframe_red = dataframe.loc[:, dataframe.columns.isin(self.num_columns)].copy()

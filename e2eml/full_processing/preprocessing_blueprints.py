@@ -103,6 +103,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
                     print("Clustering as a feature skipped due to ValueError.")
         if self.blueprint_step_selection_non_nlp["pca_clustering_results"]:
             self.pca_clustering_results()
+        if self.blueprint_step_selection_non_nlp["autotuned_clustering"]:
+            self.auto_tuned_clustering()
         if self.blueprint_step_selection_non_nlp["reduce_memory_footprint"]:
             if self.low_memory_mode:
                 self.reduce_memory_footprint()
