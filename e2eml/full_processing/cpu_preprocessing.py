@@ -196,7 +196,7 @@ class PreProcessing:
             "outlier_care": True,
             "remove_collinearity": True,
             "skewness_removal": True,
-            "autotuned_clustering": True,
+            "autotuned_clustering": False,
             "clustering_as_a_feature_dbscan": True,
             "clustering_as_a_feature_kmeans_loop": True,
             "clustering_as_a_feature_gaussian_mixture_loop": True,
@@ -3215,10 +3215,6 @@ class PreProcessing:
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             optuna.logging.set_verbosity(optuna.logging.WARNING)
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            classes_weights = class_weight.compute_sample_weight(
-                class_weight='balanced',
-                y=Y_train
-            )
 
             for col in X_train.columns:
                 print(f"Features before selection are...{col}")
@@ -3348,7 +3344,7 @@ class PreProcessing:
             self.selected_feats = final_features
             for i in final_features:
                 print(f" Final features are... {i}.")
-            logging.info('Finished Vowpal bruteforce feature selection.')
+            logging.info('Finished bruteforce random feature selection.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats

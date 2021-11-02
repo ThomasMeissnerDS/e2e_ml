@@ -28,6 +28,8 @@ from sklearn.model_selection import cross_val_score
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import make_scorer
 from sklearn.utils.extmath import softmax
+from scipy import optimize
+from scipy import special
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
@@ -64,7 +66,68 @@ class RidgeClassifierWithProba(RidgeClassifier):
         return softmax(d_2d)
 
 
-class ClassificationModels(postprocessing.FullPipeline, Matthews):
+class FocalLoss:
+    def __init__(self, gamma, alpha=None):
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def at(self, y):
+        if self.alpha is None:
+            return np.ones_like(y)
+        return np.where(y, self.alpha, 1 - self.alpha)
+
+    def pt(self, y, p):
+        p = np.clip(p, 1e-15, 1 - 1e-15)
+        return np.where(y, p, 1 - p)
+
+    def __call__(self, y_true, y_pred):
+        at = self.at(y_true)
+        pt = self.pt(y_true, y_pred)
+        return -at * (1 - pt) ** self.gamma * np.log(pt)
+
+    def grad(self, y_true, y_pred):
+        y = 2 * y_true - 1  # {0, 1} -> {-1, 1}
+        at = self.at(y_true)
+        pt = self.pt(y_true, y_pred)
+        g = self.gamma
+        return at * y * (1 - pt) ** g * (g * pt * np.log(pt) + pt - 1)
+
+    def hess(self, y_true, y_pred):
+        y = 2 * y_true - 1  # {0, 1} -> {-1, 1}
+        at = self.at(y_true)
+        pt = self.pt(y_true, y_pred)
+        g = self.gamma
+
+        u = at * y * (1 - pt) ** g
+        du = -at * y * g * (1 - pt) ** (g - 1)
+        v = g * pt * np.log(pt) + pt - 1
+        dv = g * np.log(pt) + g + 1
+
+        return (du * v + u * dv) * y * (pt * (1 - pt))
+
+    def init_score(self, y_true):
+        res = optimize.minimize_scalar(
+            lambda p: self(y_true, p).sum(),
+            bounds=(0, 1),
+            method='bounded'
+        )
+        p = res.x
+        log_odds = np.log(p / (1 - p))
+        return log_odds
+
+    def lgb_obj(self, preds, train_data):
+        y = train_data.get_label()
+        p = special.expit(preds)
+        return self.grad(y, p), self.hess(y, p)
+
+    def lgb_eval(self, preds, train_data):
+        y = train_data.get_label()
+        p = special.expit(preds)
+        is_higher_better = False
+        return 'focal_loss', self(y, p).mean(), is_higher_better
+
+
+class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
     """
     This class stores all model training and prediction methods for classification tasks.
     This class stores all pipeline relevant information (inherited from cpu preprocessing).
@@ -1100,9 +1163,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                         param = {
                             'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                             'eval_metric': 'mlogloss',
-                            'booster': 'dart',
-                            'skip_drop': trial.suggest_uniform('skip_drop', 0.1, 1.0),
-                            'rate_drop': trial.suggest_uniform('rate_drop', 0.1, 1.0),
+                            #'booster': 'dart',
+                            #'skip_drop': trial.suggest_uniform('skip_drop', 0.1, 1.0),
+                            #'rate_drop': trial.suggest_uniform('rate_drop', 0.1, 1.0),
                             'verbose': 0,
                             'tree_method': train_on,  # use GPU for training
                             'num_class': Y_train.nunique(),
@@ -1110,7 +1173,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                             # maximum depth of the decision trees being trained
                             'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
                             'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
-                            'num_leaves': trial.suggest_int('num_leaves', 2, 80),
+                            'num_leaves': trial.suggest_int('num_leaves', 2, 40),
                             'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
                             'colsample_bytree': trial.suggest_uniform('colsample_bytree', 0.5, 1.0),
                             'colsample_bylevel': trial.suggest_uniform('colsample_bylevel', 0.5, 1.0),
@@ -1159,9 +1222,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews):
                     param = {
                         'objective': 'multi:softprob',  # OR  'binary:logistic' #the loss function being used
                         'eval_metric': 'mlogloss',
-                        'booster': 'dart',
-                        'skip_drop': lgbm_best_param["skip_drop"],
-                        'rate_drop': lgbm_best_param["rate_drop"],
+                        #'booster': 'dart',
+                        #'skip_drop': lgbm_best_param["skip_drop"],
+                        #'rate_drop': lgbm_best_param["rate_drop"],
                         'verbose': 0,
                         'tree_method': train_on,  # use GPU for training
                         'num_class': Y_train.nunique(),

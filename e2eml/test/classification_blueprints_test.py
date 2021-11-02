@@ -139,12 +139,12 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "catboost": 10,
                                                     "ridge": 3,
                                                     "bruteforce_random": 10}
-    titanic_auto_ml.special_blueprint_algorithms = {"ridge": True, #titanic, #synthetic_multiclass
+    titanic_auto_ml.special_blueprint_algorithms = {"ridge": False, #titanic, #synthetic_multiclass
                                                     "xgboost": False, #titanic
                                                     "ngboost": False, #titanic, #synthetic_multiclass
-                                                    "lgbm": False, #titanic
+                                                    "lgbm": True, #titanic
                                                     "tabnet": False, #titanic
-                                                    "vowpal_wabbit": True,
+                                                    "vowpal_wabbit": False,
                                                     "sklearn_ensemble": False, #titanic, #synthetic_multiclass
                                                     "catboost": False
                                                     }
@@ -177,4 +177,4 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
 
 
 if __name__ == '__main__':
-    test_ml_special_multiclass_full_processing_multimodel_max_voting('titanic')
+    test_ml_special_multiclass_full_processing_multimodel_max_voting('synthetic_multiclass')

@@ -236,9 +236,13 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 2.7.3
+* 2.7.5
+- 
+* 2.7.4
  - fixed target encoding for multiclass classification
  - improved performance on multiclass tasks
+ - improved Xgboost & TabNet performance on binary classification
+ - added auto-tuned clustering as a feature
 * 2.6.3
  - small bugfixes
 * 2.6.1

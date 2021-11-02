@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-with open("README.rst", "r") as readme_file:
+with open("README.md", "r") as readme_file:
     readme = readme_file.read()
 
 requirements = ["babel>=2.9.0",
@@ -42,7 +42,7 @@ extras_require = {
 
 setup(
     name="e2eml",
-    version="2.7.3",
+    version="2.7.5",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",
