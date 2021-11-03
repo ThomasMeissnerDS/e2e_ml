@@ -26,7 +26,14 @@ import lightgbm as lgb
 import optuna
 import lightgbm
 import xgboost as xgb
+
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch import nn, optim
+from torch.autograd import Variable
+from torch.utils.data import Dataset, DataLoader
+
 import gc
 import warnings
 import logging
@@ -3429,6 +3436,258 @@ class PreProcessing:
             #del X_test[self.target_variable]
             #self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
             return X_train_sample, Y_train_sample
+
+    def autoencoder_based_oversampling(self):
+        if self.prediction_mode:
+            pass
+        else:
+
+            class DataBuilder(Dataset):
+                def __init__(self, dataset):
+                    self.x = dataset.values
+                    self.x = torch.from_numpy(self.x).to(torch.float)
+                    self.len = self.x.shape[0]
+
+                def __getitem__(self, index):
+                    return self.x[index]
+
+                def __len__(self):
+                    return self.len
+
+            class Autoencoder(nn.Module):
+                def __init__(self, D_in, H=50, H2=12, latent_dim=3):
+
+                    #Encoder
+                    super(Autoencoder, self).__init__()
+                    self.linear1 = nn.Linear(D_in, H)
+                    self.lin_bn1 = nn.BatchNorm1d(num_features=H)
+                    self.linear2 = nn.Linear(H, H2)
+                    self.lin_bn2 = nn.BatchNorm1d(num_features=H2)
+                    self.linear3 = nn.Linear(H2, H2)
+                    self.lin_bn3 = nn.BatchNorm1d(num_features=H2)
+
+                    # Latent vectors mu and sigma
+                    self.fc1 = nn.Linear(H2, latent_dim)
+                    self.bn1 = nn.BatchNorm1d(num_features=latent_dim)
+                    self.fc21 = nn.Linear(latent_dim, latent_dim)
+                    self.fc22 = nn.Linear(latent_dim, latent_dim)
+
+                    # Sampling vector
+                    self.fc3 = nn.Linear(latent_dim, latent_dim)
+                    self.fc_bn3 = nn.BatchNorm1d(latent_dim)
+                    self.fc4 = nn.Linear(latent_dim, H2)
+                    self.fc_bn4 = nn.BatchNorm1d(H2)
+
+                    # Decoder
+                    self.linear4 = nn.Linear(H2, H2)
+                    self.lin_bn4 = nn.BatchNorm1d(num_features=H2)
+                    self.linear5 = nn.Linear(H2, H)
+                    self.lin_bn5 = nn.BatchNorm1d(num_features=H)
+                    self.linear6 = nn.Linear(H, D_in)
+                    self.lin_bn6 = nn.BatchNorm1d(num_features=D_in)
+
+                    self.relu = nn.ReLU()
+
+                def encode(self, x):
+                    lin1 = self.relu(self.lin_bn1(self.linear1(x)))
+                    lin2 = self.relu(self.lin_bn2(self.linear2(lin1)))
+                    lin3 = self.relu(self.lin_bn3(self.linear3(lin2)))
+
+                    fc1 = F.relu(self.bn1(self.fc1(lin3)))
+
+                    r1 = self.fc21(fc1)
+                    r2 = self.fc22(fc1)
+
+                    return r1, r2
+
+                def reparameterize(self, mu, logvar):
+                    if self.training:
+                        std = logvar.mul(0.5).exp_()
+                        eps = Variable(std.data.new(std.size()).normal_())
+                        return eps.mul(std).add_(mu)
+                    else:
+                        return mu
+
+                def decode(self, z):
+                    fc3 = self.relu(self.fc_bn3(self.fc3(z)))
+                    fc4 = self.relu(self.fc_bn4(self.fc4(fc3)))
+
+                    lin4 = self.relu(self.lin_bn4(self.linear4(fc4)))
+                    lin5 = self.relu(self.lin_bn5(self.linear5(lin4)))
+                    return self.lin_bn6(self.linear6(lin5))
+
+                def forward(self, x):
+                    mu, logvar = self.encode(x)
+                    z = self.reparameterize(mu, logvar)
+                    return self.decode(z), mu, logvar
+
+            class customLoss(nn.Module):
+                def __init__(self):
+                    super(customLoss, self).__init__()
+                    self.mse_loss = nn.MSELoss(reduction="sum")
+
+                def forward(self, x_recon, x, mu, logvar):
+                    loss_MSE = self.mse_loss(x_recon, x)
+                    loss_KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+                    return loss_MSE + loss_KLD
+
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            cols = X_train.columns
+            # in this part we count how much less rows than the main class we have for all other classes
+            # get unique values
+            unique_classes = np.unique(Y_train.values)
+            # get counts
+            unique, counts = np.unique(Y_train.values, return_counts=True)
+            results = np.asarray((unique, counts))
+            # get highest count
+            results[1].max()
+            # get array with delta of each element count compared to max count
+            max_count = results[1].max()
+            deltas = max_count - results[1]
+            class_deltas = np.vstack((results[0], deltas)) # contains classes and how much they miss until max count
+
+            for i in range(len(unique_classes)):
+                target_class = unique_classes[i]
+                target_delta = deltas[i]
+                if target_delta == 0:
+                    pass
+                else:
+                    X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+                    X_train_class_only = X_train.iloc[np.where(Y_train == target_class)[0]]
+                    Y_train_class_only = Y_train.iloc[np.where(Y_train == target_class)[0]]
+
+                    X_train_other_classes = X_train.iloc[np.where(Y_train != target_class)[0]]
+                    Y_train_other_classes = Y_train.iloc[np.where(Y_train != target_class)[0]]
+
+                    D_in = X_train_class_only.shape[1]
+                    X_test_class_only = X_test.iloc[np.where(Y_test == target_class)[0]]
+
+                    traindata_set = DataBuilder(X_train_class_only)
+                    testdata_set = DataBuilder(X_test_class_only)
+
+                    trainloader = DataLoader(dataset=traindata_set, batch_size=1024)
+                    testloader = DataLoader(dataset=testdata_set, batch_size=1024)
+
+                    #D_in = X_train_class_only.shape[1]
+                    H = 50
+                    H2 = 12
+                    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                    model = Autoencoder(D_in, H, H2).to(device)
+                    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+                    loss_mse = customLoss()
+
+                    # train model
+                    log_interval = 50
+                    val_losses = []
+                    train_losses = []
+                    test_losses = []
+
+                    def train(epoch):
+                        model.train()
+                        train_loss = 0
+                        for batch_idx, data in enumerate(trainloader):
+                            data = data.to(device)
+                            optimizer.zero_grad()
+                            recon_batch, mu, logvar = model(data)
+                            loss = loss_mse(recon_batch, data, mu, logvar)
+                            loss.backward()
+                            train_loss += loss.item()
+                            optimizer.step()
+                        if epoch % 200 == 0:
+                            print('====> Epoch: {} Average training loss: {:.4f}'.format(
+                                epoch, train_loss / len(trainloader.dataset)))
+                            train_losses.append(train_loss / len(trainloader.dataset))
+
+                    def test(epoch):
+                        with torch.no_grad():
+                            test_loss = 0
+                            for batch_idx, data in enumerate(testloader):
+                                data = data.to(device)
+                                optimizer.zero_grad()
+                                recon_batch, mu, logvar = model(data)
+                                loss = loss_mse(recon_batch, data, mu, logvar)
+                                test_loss += loss.item()
+                                if epoch % 200 == 0:
+                                    print('====> Epoch: {} Average test loss: {:.4f}'.format(
+                                        epoch, test_loss / len(testloader.dataset)))
+                                test_losses.append(test_loss / len(testloader.dataset))
+
+
+
+                    epochs = 2500
+                    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+                    for epoch in range(1, epochs + 1):
+                        train(epoch)
+                        test(epoch)
+
+                    with torch.no_grad():
+                        for batch_idx, data in enumerate(testloader):
+                            data = data.to(device)
+                            optimizer.zero_grad()
+                            recon_batch, mu, logvar = model(data)
+
+                    recon_row = recon_batch[0].cpu().numpy()
+                    recon_row = np.append(recon_row, [1])
+                    real_row = testloader.dataset.x[0].cpu().numpy()
+                    real_row = np.append(real_row, [1])
+
+                    sigma = torch.exp(logvar/2)
+
+                    # sample z from q
+                    q = torch.distributions.Normal(mu.mean(axis=0), sigma.mean(axis=0))
+                    z = q.rsample(sample_shape=torch.Size([int(target_delta)]))
+
+                    with torch.no_grad():
+                        pred = model.decode(z).cpu().numpy()
+
+
+                    df_fake = pd.DataFrame(pred)
+                    df_fake.columns = cols
+                    df_fake['Class'] = target_class
+
+                    q = torch.distributions.Normal(mu.mean(axis=0), sigma.mean(axis=0))
+                    z = q.rsample(sample_shape=torch.Size([int(target_delta)]))
+
+                    with torch.no_grad():
+                        pred = model.decode(z).cpu().numpy()
+
+
+                    print(X_train_class_only.shape)
+                    print(pred.shape)
+                    X_train = np.vstack((X_train_class_only.values, pred))
+                    X_train = np.vstack((X_train, X_train_other_classes))
+                    X_train = pd.DataFrame(X_train, columns=cols)
+
+                    print(Y_train.shape)
+                    Y_train = np.append(Y_train_class_only.values, np.repeat(target_class, target_delta))
+                    Y_train = np.append(Y_train, Y_train_other_classes)
+                    Y_train = pd.Series(Y_train)
+
+                    print(X_train.shape)
+                    print(Y_train.shape)
+
+                    X_train = X_train.reset_index(drop=True)
+                    Y_train = Y_train.reset_index(drop=True)
+                    return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
