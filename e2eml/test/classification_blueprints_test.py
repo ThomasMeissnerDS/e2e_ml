@@ -132,7 +132,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                      )
 
     titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 10,
-                                                    "lgbm": 8,
+                                                    "lgbm": 15,
                                                     "tabnet": 3,
                                                     "ngboost": 10,
                                                     "sklearn_ensemble": 3,
@@ -142,13 +142,13 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
     titanic_auto_ml.special_blueprint_algorithms = {"ridge": True, #titanic, #synthetic_multiclass
                                                     "xgboost": False, #titanic
                                                     "ngboost": False, #titanic, #synthetic_multiclass
-                                                    "lgbm": False, #titanic
+                                                    "lgbm": True, #titanic
                                                     "tabnet": False, #titanic
-                                                    "vowpal_wabbit": False,
+                                                    "vowpal_wabbit": True,
                                                     "sklearn_ensemble": False, #titanic, #synthetic_multiclass
                                                     "catboost": False
                                                     }
-    titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = False
+    titanic_auto_ml.blueprint_step_selection_non_nlp["scale_data"] = True
 
 
     titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
@@ -177,4 +177,4 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
 
 
 if __name__ == '__main__':
-    test_ml_special_multiclass_full_processing_multimodel_max_voting('titanic')
+    test_ml_special_multiclass_full_processing_multimodel_max_voting('synthetic_multiclass')

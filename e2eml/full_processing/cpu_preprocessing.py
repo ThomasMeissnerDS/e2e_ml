@@ -215,7 +215,8 @@ class PreProcessing:
             "synthetic_data_augmentation": False,
             "delete_unpredictable_training_rows": False,
             "scale_data": False,
-            "smote": False
+            "smote": False,
+            "autoencoder_based_oversampling": False
         }
 
         self.blueprint_step_selection_nlp_transformers = {
@@ -3547,6 +3548,8 @@ class PreProcessing:
             deltas = max_count - results[1]
             class_deltas = np.vstack((results[0], deltas)) # contains classes and how much they miss until max count
 
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
             for i in range(len(unique_classes)):
                 target_class = unique_classes[i]
                 target_delta = deltas[i]
@@ -3572,8 +3575,8 @@ class PreProcessing:
 
                     #D_in = X_train_class_only.shape[1]
                     H = 50
-                    H2 = 12
-                    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                    H2 = 8
+
                     model = Autoencoder(D_in, H, H2).to(device)
                     optimizer = optim.Adam(model.parameters(), lr=1e-3)
                     loss_mse = customLoss()
@@ -3654,42 +3657,15 @@ class PreProcessing:
                         pred = model.decode(z).cpu().numpy()
 
 
-                    print(X_train_class_only.shape)
-                    print(pred.shape)
                     X_train = np.vstack((X_train_class_only.values, pred))
                     X_train = np.vstack((X_train, X_train_other_classes))
                     X_train = pd.DataFrame(X_train, columns=cols)
 
-                    print(Y_train.shape)
+
                     Y_train = np.append(Y_train_class_only.values, np.repeat(target_class, target_delta))
                     Y_train = np.append(Y_train, Y_train_other_classes)
                     Y_train = pd.Series(Y_train)
 
-                    print(X_train.shape)
-                    print(Y_train.shape)
-
                     X_train = X_train.reset_index(drop=True)
                     Y_train = Y_train.reset_index(drop=True)
-                    return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                    self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)

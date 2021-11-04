@@ -123,7 +123,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.synthetic_data_augmentation()
         if self.blueprint_step_selection_non_nlp["delete_unpredictable_training_rows"]:
             self.delete_unpredictable_training_rows()
-        #self.autoencoder_based_oversampling()
+        if self.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"]:
+            self.autoencoder_based_oversampling()
         if self.blueprint_step_selection_non_nlp["sort_columns_alphabetically"]:
             self.sort_columns_alphabetically()
 
