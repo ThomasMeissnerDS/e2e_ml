@@ -319,7 +319,8 @@ class PreProcessing:
                                              "elasticnet": 100,
                                              "catboost": 25,
                                              "sgd": 25,
-                                             "bruteforce_random": 400}
+                                             "bruteforce_random": 400,
+                                             "autoencoder_based_oversampling": 20}
 
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
                                                        "lgbm": 2*60*60,
@@ -330,7 +331,8 @@ class PreProcessing:
                                                        "elasticnet": 2*60*60,
                                                        "catboost": 2*60*60,
                                                        "sgd": 2*60*60,
-                                                       "bruteforce_random": 2*60*60}
+                                                       "bruteforce_random": 2*60*60,
+                                                       "autoencoder_based_oversampling": 2*60*60}
 
         self.feature_selection_sample_size = 100000
         self.hyperparameter_tuning_sample_size = 100000
@@ -3574,8 +3576,87 @@ class PreProcessing:
                     testloader = DataLoader(dataset=testdata_set, batch_size=1024)
 
                     #D_in = X_train_class_only.shape[1]
-                    H = 50
-                    H2 = 8
+                    # HYPERPARAMETER OPTIMIZATION
+                    def objective(trial):
+                        param = {
+                            'nb_epochs': trial.suggest_int('nb_epochs', 2, 5000),
+                            'h': trial.suggest_int('h', 20, 100),
+                            'h2': trial.suggest_int('h2', 2, 18)
+                        }
+                        model = Autoencoder(D_in, param["h"], param["h2"]).to(device)
+                        optimizer = optim.Adam(model.parameters(), lr=1e-3)
+                        loss_mse = customLoss()
+
+                        # train model
+                        log_interval = 50
+                        val_losses = []
+                        train_losses = []
+                        test_losses = []
+
+                        def train(epoch):
+                            model.train()
+                            train_loss = 0
+                            for batch_idx, data in enumerate(trainloader):
+                                data = data.to(device)
+                                optimizer.zero_grad()
+                                recon_batch, mu, logvar = model(data)
+                                loss = loss_mse(recon_batch, data, mu, logvar)
+                                loss.backward()
+                                train_loss += loss.item()
+                                optimizer.step()
+                            if epoch % 200 == 0:
+                                print('====> Epoch: {} Average training loss: {:.4f}'.format(
+                                    epoch, train_loss / len(trainloader.dataset)))
+                                train_losses.append(train_loss / len(trainloader.dataset))
+
+                        def test(epoch):
+                            with torch.no_grad():
+                                test_loss = 0
+                                for batch_idx, data in enumerate(testloader):
+                                    data = data.to(device)
+                                    optimizer.zero_grad()
+                                    recon_batch, mu, logvar = model(data)
+                                    loss = loss_mse(recon_batch, data, mu, logvar)
+                                    test_loss += loss.item()
+                                    if epoch % 200 == 0:
+                                        print('====> Epoch: {} Average test loss: {:.4f}'.format(
+                                            epoch, test_loss / len(testloader.dataset)))
+                                    test_losses.append(test_loss / len(testloader.dataset))
+
+
+
+                        epochs = param["nb_epochs"]
+                        optimizer = optim.Adam(model.parameters(), lr=1e-3)
+                        for epoch in range(1, epochs + 1):
+                            train(epoch)
+                            test(epoch)
+
+                        with torch.no_grad():
+                            for batch_idx, data in enumerate(testloader):
+                                data = data.to(device)
+                                optimizer.zero_grad()
+                                recon_batch, mu, logvar = model(data)
+
+                            return test_losses[-1]
+
+                    algorithm = 'autoencoder_based_oversampling'
+
+                    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+                    study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm}")
+                    study.optimize(objective,
+                                   n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                                   timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                                   gc_after_trial=True,
+                                   show_progress_bar=True)
+                    self.optuna_studies[f"{algorithm}"] = {}
+                    fig = optuna.visualization.plot_optimization_history(study)
+                    self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                    fig.show()
+
+                    # FINAL TRAINING
+                    best_parameters = study.best_trial.params
+                    H = best_parameters["h"]
+                    H2 = best_parameters["h2"]
 
                     model = Autoencoder(D_in, H, H2).to(device)
                     optimizer = optim.Adam(model.parameters(), lr=1e-3)
@@ -3619,7 +3700,7 @@ class PreProcessing:
 
 
 
-                    epochs = 2500
+                    epochs = best_parameters["nb_epochs"]
                     optimizer = optim.Adam(model.parameters(), lr=1e-3)
                     for epoch in range(1, epochs + 1):
                         train(epoch)

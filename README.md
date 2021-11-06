@@ -158,7 +158,8 @@ test_class.blueprint_step_selection_non_nlp = {
             "synthetic_data_augmentation": False, # this feature is experimental, can be heavily accelerated using rapids_acceleration=True during class instantiation
             "delete_unpredictable_training_rows": False, # this feature is experimental!
             "scale_data": False,
-            "smote": False
+            "smote": False,
+            "autoencoder_based_oversampling": False
         }
         
 The bruteforce_random_feature_selection step is experimental. It showed promising results. The number of trials can be controlled.
@@ -236,8 +237,10 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 2.8.0
+- autoencoder based oversampling will go through hyperprameter tuning first
 * 2.7.5
-- 
+- added oversampling based on variational autoencoder (experimental)
 * 2.7.4
  - fixed target encoding for multiclass classification
  - improved performance on multiclass tasks
