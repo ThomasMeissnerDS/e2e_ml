@@ -1123,7 +1123,7 @@ class PreProcessing:
                 pass
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.70):
+    def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.80):
         """
         This method splits the dataframe either as a simple or as a time split.
         :param how: 'cross' for cross validation, 'time' for time validation.
@@ -3572,18 +3572,19 @@ class PreProcessing:
                     traindata_set = DataBuilder(X_train_class_only)
                     testdata_set = DataBuilder(X_test_class_only)
 
-                    trainloader = DataLoader(dataset=traindata_set, batch_size=1024)
-                    testloader = DataLoader(dataset=testdata_set, batch_size=1024)
+                    trainloader = DataLoader(dataset=traindata_set, batch_size=4096)
+                    testloader = DataLoader(dataset=testdata_set, batch_size=4096)
 
                     #D_in = X_train_class_only.shape[1]
                     # HYPERPARAMETER OPTIMIZATION
                     def objective(trial):
                         param = {
-                            'nb_epochs': trial.suggest_int('nb_epochs', 2, 5000),
-                            'h': trial.suggest_int('h', 20, 100),
-                            'h2': trial.suggest_int('h2', 2, 18)
+                            'nb_epochs': trial.suggest_int('nb_epochs', 2, 30000),
+                            'h': trial.suggest_int('h', 2, 400),
+                            'h2': trial.suggest_int('h2', 2, 400),
+                            'latent_dim': trial.suggest_int('latent_dim', 2, 50)
                         }
-                        model = Autoencoder(D_in, param["h"], param["h2"]).to(device)
+                        model = Autoencoder(D_in, param["h"], param["h2"], param["latent_dim"]).to(device)
                         optimizer = optim.Adam(model.parameters(), lr=1e-3)
                         loss_mse = customLoss()
 
@@ -3621,6 +3622,9 @@ class PreProcessing:
                                     if epoch % 200 == 0:
                                         print('====> Epoch: {} Average test loss: {:.4f}'.format(
                                             epoch, test_loss / len(testloader.dataset)))
+                                    trial.report(test_loss, epoch)
+                                    if trial.should_prune():
+                                        raise optuna.exceptions.TrialPruned()
                                     test_losses.append(test_loss / len(testloader.dataset))
 
 
@@ -3637,7 +3641,12 @@ class PreProcessing:
                                 optimizer.zero_grad()
                                 recon_batch, mu, logvar = model(data)
 
-                            return test_losses[-1]
+                            try:
+                                loss_score = test_losses[-1] #np.sum(test_losses[-1] + abs(np.sum([test_losses[-1], train_losses[-1]]))**2)
+                            except IndexError:
+                                loss_score = 10000000000
+
+                            return loss_score #test_losses[-1]
 
                     algorithm = 'autoencoder_based_oversampling'
 
@@ -3657,8 +3666,9 @@ class PreProcessing:
                     best_parameters = study.best_trial.params
                     H = best_parameters["h"]
                     H2 = best_parameters["h2"]
+                    latent_dim = best_parameters["latent_dim"]
 
-                    model = Autoencoder(D_in, H, H2).to(device)
+                    model = Autoencoder(D_in, H, H2, latent_dim).to(device)
                     optimizer = optim.Adam(model.parameters(), lr=1e-3)
                     loss_mse = customLoss()
 
