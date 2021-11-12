@@ -746,6 +746,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 mask_type = trial.suggest_categorical('mask_type', ["sparsemax", "entmax"])
                 n_shared = trial.suggest_int('n_shared', 1, 5)
                 n_independent = trial.suggest_int('n_independent', 1, 5)
+                weights = trial.suggest_int('weights', 0, 1)
+                pre_trainer_max_epochs = trial.suggest_int('pre_trainer_max_epochs', 10, 1000)
+                trainer_max_epochs = trial.suggest_int('trainer_max_epochs', 10, 1000)
 
                 param = dict(
                     gamma=gamma,
@@ -787,7 +790,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     pretrainer = TabNetPretrainer(**param)
                     pretrainer.fit(x_train,
                                    eval_set=[(x_test)],
-                                   max_epochs=max_epochs,
+                                   max_epochs=pre_trainer_max_epochs,
                                    patience=30,
                                    batch_size=batch_size,
                                    virtual_batch_size=virtual_batch_size,
@@ -804,9 +807,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                         batch_size=batch_size,
                         virtual_batch_size=virtual_batch_size,
                         num_workers=num_workers,
-                        max_epochs=max_epochs,
                         drop_last=True,
-                        from_unsupervised=pretrainer
+                        from_unsupervised=pretrainer,
+                        weights=weights,
+                        max_epochs=trainer_max_epochs
                     )
                     partial_probs = model.predict_proba(X_test_num)
                     if self.class_problem == 'binary':
@@ -833,12 +837,20 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            fig = optuna.visualization.plot_optimization_history(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-            fig.show()
-            fig = optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_param_importance"] = fig
-            fig.show()
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                print("Plotting of hyperparameter performances failed. This usually implicates an error during training.")
+
+            try:
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                print("Plotting of hyperparameter performances failed. This usually implicates an error during training.")
+
 
             try:
                 X_train = X_train.drop(self.target_variable, axis=1)
@@ -871,13 +883,13 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             pretrainer = TabNetPretrainer(**param)
             pretrainer.fit(X_train,
                            eval_set=[(X_test)],
-                           max_epochs=max_epochs,
                            patience=30,
                            batch_size=batch_size,
                            virtual_batch_size=virtual_batch_size,
                            num_workers=num_workers,
                            drop_last=True,
-                           pretraining_ratio=tabnet_best_param["pretrain_difficulty"])
+                           pretraining_ratio=tabnet_best_param["pretrain_difficulty"],
+                           max_epochs=tabnet_best_param["pre_trainer_max_epochs"])
 
             model = TabNetClassifier(**param)
             model.fit(
@@ -888,9 +900,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 batch_size=batch_size,
                 virtual_batch_size=virtual_batch_size,
                 num_workers=num_workers,
-                max_epochs=max_epochs,
                 drop_last=True,
-                from_unsupervised=pretrainer
+                from_unsupervised=pretrainer,
+                weights=tabnet_best_param["weights"],
+                max_epochs=tabnet_best_param["trainer_max_epochs"]
             )
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -1113,12 +1126,15 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     self.optuna_studies[f"{algorithm}"] = {}
                     # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-                    fig = optuna.visualization.plot_optimization_history(study)
-                    self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-                    fig.show()
-                    fig = optuna.visualization.plot_param_importances(study)
-                    self.optuna_studies[f"{algorithm}_param_importance"] = fig
-                    fig.show()
+                    try:
+                        fig = optuna.visualization.plot_optimization_history(study)
+                        self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                        fig.show()
+                        fig = optuna.visualization.plot_param_importances(study)
+                        self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                        fig.show()
+                    except ZeroDivisionError:
+                        pass
 
                     lgbm_best_param = study.best_trial.params
                     param = {
@@ -1211,12 +1227,15 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     self.optuna_studies[f"{algorithm}"] = {}
                     # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                     # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-                    fig = optuna.visualization.plot_optimization_history(study)
-                    self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-                    fig.show()
-                    fig = optuna.visualization.plot_param_importances(study)
-                    self.optuna_studies[f"{algorithm}_param_importance"] = fig
-                    fig.show()
+                    try:
+                        fig = optuna.visualization.plot_optimization_history(study)
+                        self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                        fig.show()
+                        fig = optuna.visualization.plot_param_importances(study)
+                        self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                        fig.show()
+                    except ZeroDivisionError:
+                        pass
 
                     lgbm_best_param = study.best_trial.params
                     param = {
@@ -1466,12 +1485,15 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.optuna_studies[f"{algorithm}"] = {}
                 # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-                fig = optuna.visualization.plot_optimization_history(study)
-                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-                fig.show()
-                fig = optuna.visualization.plot_param_importances(study)
-                self.optuna_studies[f"{algorithm}_param_importance"] = fig
-                fig.show()
+                try:
+                    fig = optuna.visualization.plot_optimization_history(study)
+                    self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                    fig.show()
+                    fig = optuna.visualization.plot_param_importances(study)
+                    self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                    fig.show()
+                except ZeroDivisionError:
+                    pass
 
                 lgbm_best_param = study.best_trial.params
                 param = {
@@ -1562,12 +1584,15 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.optuna_studies[f"{algorithm}"] = {}
                 # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-                fig = optuna.visualization.plot_optimization_history(study)
-                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-                fig.show()
-                fig = optuna.visualization.plot_param_importances(study)
-                self.optuna_studies[f"{algorithm}_param_importance"] = fig
-                fig.show()
+                try:
+                    fig = optuna.visualization.plot_optimization_history(study)
+                    self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                    fig.show()
+                    fig = optuna.visualization.plot_param_importances(study)
+                    self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                    fig.show()
+                except ZeroDivisionError:
+                    pass
 
                 lgbm_best_param = study.best_trial.params
                 param = {
@@ -1968,12 +1993,15 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            fig = optuna.visualization.plot_optimization_history(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-            fig.show()
-            fig = optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_param_importance"] = fig
-            fig.show()
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                pass
 
             lgbm_best_param = study.best_trial.params
 

@@ -672,12 +672,15 @@ class RegressionModels(postprocessing.FullPipeline):
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            fig = optuna.visualization.plot_optimization_history(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-            fig.show()
-            fig = optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_param_importance"] = fig
-            fig.show()
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                pass
 
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             Y_train = Y_train.values.reshape(-1, 1)
@@ -904,12 +907,15 @@ class RegressionModels(postprocessing.FullPipeline):
                 self.optuna_studies[f"{algorithm}"] = {}
                 # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
                 # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-                fig = optuna.visualization.plot_optimization_history(study)
-                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-                fig.show()
-                fig = optuna.visualization.plot_param_importances(study)
-                self.optuna_studies[f"{algorithm}_param_importance"] = fig
-                fig.show()
+                try:
+                    fig = optuna.visualization.plot_optimization_history(study)
+                    self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                    fig.show()
+                    fig = optuna.visualization.plot_param_importances(study)
+                    self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                    fig.show()
+                except ZeroDivisionError:
+                    pass
 
                 lgbm_best_param = study.best_trial.params
                 param = {
@@ -1085,12 +1091,15 @@ class RegressionModels(postprocessing.FullPipeline):
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            fig = optuna.visualization.plot_optimization_history(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-            fig.show()
-            fig = optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_param_importance"] = fig
-            fig.show()
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                pass
 
             lgbm_best_param = study.best_trial.params
             param = {
@@ -1401,12 +1410,15 @@ class RegressionModels(postprocessing.FullPipeline):
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            fig = optuna.visualization.plot_optimization_history(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-            fig.show()
-            fig = optuna.visualization.plot_param_importances(study)
-            self.optuna_studies[f"{algorithm}_param_importance"] = fig
-            fig.show()
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                pass
 
             lgbm_best_param = study.best_trial.params
 

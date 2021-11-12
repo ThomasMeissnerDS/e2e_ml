@@ -335,7 +335,7 @@ class PreProcessing:
                                                        "autoencoder_based_oversampling": 2*60*60}
 
         self.feature_selection_sample_size = 100000
-        self.hyperparameter_tuning_sample_size = 100000
+        self.hyperparameter_tuning_sample_size = 10000
         self.brute_force_selection_sample_size = 15000
         self.brute_force_selection_base_learner = 'double' # 'lgbm', 'vowpal_wabbit', 'auto
 
@@ -1123,7 +1123,7 @@ class PreProcessing:
                 pass
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.80):
+    def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.70):
         """
         This method splits the dataframe either as a simple or as a time split.
         :param how: 'cross' for cross validation, 'time' for time validation.
@@ -3329,9 +3329,12 @@ class PreProcessing:
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
-            fig = optuna.visualization.plot_optimization_history(study)
-            self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-            fig.show()
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                print("Plotting of hyperparameter performances failed. This usually implicates an error during training.")
 
             if len(X_train.columns) <= 1000:
                fig = optuna.visualization.plot_param_importances(study)
@@ -3572,17 +3575,17 @@ class PreProcessing:
                     traindata_set = DataBuilder(X_train_class_only)
                     testdata_set = DataBuilder(X_test_class_only)
 
-                    trainloader = DataLoader(dataset=traindata_set, batch_size=4096)
-                    testloader = DataLoader(dataset=testdata_set, batch_size=4096)
+                    trainloader = DataLoader(dataset=traindata_set, batch_size=8192)
+                    testloader = DataLoader(dataset=testdata_set, batch_size=8192)
 
                     #D_in = X_train_class_only.shape[1]
                     # HYPERPARAMETER OPTIMIZATION
                     def objective(trial):
                         param = {
-                            'nb_epochs': trial.suggest_int('nb_epochs', 2, 30000),
-                            'h': trial.suggest_int('h', 2, 400),
-                            'h2': trial.suggest_int('h2', 2, 400),
-                            'latent_dim': trial.suggest_int('latent_dim', 2, 50)
+                            'nb_epochs': trial.suggest_int('nb_epochs', 2, 10000),
+                            'h': trial.suggest_int('h', 2, 800),
+                            'h2': trial.suggest_int('h2', 2, 800),
+                            'latent_dim': trial.suggest_int('latent_dim', 1, 10)
                         }
                         model = Autoencoder(D_in, param["h"], param["h2"], param["latent_dim"]).to(device)
                         optimizer = optim.Adam(model.parameters(), lr=1e-3)
@@ -3658,9 +3661,12 @@ class PreProcessing:
                                    gc_after_trial=True,
                                    show_progress_bar=True)
                     self.optuna_studies[f"{algorithm}"] = {}
-                    fig = optuna.visualization.plot_optimization_history(study)
-                    self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-                    fig.show()
+                    try:
+                        fig = optuna.visualization.plot_optimization_history(study)
+                        self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                        fig.show()
+                    except ZeroDivisionError:
+                        print("Plotting of hyperparameter performances failed. This usually implicates an error during training.")
 
                     # FINAL TRAINING
                     best_parameters = study.best_trial.params

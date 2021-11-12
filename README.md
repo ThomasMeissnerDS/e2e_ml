@@ -112,12 +112,14 @@ There are regression blueprints as well (in regression module):
 
 In ensembles algorithms can be chosen via the class attribute:
 test_class.special_blueprint_algorithms = {"ridge": True,
+                                            "elasticnet": False,
                                              "xgboost": True,
                                              "ngboost": True,
                                              "lgbm": True,
                                              "tabnet": False,
                                              "vowpal_wabbit": True,
-                                             "sklearn_ensemble": True
+                                             "sklearn_ensemble": True,
+                                             "catboost": False
                                              }
                                              
 Also preprocessing steps can be selected:
@@ -184,7 +186,8 @@ test_class.hyperparameter_tuning_rounds = {"xgboost": 100,
                                              "elasticnet": 100,
                                              "catboost": 25,
                                              "sgd": 25,
-                                             "bruteforce_random": 400}
+                                             "bruteforce_random": 400,
+                                             "autoencoder_based_oversampling": 25}
 
 test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
                                                        "lgbm": 2*60*60,
@@ -195,12 +198,13 @@ test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
                                                        "elasticnet": 2*60*60,
                                                        "catboost": 2*60*60,
                                                        "sgd": 2*60*60,
-                                                       "bruteforce_random": 2*60*60}
+                                                       "bruteforce_random": 2*60*60,
+                                                       "autoencoder_based_oversampling": 1*60*60}
 
 Working with big data can bring all hardware to it's needs. e2eml has been tested with:
 - Ryzen 5950x (16 cores CPU)
 - Geforce RTX 3090 (24GB VRAM)
-- 32GB RAM                                                      
+- 64GB RAM                                                      
 e2eml has been able to process 100k rows with 200 columns approximately using these specs stable for non-blended 
 blueprints. Blended blueprints consume more resources as e2eml keep the trained models in memory as of now.
 
@@ -209,9 +213,13 @@ For data bigger than 100k rows it is possible to limit the amount of data for va
 - test_class.hyperparameter_tuning_sample_size = 100000 # for model hyperparameter optimization
 - test_class.brute_force_selection_sample_size = 15000 # for an experimental feature selection
 
-However during our internal tests, we achieved better results, using 100k rows and tune hyperparameters using all of them,
-than using 600k rows and tuning hyperparameters on a sample of 50k. This has been the case, because e2eml will use a broad
-parameter space during hyperparameter tuning.
+For binary classification a sample size of 100k datapoints is sufficient in most cases. Hyperparameter tuning can be much less, 
+depending on class imbalance.
+
+For multiclass we recommend to start with small samples as algorithms like Xgboost and LGBM will easily grow in memory consumption
+with growing number of classes.
+
+Whenever classes are imbalanced (binary & multiclass) we recommend to use the preprocessing step "autoencoder_based_oversampling".
 """
 # After running the blueprint the pipeline is done. I can be saved with:
 save_to_production(test_class, file_name='automl_instance')
@@ -237,8 +245,9 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
-* 2.8.0
-- autoencoder based oversampling will go through hyperprameter tuning first
+* 2.8.1
+- autoencoder based oversampling will go through hyperprameter tuning first (for each class individually)
+- optimized TabNet performance
 * 2.7.5
 - added oversampling based on variational autoencoder (experimental)
 * 2.7.4
