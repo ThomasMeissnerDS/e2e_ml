@@ -2787,6 +2787,7 @@ class PreProcessing:
                 param["lambda_value"] = lambda_value
                 param["c_value"] = c_value
                 param["pos_only_location"] = pos_only_location
+                param["random_factor_pos"] = random_factor_pos
 
                 temp_df_list = []
                 X_train_sample[self.target_variable] = Y_train_sample
@@ -3762,11 +3763,9 @@ class PreProcessing:
                     with torch.no_grad():
                         pred = model.decode(z).cpu().numpy()
 
-
                     X_train = np.vstack((X_train_class_only.values, pred))
                     X_train = np.vstack((X_train, X_train_other_classes))
                     X_train = pd.DataFrame(X_train, columns=cols)
-
 
                     Y_train = np.append(Y_train_class_only.values, np.repeat(target_class, target_delta))
                     Y_train = np.append(Y_train, Y_train_other_classes)

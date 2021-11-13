@@ -161,7 +161,8 @@ test_class.blueprint_step_selection_non_nlp = {
             "delete_unpredictable_training_rows": False, # this feature is experimental!
             "scale_data": False,
             "smote": False,
-            "autoencoder_based_oversampling": False
+            "autoencoder_based_oversampling": False, # perfect for imbalanced binary and multiclass data
+            "final_pca_dimensionality_reduction": False
         }
         
 The bruteforce_random_feature_selection step is experimental. It showed promising results. The number of trials can be controlled.
@@ -187,7 +188,8 @@ test_class.hyperparameter_tuning_rounds = {"xgboost": 100,
                                              "catboost": 25,
                                              "sgd": 25,
                                              "bruteforce_random": 400,
-                                             "autoencoder_based_oversampling": 25}
+                                             "autoencoder_based_oversampling": 25,
+                                             "final_pca_dimensionality_reduction": 50}
 
 test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
                                                        "lgbm": 2*60*60,
@@ -199,7 +201,8 @@ test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
                                                        "catboost": 2*60*60,
                                                        "sgd": 2*60*60,
                                                        "bruteforce_random": 2*60*60,
-                                                       "autoencoder_based_oversampling": 1*60*60}
+                                                       "autoencoder_based_oversampling": 1*60*60,
+                                                       "final_pca_dimensionality_reduction": 2*60*60}
 
 Working with big data can bring all hardware to it's needs. e2eml has been tested with:
 - Ryzen 5950x (16 cores CPU)
@@ -213,7 +216,7 @@ For data bigger than 100k rows it is possible to limit the amount of data for va
 - test_class.hyperparameter_tuning_sample_size = 100000 # for model hyperparameter optimization
 - test_class.brute_force_selection_sample_size = 15000 # for an experimental feature selection
 
-For binary classification a sample size of 100k datapoints is sufficient in most cases. Hyperparameter tuning can be much less, 
+For binary classification a sample size of 100k datapoints is sufficient in most cases. Hyperparameter tuning sample size can be much less, 
 depending on class imbalance.
 
 For multiclass we recommend to start with small samples as algorithms like Xgboost and LGBM will easily grow in memory consumption
@@ -245,6 +248,11 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 2.9.0
+- bug fixes with synthetic data augmentation for regression
+- bug fix of target encoding during regression
+- enhanced hyperparameter space for autoencoder based oversampling
+- added final PCA dimensionality reduction as optional preprocessing step
 * 2.8.1
 - autoencoder based oversampling will go through hyperprameter tuning first (for each class individually)
 - optimized TabNet performance
