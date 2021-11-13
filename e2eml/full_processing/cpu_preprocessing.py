@@ -321,6 +321,7 @@ class PreProcessing:
                                              "catboost": 25,
                                              "sgd": 25,
                                              "bruteforce_random": 400,
+                                             "synthetic_data_augmentation": 100,
                                              "autoencoder_based_oversampling": 20,
                                              "final_pca_dimensionality_reduction": 50}
 
@@ -334,6 +335,7 @@ class PreProcessing:
                                                        "catboost": 2*60*60,
                                                        "sgd": 2*60*60,
                                                        "bruteforce_random": 2*60*60,
+                                                       "synthetic_data_augmentation": 1*60*60,
                                                        "autoencoder_based_oversampling": 2*60*60,
                                                        "final_pca_dimensionality_reduction": 2*60*60}
 
@@ -2916,9 +2918,10 @@ class PreProcessing:
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=self.preprocess_decisions["random_state_counter"])
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
+
             study.optimize(objective,
-                           n_trials=100,
-                           timeout=600,
+                           n_trials=self.hyperparameter_tuning_rounds["synthetic_data_augmentation"],
+                           timeout=self.hyperparameter_tuning_max_runtime_secs["synthetic_data_augmentation"],
                            show_progress_bar=True
                            )
             self.optuna_studies[f"{algorithm}"] = {}
@@ -3117,6 +3120,7 @@ class PreProcessing:
                     norm.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
                     pareto.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
                     levy.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
+                    dweibull.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
                     X_train[col] = self.synthetic_floating_data_generator(column_name=col, sample_size=sample_size)
                     self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
                     print(f"Finished augmenting column {col}")
