@@ -1,6 +1,8 @@
 from e2eml.regression import regression_blueprints as rb
 import pandas as pd
 from sklearn.metrics import mean_absolute_error
+
+
 # track memory consumption in terminal: dmesg
 
 
@@ -47,10 +49,11 @@ def load_housingprices_data():
 def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender():
     test_df, test_target, val_df, val_df_target, test_categorical_cols = load_housingprices_data()
     titanic_auto_ml = rb.RegressionBluePrint(datasource=test_df,
-                                   target_variable=test_target,
-                                   categorical_columns=test_categorical_cols,
-                                   preferred_training_mode='auto',
-                                             tune_mode='accurate')
+                                             target_variable=test_target,
+                                             categorical_columns=test_categorical_cols,
+                                             preferred_training_mode='auto',
+                                             tune_mode='accurate',
+                                             ml_task='regression')
     titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 10,
                                                     "lgbm": 10,
                                                     "tabnet": 3,
@@ -59,17 +62,21 @@ def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender
                                                     "catboost": 10,
                                                     "ridge": 3,
                                                     "bruteforce_random": 10,
-                                                    "elasticnet": 10}
-    titanic_auto_ml.special_blueprint_algorithms = {"ridge": True,
-                                                    "xgboost": True,
-                                                    "ngboost": True,
+                                                    "elasticnet": 10,
+                                                    "autoencoder_based_oversampling": 20,
+                                                    "final_pca_dimensionality_reduction": 20}
+
+    titanic_auto_ml.special_blueprint_algorithms = {"ridge": False,
+                                                    "xgboost": False,
+                                                    "ngboost": False,
                                                     "lgbm": True,
                                                     "tabnet": False,
                                                     "vowpal_wabbit": True,
-                                                    "sklearn_ensemble": True,
-                                                    "catboost": True,
-                                                    "elasticnet": True
+                                                    "sklearn_ensemble": False,
+                                                    "catboost": False,
+                                                    "elasticnet": False
                                                     }
+    titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = True
     titanic_auto_ml.hyperparameter_tuning_sample_size = 800
 
     titanic_auto_ml.ml_special_regression_full_processing_multimodel_avg_blender()
@@ -93,6 +100,7 @@ def test_ml_bp10_train_test_regression_full_processing_linear_reg():
     mae = mean_absolute_error(val_df_target, val_y_hat)
     finished = True
     assert finished == True
+
 
 if __name__ == '__main__':
     test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender()

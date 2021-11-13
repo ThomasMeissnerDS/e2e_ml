@@ -17,7 +17,7 @@ from sklearn.decomposition import PCA
 from sklearn.model_selection import cross_val_score
 from sklearn.utils import class_weight
 from sklearn.metrics import make_scorer
-from sklearn.metrics import matthews_corrcoef
+from sklearn.metrics import matthews_corrcoef, mean_squared_error
 from scipy.stats import bernoulli, norm, poisson, uniform,  gamma, expon, binom, pareto, levy, dweibull, halfcauchy, halfnorm, powernorm, semicircular, tukeylambda, rdist
 from boostaroota import BoostARoota
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
@@ -216,7 +216,8 @@ class PreProcessing:
             "delete_unpredictable_training_rows": False,
             "scale_data": False,
             "smote": False,
-            "autoencoder_based_oversampling": False
+            "autoencoder_based_oversampling": False,
+            "final_pca_dimensionality_reduction": False
         }
 
         self.blueprint_step_selection_nlp_transformers = {
@@ -320,7 +321,8 @@ class PreProcessing:
                                              "catboost": 25,
                                              "sgd": 25,
                                              "bruteforce_random": 400,
-                                             "autoencoder_based_oversampling": 20}
+                                             "autoencoder_based_oversampling": 20,
+                                             "final_pca_dimensionality_reduction": 50}
 
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
                                                        "lgbm": 2*60*60,
@@ -332,11 +334,13 @@ class PreProcessing:
                                                        "catboost": 2*60*60,
                                                        "sgd": 2*60*60,
                                                        "bruteforce_random": 2*60*60,
-                                                       "autoencoder_based_oversampling": 2*60*60}
+                                                       "autoencoder_based_oversampling": 2*60*60,
+                                                       "final_pca_dimensionality_reduction": 2*60*60}
 
         self.feature_selection_sample_size = 100000
         self.hyperparameter_tuning_sample_size = 10000
         self.brute_force_selection_sample_size = 15000
+        self.final_pca_dimensionality_reduction_sample_size = 15000
         self.brute_force_selection_base_learner = 'double' # 'lgbm', 'vowpal_wabbit', 'auto
 
         if self.class_problem == 'regression':
@@ -1502,7 +1506,7 @@ class PreProcessing:
                 kmeans = RapidsKMeans(n_clusters=n_components, random_state=42, n_init=20, max_iter=500)
                 kmeans.fit(dataframe)
                 kmeans_clusters = kmeans.predict(dataframe)
-                dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
+                dataframe[f"gaussian_clusters_{n_components}"] = kmeans_clusters
                 del kmeans
                 del kmeans_clusters
                 _ = gc.collect()
@@ -1560,7 +1564,7 @@ class PreProcessing:
                 try:
                     self.dataframe = add_dbscan_clusters(self.dataframe)
                 except ValueError:
-                    self.dataframe[f"kmeans_clusters_{nb_clusters}"] = 0
+                    self.dataframe[f"dbscan_clusters_{nb_clusters}"] = 0
                 logging.info('Finished adding clusters as additional features.')
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.dataframe
@@ -1570,8 +1574,8 @@ class PreProcessing:
                     X_train = add_dbscan_clusters(X_train)
                     X_test = add_dbscan_clusters(X_test)
                 except ValueError:
-                    X_train[f"kmeans_clusters_{nb_clusters}"] = 0
-                    X_test[f"kmeans_clusters_{nb_clusters}"] = 0
+                    X_train[f"dbscan_clusters_{nb_clusters}"] = 0
+                    X_test[f"dbscan_clusters_{nb_clusters}"] = 0
                 logging.info('Finished adding clusters as additional features.')
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -1580,7 +1584,7 @@ class PreProcessing:
                 try:
                     self.dataframe = add_gaussian_mixture_clusters(self.dataframe)
                 except ValueError:
-                    self.dataframe[f"kmeans_clusters_{nb_clusters}"] = 0
+                    self.dataframe[f"gaussian_clusters_{nb_clusters}"] = 0
                 logging.info('Finished adding clusters as additional features.')
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.dataframe
@@ -1590,8 +1594,8 @@ class PreProcessing:
                     X_train = add_gaussian_mixture_clusters(X_train)
                     X_test = add_gaussian_mixture_clusters(X_test)
                 except ValueError:
-                    X_train[f"kmeans_clusters_{nb_clusters}"] = 0
-                    X_test[f"kmeans_clusters_{nb_clusters}"] = 0
+                    X_train[f"gaussian_clusters_{nb_clusters}"] = 0
+                    X_test[f"gaussian_clusters_{nb_clusters}"] = 0
                 logging.info('Finished adding clusters as additional features.')
                 logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -3271,9 +3275,9 @@ class PreProcessing:
 
                 if base_learner == 'lgbm':
                     if problem == 'binary' or problem == 'multiclass':
-                        model = lgb.LGBMClassifier()
+                        model = lgb.LGBMClassifier(random_state=1000)
                     else:
-                        model = lgb.LGBMRegressor()
+                        model = lgb.LGBMRegressor(random_state=1000)
                 elif base_learner == 'vowal_wobbit':
                     if problem == 'binary' or problem == 'multiclass':
                         model = VWClassifier()
@@ -3282,10 +3286,10 @@ class PreProcessing:
                 elif brute_force_selection_base_learner == 'double':
                     if problem == 'binary' or problem == 'multiclass':
                         model_1 = VWClassifier()
-                        model_2 = lgb.LGBMClassifier()
+                        model_2 = lgb.LGBMClassifier(random_state=1000)
                     else:
                         model_1 = VWRegressor()
-                        model_2 = lgb.LGBMRegressor()
+                        model_2 = lgb.LGBMRegressor(random_state=1000)
                 else:
                     if problem == 'binary' or problem == 'multiclass':
                         model = VWClassifier()
@@ -3435,12 +3439,6 @@ class PreProcessing:
                 del X_train[self.target_variable]
             except KeyError:
                 pass
-
-            #X_test[self.target_variable] = Y_test
-            #X_test = X_test.reset_index(drop=True)
-            #Y_test = X_test[self.target_variable]
-            #del X_test[self.target_variable]
-            #self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
             return X_train_sample, Y_train_sample
 
     def autoencoder_based_oversampling(self):
@@ -3766,3 +3764,123 @@ class PreProcessing:
                     X_train = X_train.reset_index(drop=True)
                     Y_train = Y_train.reset_index(drop=True)
                     self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def final_pca_dimensionality_reduction(self):
+        logging.info('Start final PCA dimensionality reduction.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        if self.prediction_mode:
+            best_parameters = self.preprocess_decisions[f"final_pca_dimensionality_reduction_parameters"]
+            pca = self.preprocess_decisions[f"final_pca_dimensionality_reduction_model"]
+            dataframe_comps = pca.transform(self.dataframe)
+            new_cols = [f"PCA_{i}" for i in range(best_parameters["n_components"])]
+            self.dataframe = pd.DataFrame(dataframe_comps, columns=new_cols)
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            if self.final_pca_dimensionality_reduction_sample_size > len(X_train.index):
+                sample_size = len(X_train.index)
+            else:
+                sample_size = self.final_pca_dimensionality_reduction_sample_size
+
+            max_pca_columns = len(X_train.columns.to_list())-1
+
+            print(f"Number of columns before dimensionality reduction is: {len(X_train.columns.to_list())}")
+
+            X_train_sample = X_train.copy()
+            X_train_sample[self.target_variable] = Y_train
+            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            Y_train_sample = X_train_sample[self.target_variable]
+            X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+
+            if self.class_problem == 'binary':
+                metric = make_scorer(matthews_corrcoef)
+            elif self.class_problem == 'multiclass':
+                metric = make_scorer(matthews_corrcoef)
+            elif self.class_problem == 'regression':
+                metric = 'neg_mean_squared_error'
+
+            def objective(trial):
+                param = {
+                    'n_components': trial.suggest_int('n_components', 2, max_pca_columns),
+                    'whiten': trial.suggest_categorical('whiten', [True, False])
+                }
+                pca = PCA(n_components=param["n_components"], whiten=param["whiten"], random_state=1000)
+                train_comps = pca.fit_transform(X_train_sample)
+                test_comps = pca.transform(X_test)
+                new_cols = [f"PCA_{i}" for i in range(param["n_components"])]
+                X_train_branch = pd.DataFrame(train_comps, columns=new_cols)
+                X_test_branch = pd.DataFrame(test_comps, columns=new_cols)
+
+                if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+                    model = lgb.LGBMClassifier(random_state=42)
+                else:
+                    model = lgb.LGBMRegressor(random_state=42)
+
+                try:
+                    scores = cross_val_score(model, X_train_branch, Y_train_sample, cv=10, scoring=metric)
+                    train_mae = np.mean(scores)
+                    if self.class_problem in ["binary", "multiclass"]:
+                        train_mae *= 100
+                except Exception:
+                    train_mae = 0
+
+                print(train_mae)
+
+                model.fit(X_train_branch, Y_train_sample)
+                scores_2_test = model.predict(X_test_branch)
+
+                try:
+                    if self.class_problem in ["binary", "multiclass"]:
+                        matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
+                        test_mae = matthew_2*100
+                    else:
+                        test_mae = mean_squared_error(Y_test, scores_2_test, squared=True)
+                        test_mae *= -1
+                except Exception:
+                    test_mae = 0
+
+                print(test_mae)
+
+                meissner_score = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
+                return meissner_score
+
+            algorithm = 'final_pca_dimensionality_reduction'
+
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
+            study.optimize(objective,
+                           n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                           timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                           gc_after_trial=True,
+                           show_progress_bar=True)
+            self.optuna_studies[f"{algorithm}"] = {}
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                print("Plotting of hyperparameter performances failed. This usually implicates an error during training.")
+
+            best_parameters = study.best_trial.params
+            pca = PCA(n_components=best_parameters["n_components"], whiten=best_parameters["whiten"], random_state=1000)
+            train_comps = pca.fit_transform(X_train)
+            test_comps = pca.transform(X_test)
+            new_cols = [f"PCA_{i}" for i in range(best_parameters["n_components"])]
+            X_train = pd.DataFrame(train_comps, columns=new_cols)
+            X_test = pd.DataFrame(test_comps, columns=new_cols)
+            self.preprocess_decisions[f"final_pca_dimensionality_reduction_parameters"] = best_parameters
+            self.preprocess_decisions[f"final_pca_dimensionality_reduction_model"] = pca
+
+            print(f"Number of columns after dimensionality reduction is: {len(X_train.columns.to_list())}")
+
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            try:
+                del pca
+                del train_comps
+                del test_comps
+                del study
+                del sampler
+            except Exception:
+                pass
+
+        logging.info('Finished final PCA dimensionality reduction.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')

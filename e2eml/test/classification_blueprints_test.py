@@ -138,20 +138,23 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "ngboost": 10,
                                                     "sklearn_ensemble": 3,
                                                     "catboost": 10,
-                                                    "ridge": 3,
+                                                    "ridge": 25,
                                                     "bruteforce_random": 10,
-                                                    "autoencoder_based_oversampling": 20}
+                                                    "autoencoder_based_oversampling": 20,
+                                                    "final_pca_dimensionality_reduction": 20}
+
     titanic_auto_ml.special_blueprint_algorithms = {"ridge": False, #titanic, #synthetic_multiclass
                                                     "xgboost": False, #titanic
                                                     "ngboost": False, #titanic, #synthetic_multiclass
-                                                    "lgbm": False, #titanic
-                                                    "tabnet": True, #titanic
+                                                    "lgbm": True, #titanic
+                                                    "tabnet": False, #titanic
                                                     "vowpal_wabbit": False,
                                                     "sklearn_ensemble": False, #titanic, #synthetic_multiclass
                                                     "catboost": False
                                                     }
-    titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
-    titanic_auto_ml.blueprint_step_selection_non_nlp["scale_data"] = True
+    titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
+    titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = True
+    titanic_auto_ml.blueprint_step_selection_non_nlp["scale_data"] = False
 
 
     titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
