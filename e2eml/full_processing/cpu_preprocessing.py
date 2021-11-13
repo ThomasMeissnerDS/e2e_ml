@@ -2392,7 +2392,7 @@ class PreProcessing:
             self.cat_columns_encoded = cat_columns
             self.preprocess_decisions[f"category_encoders"] = {}
             if algorithm == 'target':
-                if self.class_problem == 'binary':
+                if self.class_problem in ['binary', 'regression']:
                     enc = TargetEncoder(cols=cat_columns)
                     X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                     X_test[cat_columns] = enc.transform(X_test[cat_columns])
@@ -2651,18 +2651,6 @@ class PreProcessing:
             model_2_copy = model_2
             model_3_copy = model_2
 
-            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-                pass
-            else:
-                # sort on A
-                X_train_sample.sort_values(self.target_variable, inplace=True)
-                # create bins
-                X_train_sample['bin'] = pd.cut(X_train_sample[self.target_variable], 1, include_lowest=True)
-                # group on bin
-                group = X_train_sample.groupby('bin')
-                # list comprehension to split groups into list of dataframes
-                dfs = [group.get_group(x) for x in group.groups]
-
             if self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] == 0:
                 # get benchmark
                 try:
@@ -2731,6 +2719,22 @@ class PreProcessing:
             if dist_median_high_inv-dist_median_lowq_inv <= 1:
                 dist_median_high_inv += 2
 
+            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+                pass
+            else:
+                X_train_sample[self.target_variable] = Y_train
+                # sort on A
+                X_train_sample.sort_values(self.target_variable, inplace=True)
+                # create bins
+                X_train_sample['bin'] = pd.cut(X_train_sample[self.target_variable], 1, include_lowest=True)
+                # group on bin
+                group = X_train_sample.groupby('bin')
+                # list comprehension to split groups into list of dataframes
+                dfs = [group.get_group(x) for x in group.groups]
+
+                Y_train_sample = X_train_sample[self.target_variable]
+                X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+
             def objective(trial):
                 param = {}
 
@@ -2743,7 +2747,7 @@ class PreProcessing:
                                                                                         "Uniform",
                                                                                         "Pareto",
                                                                                         "Levy",
-                                                                                        #"dweibull",
+                                                                                        "dweibull",
                                                                                         "halfcauchy",
                                                                                         "halfnorm",
                                                                                         "powernorm",
@@ -2762,6 +2766,7 @@ class PreProcessing:
                 location = trial.suggest_int('location', dist_median_lowq_inv, dist_median_high_inv)
                 lambda_value = trial.suggest_uniform('lambda_value', 1e-3, 10)
                 c_value = trial.suggest_uniform('c_value', 1e-3, 10)
+                pos_only_location = trial.suggest_uniform('pos_only_location', 0, 100)
 
                 random_factor = trial.suggest_int('random_factor', dist_min, dist_max)
                 if random_factor < 0:
@@ -2781,6 +2786,7 @@ class PreProcessing:
                 param["location"] = location
                 param["lambda_value"] = lambda_value
                 param["c_value"] = c_value
+                param["pos_only_location"] = pos_only_location
 
                 temp_df_list = []
                 X_train_sample[self.target_variable] = Y_train_sample
@@ -2812,8 +2818,8 @@ class PreProcessing:
                                 gen_data = gen_data*random_factor_pos
                             else:
                                 gen_data += class_inst*2
-                        #elif sample_distribution == "dweibull":
-                        #    gen_data = dweibull.rvs(location, size=size)
+                        elif sample_distribution == "dweibull":
+                            gen_data = dweibull.rvs(c=pos_only_location, size=size)
                         elif sample_distribution == 'halfcauchy':
                             gen_data = halfcauchy.rvs(loc=location, scale=scale, size=size)
                         elif sample_distribution == 'halfnorm':
@@ -2832,9 +2838,11 @@ class PreProcessing:
                         temp_df_list.append(X_train_sample_class)
 
                 else:
+                    bin_encoder = 1
                     for X_train_sample_class in dfs:
                         size = len(X_train_sample_class.index)
-                        class_inst = X_train_sample_class["bin"]
+                        class_inst = bin_encoder
+                        bin_encoder += 1
                         if sample_distribution == 'Uniform':
                             gen_data = np.full((size,), uniformity)
                         elif sample_distribution == 'Binomial':
@@ -2859,8 +2867,8 @@ class PreProcessing:
                                 gen_data = gen_data*random_factor_pos
                             else:
                                 gen_data += class_inst*2
-                        #elif sample_distribution == "dweibull":
-                        #   gen_data = dweibull.rvs(loc=location, size=size)
+                        elif sample_distribution == "dweibull":
+                           gen_data = dweibull.rvs(c=pos_only_location, size=size)
                         elif sample_distribution == 'halfcauchy':
                             gen_data = halfcauchy.rvs(loc=location, scale=scale, size=size)
                         elif sample_distribution == 'halfnorm':
@@ -2876,6 +2884,7 @@ class PreProcessing:
                         else:
                             gen_data = random_factor
                         X_train_sample_class[column_name] = gen_data
+                        X_train_sample_class = X_train_sample_class.drop("bin", axis=1)
                         temp_df_list.append(X_train_sample_class)
 
                 temp_df = pd.concat(temp_df_list, ignore_index=False)
@@ -2907,7 +2916,7 @@ class PreProcessing:
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=self.preprocess_decisions["random_state_counter"])
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective,
-                           n_trials=70,
+                           n_trials=100,
                            timeout=600,
                            show_progress_bar=True
                            )
@@ -2953,8 +2962,8 @@ class PreProcessing:
                             gen_data = gen_data*random_factor_pos
                         else:
                             gen_data += class_inst*2
-                    #elif best_parameters["sample_distribution"] == "dweibull":
-                    #    gen_data = dweibull.rvs(best_parameters["location"], size=size)
+                    elif best_parameters["sample_distribution"] == "dweibull":
+                        gen_data = dweibull.rvs(best_parameters["pos_only_location"], size=size)
                     elif best_parameters["sample_distribution"] == 'halfcauchy':
                         gen_data = halfcauchy.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
                     elif best_parameters["sample_distribution"] == 'halfnorm':
@@ -2973,9 +2982,11 @@ class PreProcessing:
                     temp_df_list.append(X_train_sample_class)
 
             else:
+                bin_encoder = 1
                 for X_train_sample_class in dfs:
                     size = len(X_train_sample_class.index)
-                    class_inst = X_train_sample_class["bin"]
+                    class_inst = bin_encoder
+                    bin_encoder += 1
                     if best_parameters["sample_distribution"] == 'Uniform':
                         gen_data = np.full((size,), best_parameters["uniformity"])
                     elif best_parameters["sample_distribution"] == 'Binomial':
@@ -2998,8 +3009,8 @@ class PreProcessing:
                             gen_data = gen_data*best_parameters["random_factor_pos"]
                         else:
                             gen_data += class_inst*2
-                    #elif best_parameters["sample_distribution"] == "dweibull":
-                    #    gen_data = dweibull.rvs(best_parameters["location"], size=size)
+                    elif best_parameters["sample_distribution"] == "dweibull":
+                        gen_data = dweibull.rvs(best_parameters["pos_only_location"], size=size)
                     elif best_parameters["sample_distribution"] == 'halfcauchy':
                         gen_data = halfcauchy.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
                     elif best_parameters["sample_distribution"] == 'halfnorm':
@@ -3580,7 +3591,7 @@ class PreProcessing:
                     # HYPERPARAMETER OPTIMIZATION
                     def objective(trial):
                         param = {
-                            'nb_epochs': trial.suggest_int('nb_epochs', 2, 10000),
+                            'nb_epochs': trial.suggest_int('nb_epochs', 2, 20000),
                             'h': trial.suggest_int('h', 2, 800),
                             'h2': trial.suggest_int('h2', 2, 800),
                             'latent_dim': trial.suggest_int('latent_dim', 1, 10)

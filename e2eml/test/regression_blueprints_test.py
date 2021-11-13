@@ -71,12 +71,13 @@ def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender
                                                     "ngboost": False,
                                                     "lgbm": True,
                                                     "tabnet": False,
-                                                    "vowpal_wabbit": True,
+                                                    "vowpal_wabbit": False,
                                                     "sklearn_ensemble": False,
                                                     "catboost": False,
                                                     "elasticnet": False
                                                     }
     titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = True
+    titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = True
     titanic_auto_ml.hyperparameter_tuning_sample_size = 800
 
     titanic_auto_ml.ml_special_regression_full_processing_multimodel_avg_blender()
