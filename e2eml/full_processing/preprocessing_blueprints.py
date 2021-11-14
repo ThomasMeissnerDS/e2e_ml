@@ -21,6 +21,104 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         except AttributeError:
             self.prediction_mode = False
 
+    def dbscan_clustering(self):
+        if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_dbscan"]:
+            try:
+                self.clustering_as_a_feature(algorithm='dbscan', eps=0.3, n_jobs=-1, min_samples=10)
+            except ValueError:
+                print("Clustering as a feature skipped due to ValueError.")
+
+    def kmeans_clustering_loop(self):
+        if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_kmeans_loop"]:
+            for nb_cluster in [3, 5, 7, 9]:
+                try:
+                    self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
+                except ValueError:
+                    print("Clustering as a feature skipped due to ValueError.")
+
+    def gaussian_mixture_clustering_loop(self):
+        if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_gaussian_mixture_loop"]:
+            for nb_cluster in [2, 4, 6, 8, 10]:
+                try:
+                    self.clustering_as_a_feature(algorithm='gaussian', nb_clusters=nb_cluster)
+                except ValueError:
+                    print("Clustering as a feature skipped due to ValueError.")
+
+    def smote_binary_multiclass(self):
+        if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+            self.smote_data()
+        else:
+            pass
+
+    def preprocessing_mapping(self):
+        preprocessing_funcs = {
+            "automatic_type_detection_casting": {"func": self.automatic_type_detection_casting, "args": None},
+            "remove_duplicate_column_names": {"func": self.remove_duplicate_column_names, "args": None},
+            "reset_dataframe_index": {"func": self.reset_dataframe_index, "args": None},
+            "fill_infinite_values": {"func": self.fill_infinite_values, "args": None},
+            "early_numeric_only_feature_selection": {"func": self.automated_feature_selection, "args": (True)},
+            "delete_high_null_cols": {"func": self.delete_high_null_cols, "args": (0.05)},
+            "data_binning": {"func": self.data_binning, "args": None},
+            "regex_clean_text_data": {"func": self.regex_clean_text_data, "args": None},
+            "handle_target_skewness": {"func": self.target_skewness_handling, "args": ("fit")},
+            "datetime_converter": {"func": self.datetime_converter, "args": ("all")},
+            "pos_tagging_pca": {"func": self.pos_tagging_pca, "args": (True)},# slow with many categories
+            "append_text_sentiment_score": {"func": self.append_text_sentiment_score, "args": None},
+            "tfidf_vectorizer_to_pca": {"func": self.tfidf_vectorizer_to_pca, "args": (True)}, # slow with many categories
+            "tfidf_vectorizer": {"func": self.tfidf_vectorizer_to_pca, "args": (False)},
+            "rare_feature_processing": {"func": self.rare_feature_processor, "args": (0.005, 'miscellaneous', self.rarity_cols)},
+            "cardinality_remover": {"func": self.cardinality_remover, "args": (100)},
+            "holistic_null_filling": {"func": self.holistic_null_filling, "args": (False)}, # slow
+            "numeric_binarizer_pca": {"func": self.numeric_binarizer_pca, "args": None},
+            "onehot_pca": {"func": self.onehot_pca, "args": None},
+            "category_encoding": {"func": self.category_encoding, "args": ("target")},
+            "fill_nulls_static": {"func": self.fill_nulls, "args": ("static")},
+            "outlier_care": {"func": self.outlier_care, "args": ('isolation', 'append')},
+            "remove_collinearity": {"func": self.remove_collinearity, "args": (0.8)},
+            "skewness_removal": {"func": self.skewness_removal, "args": (False)},
+            "clustering_as_a_feature_dbscan": {"func": self.dbscan_clustering, "args": None},
+            "clustering_as_a_feature_kmeans_loop": {"func": self.kmeans_clustering_loop, "args": None},
+            "clustering_as_a_feature_gaussian_mixture_loop": {"func": self.gaussian_mixture_clustering_loop, "args": None},
+            "pca_clustering_results": {"func": self.pca_clustering_results, "args": None},
+            "autotuned_clustering": {"func": self.auto_tuned_clustering, "args": None},
+            "reduce_memory_footprint": {"func": self.reduce_memory_footprint, "args": None},
+            "scale_data": {"func": self.data_scaling, "args": None},
+            "smote": {"func": self.smote_binary_multiclass, "args": None},
+            "automated_feature_selection": {"func": self.automated_feature_selection, "args": (False)},
+            "bruteforce_random_feature_selection": {"func": self.bruteforce_random_feature_selection, "args": None}, # slow
+            "delete_unpredictable_training_rows": {"func": self.delete_unpredictable_training_rows, "args": None},
+            "autoencoder_based_oversampling": {"func": self.autoencoder_based_oversampling, "args": None},
+            "synthetic_data_augmentation": {"func": self.synthetic_data_augmentation, "args": None},
+            "final_pca_dimensionality_reduction": {"func": self.final_pca_dimensionality_reduction, "args": None},
+            "sort_columns_alphabetically": {"func": self.sort_columns_alphabetically, "args": None},
+        }
+
+    def std_preprocessing_pipeline_test_new(self, df=None):
+        """
+        Our recommended blueprint for Tabnet testing.
+        Runs a preprocessing blueprint only. This is useful for building custom pipelines.
+        :param df: Accepts a dataframe to run ml preprocessing on it.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :return: Updates class attributes.
+        """
+        logging.info('Start blueprint.')
+        self.runtime_warnings(warn_about="future_architecture_change")
+        self.check_prediction_mode(df)
+        self.train_test_split(how=self.train_split_type)
+        self.binary_imbalance()
+
+        for key, value in self.blueprint_step_selection_non_nlp.items():
+            if self.blueprint_step_selection_non_nlp[key]:
+                if (key == "regex_clean_text_data" and len(self.nlp_transformer_columns) > 0) or \
+                        (key == "tfidf_vectorizer" and len(self.nlp_transformer_columns) > 0) or \
+                        (key == "append_text_sentiment_score" and len(self.nlp_transformer_columns) > 0):
+                    self.blueprint_step_selection_non_nlp_funcs[key]
+                else:
+                    print(f"Skipped preprocessing step {key} as it has not been selected by user.")
+            else:
+                pass
+
     def std_preprocessing_pipeline(self, df=None):
         """
         Our recommended blueprint for Tabnet testing.
@@ -36,6 +134,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
 
         self.train_test_split(how=self.train_split_type)
         self.binary_imbalance()
+
         if self.blueprint_step_selection_non_nlp["automatic_type_detection_casting"]:
             self.automatic_type_detection_casting()
         if self.blueprint_step_selection_non_nlp["remove_duplicate_column_names"]:
@@ -52,7 +151,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.data_binning(nb_bins=10)
         if self.blueprint_step_selection_non_nlp["regex_clean_text_data"] and len(self.nlp_transformer_columns)>0:
             self.regex_clean_text_data()
-        self.target_skewness_handling(mode='fit')
+        if self.blueprint_step_selection_non_nlp["handle_target_skewness"]:
+            self.target_skewness_handling(mode='fit')
         #self.fill_nulls(how='static') # can only be here when "static"
         if self.blueprint_step_selection_non_nlp["datetime_converter"]:
             self.datetime_converter(datetime_handling='all')
@@ -69,7 +169,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         if self.blueprint_step_selection_non_nlp["cardinality_remover"]:
             self.cardinality_remover(threshold=100)
         if self.blueprint_step_selection_non_nlp["holistic_null_filling"]:
-            self.holistic_null_filling(iterative=self.blueprint_step_selection_non_nlp["iterative_null_imputation"])
+            self.holistic_null_filling(iterative=False)
         if self.blueprint_step_selection_non_nlp["numeric_binarizer_pca"]:
             self.numeric_binarizer_pca()
         if self.blueprint_step_selection_non_nlp["onehot_pca"]:
@@ -92,7 +192,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_kmeans_loop"]:
             for nb_cluster in [3, 5, 7, 9]:
                 try:
-                    self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
+                    self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster, eps=None, n_jobs=-1, min_samples=50)
                 except ValueError:
                     print("Clustering as a feature skipped due to ValueError.")
         if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_gaussian_mixture_loop"]:
@@ -123,6 +223,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.delete_unpredictable_training_rows()
         if self.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"]:
             self.autoencoder_based_oversampling()
+        #self.autoencoder_based_dimensionality_reduction()
         if self.blueprint_step_selection_non_nlp["synthetic_data_augmentation"]:
             self.synthetic_data_augmentation()
         if self.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"]:

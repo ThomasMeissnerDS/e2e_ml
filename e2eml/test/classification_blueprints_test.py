@@ -141,7 +141,9 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "ridge": 25,
                                                     "bruteforce_random": 10,
                                                     "autoencoder_based_oversampling": 20,
-                                                    "final_pca_dimensionality_reduction": 20}
+                                                    "autoencoder_based_dimensionality_reduction": 100,
+                                                    "final_pca_dimensionality_reduction": 20,
+                                                    "synthetic_data_augmentation": 100}
 
     titanic_auto_ml.special_blueprint_algorithms = {"ridge": False, #titanic, #synthetic_multiclass
                                                     "xgboost": False, #titanic

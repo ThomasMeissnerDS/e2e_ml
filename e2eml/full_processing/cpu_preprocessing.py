@@ -1,3 +1,4 @@
+import param
 from pandas.core.common import SettingWithCopyWarning
 from sklearn import model_selection
 from sklearn.linear_model import BayesianRidge, Ridge
@@ -179,14 +180,14 @@ class PreProcessing:
         self.df_dict = None
         self.blueprint_step_selection_non_nlp = {
             "automatic_type_detection_casting": True,
-            "early_numeric_only_feature_selection": True,
             "remove_duplicate_column_names": True,
             "reset_dataframe_index": True,
+            "fill_infinite_values": True,
+            "early_numeric_only_feature_selection": True,
+            "delete_high_null_cols": True,
+            "data_binning": True,
             "regex_clean_text_data": False,
             "handle_target_skewness": False,
-            "holistic_null_filling": True, # slow
-            "iterative_null_imputation": False,
-            "fill_infinite_values": True,
             "datetime_converter": True,
             "pos_tagging_pca": False, # slow with many categories
             "append_text_sentiment_score": False,
@@ -194,31 +195,32 @@ class PreProcessing:
             "tfidf_vectorizer": False,
             "rare_feature_processing": True,
             "cardinality_remover": True,
-            "delete_high_null_cols": True,
+            "holistic_null_filling": True, # slow
             "numeric_binarizer_pca": True,
             "onehot_pca": True,
             "category_encoding": True,
             "fill_nulls_static": True,
-            "data_binning": True,
             "outlier_care": True,
             "remove_collinearity": True,
             "skewness_removal": True,
-            "autotuned_clustering": False,
             "clustering_as_a_feature_dbscan": True,
             "clustering_as_a_feature_kmeans_loop": True,
             "clustering_as_a_feature_gaussian_mixture_loop": True,
             "pca_clustering_results": True,
+            "autotuned_clustering": False,
             "reduce_memory_footprint": False,
-            "automated_feature_selection": True,
-            "bruteforce_random_feature_selection": False, # slow
-            "sort_columns_alphabetically": True,
-            "synthetic_data_augmentation": False,
-            "delete_unpredictable_training_rows": False,
             "scale_data": False,
             "smote": False,
+            "automated_feature_selection": True,
+            "bruteforce_random_feature_selection": False, # slow
+            "delete_unpredictable_training_rows": False,
             "autoencoder_based_oversampling": False,
-            "final_pca_dimensionality_reduction": False
+            "synthetic_data_augmentation": False,
+            "final_pca_dimensionality_reduction": False,
+            "sort_columns_alphabetically": True
         }
+        self.blueprint_step_selection_non_nlp_funcs = None
+        self.blueprint_step_selection_non_nlp_funcs_default_args = None
 
         self.blueprint_step_selection_nlp_transformers = {
             "train_test_split": True,
@@ -323,6 +325,7 @@ class PreProcessing:
                                              "bruteforce_random": 400,
                                              "synthetic_data_augmentation": 100,
                                              "autoencoder_based_oversampling": 20,
+                                             "autoencoder_based_dimensionality_reduction": 50,
                                              "final_pca_dimensionality_reduction": 50}
 
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
@@ -337,6 +340,7 @@ class PreProcessing:
                                                        "bruteforce_random": 2*60*60,
                                                        "synthetic_data_augmentation": 1*60*60,
                                                        "autoencoder_based_oversampling": 2*60*60,
+                                                       "autoencoder_based_dimensionality_reduction": 4*60*60,
                                                        "final_pca_dimensionality_reduction": 2*60*60}
 
         self.feature_selection_sample_size = 100000
@@ -2728,7 +2732,7 @@ class PreProcessing:
                 # sort on A
                 X_train_sample.sort_values(self.target_variable, inplace=True)
                 # create bins
-                X_train_sample['bin'] = pd.cut(X_train_sample[self.target_variable], 1, include_lowest=True)
+                X_train_sample['bin'] = pd.cut(X_train_sample[self.target_variable], 10, include_lowest=True)
                 # group on bin
                 group = X_train_sample.groupby('bin')
                 # list comprehension to split groups into list of dataframes
@@ -2837,7 +2841,10 @@ class PreProcessing:
                             gen_data = rdist.rvs(c_value, loc=location, scale=scale, size=size)
                         else:
                             gen_data = random_factor
-                        X_train_sample_class[column_name] = gen_data
+                        try:
+                            X_train_sample_class[column_name] = gen_data
+                        except UnboundLocalError:
+                            X_train_sample_class[column_name] = 0
                         temp_df_list.append(X_train_sample_class)
 
                 else:
@@ -2886,7 +2893,10 @@ class PreProcessing:
                             gen_data = rdist.rvs(c_value, loc=location, scale=scale, size=size)
                         else:
                             gen_data = random_factor
-                        X_train_sample_class[column_name] = gen_data
+                        try:
+                            X_train_sample_class[column_name] = gen_data
+                        except UnboundLocalError:
+                            X_train_sample_class[column_name] = 0
                         X_train_sample_class = X_train_sample_class.drop("bin", axis=1)
                         temp_df_list.append(X_train_sample_class)
 
@@ -2982,7 +2992,10 @@ class PreProcessing:
                         gen_data = rdist.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
                     else:
                         gen_data = best_parameters["random_factor"]
-                    X_train_sample_class[column_name] = gen_data
+                    try:
+                        X_train_sample_class[column_name] = gen_data
+                    except UnboundLocalError:
+                        X_train_sample_class[column_name] = 0
                     temp_df_list.append(X_train_sample_class)
 
             else:
@@ -2994,7 +3007,7 @@ class PreProcessing:
                     if best_parameters["sample_distribution"] == 'Uniform':
                         gen_data = np.full((size,), best_parameters["uniformity"])
                     elif best_parameters["sample_distribution"] == 'Binomial':
-                        gen_data = binom.rvs(n=best_parameters["random_factor_pos"], p=best_parameters["p_value"], size=size)
+                        gen_data = binom.rvs(n=random_factor_pos, p=best_parameters["p_value"], size=size)
                     elif best_parameters["sample_distribution"] == 'Poisson':
                         gen_data = poisson.rvs(mu=best_parameters["mu"], size=size)
                     elif best_parameters["sample_distribution"] == 'Exponential':
@@ -3010,7 +3023,7 @@ class PreProcessing:
                     elif best_parameters["sample_distribution"] == "Levy":
                         gen_data = levy.rvs(size=size)
                         if best_parameters["random_or_control_factor"] == 'Random':
-                            gen_data = gen_data*best_parameters["random_factor_pos"]
+                            gen_data = gen_data*random_factor_pos
                         else:
                             gen_data += class_inst*2
                     elif best_parameters["sample_distribution"] == "dweibull":
@@ -3029,7 +3042,11 @@ class PreProcessing:
                         gen_data = rdist.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
                     else:
                         gen_data = best_parameters["random_factor"]
-                    X_train_sample_class[column_name] = gen_data
+
+                    try:
+                        X_train_sample_class[column_name] = gen_data
+                    except UnboundLocalError:
+                        X_train_sample_class[column_name] = 0
                     temp_df_list.append(X_train_sample_class)
 
             temp_df = pd.concat(temp_df_list, ignore_index=False)
@@ -3778,6 +3795,318 @@ class PreProcessing:
                     X_train = X_train.reset_index(drop=True)
                     Y_train = Y_train.reset_index(drop=True)
                     self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def autoencoder_based_dimensionality_reduction(self):
+        class DataBuilder(Dataset):
+            def __init__(self, dataset):
+                self.x = dataset.values
+                self.x = torch.from_numpy(self.x).to(torch.float)
+                self.len = self.x.shape[0]
+
+            def __getitem__(self, index):
+                return self.x[index]
+
+            def __len__(self):
+                return self.len
+
+        class Autoencoder(nn.Module):
+            def __init__(self, D_in, H=50, H2=12, latent_dim=3):
+
+                #Encoder
+                super(Autoencoder, self).__init__()
+                self.linear1 = nn.Linear(D_in, H)
+                self.lin_bn1 = nn.BatchNorm1d(num_features=H)
+                self.linear2 = nn.Linear(H, H2)
+                self.lin_bn2 = nn.BatchNorm1d(num_features=H2)
+                self.linear3 = nn.Linear(H2, H2)
+                self.lin_bn3 = nn.BatchNorm1d(num_features=H2)
+
+                # Latent vectors mu and sigma
+                self.fc1 = nn.Linear(H2, latent_dim)
+                self.bn1 = nn.BatchNorm1d(num_features=latent_dim)
+                self.fc21 = nn.Linear(latent_dim, latent_dim)
+                self.fc22 = nn.Linear(latent_dim, latent_dim)
+
+                # Sampling vector
+                self.fc3 = nn.Linear(latent_dim, latent_dim)
+                self.fc_bn3 = nn.BatchNorm1d(latent_dim)
+                self.fc4 = nn.Linear(latent_dim, H2)
+                self.fc_bn4 = nn.BatchNorm1d(H2)
+
+                # Decoder
+                self.linear4 = nn.Linear(H2, H2)
+                self.lin_bn4 = nn.BatchNorm1d(num_features=H2)
+                self.linear5 = nn.Linear(H2, H)
+                self.lin_bn5 = nn.BatchNorm1d(num_features=H)
+                self.linear6 = nn.Linear(H, D_in)
+                self.lin_bn6 = nn.BatchNorm1d(num_features=D_in)
+
+                self.relu = nn.ReLU()
+
+            def encode(self, x):
+                lin1 = self.relu(self.lin_bn1(self.linear1(x)))
+                lin2 = self.relu(self.lin_bn2(self.linear2(lin1)))
+                lin3 = self.relu(self.lin_bn3(self.linear3(lin2)))
+
+                fc1 = F.relu(self.bn1(self.fc1(lin3)))
+
+                r1 = self.fc21(fc1)
+                r2 = self.fc22(fc1)
+
+                return r1, r2
+
+            def reparameterize(self, mu, logvar):
+                if self.training:
+                    std = logvar.mul(0.5).exp_()
+                    eps = Variable(std.data.new(std.size()).normal_())
+                    return eps.mul(std).add_(mu)
+                else:
+                    return mu
+
+            def decode(self, z):
+                fc3 = self.relu(self.fc_bn3(self.fc3(z)))
+                fc4 = self.relu(self.fc_bn4(self.fc4(fc3)))
+
+                lin4 = self.relu(self.lin_bn4(self.linear4(fc4)))
+                lin5 = self.relu(self.lin_bn5(self.linear5(lin4)))
+                return self.lin_bn6(self.linear6(lin5))
+
+            def forward(self, x):
+                mu, logvar = self.encode(x)
+                z = self.reparameterize(mu, logvar)
+                return self.decode(z), mu, logvar
+
+        class customLoss(nn.Module):
+            def __init__(self):
+                super(customLoss, self).__init__()
+                self.mse_loss = nn.MSELoss(reduction="sum")
+
+            def forward(self, x_recon, x, mu, logvar):
+                loss_MSE = self.mse_loss(x_recon, x)
+                loss_KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+                return loss_MSE + loss_KLD
+
+        if self.prediction_mode:
+            best_parameters = self.preprocess_decisions[f"autoencoder_based_dimensionality_reduction_parameters"]
+            model = self.preprocess_decisions[f"autoencoder_based_dimensionality_reduction_model"]
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            pred_set = DataBuilder(self.dataframe)
+            predloader = DataLoader(dataset=pred_set, batch_size=8192)
+            optimizer = optim.Adam(model.parameters(), lr=1e-3)
+            loss_mse = customLoss()
+
+            mu_output = []
+            logvar_output = []
+
+            with torch.no_grad():
+                for i, (data) in enumerate(predloader):
+                    data = data.to(device)
+                    optimizer.zero_grad()
+                    recon_batch, mu, logvar = model(data)
+
+                    mu_tensor = mu
+                    mu_output.append(mu_tensor)
+                    mu_result = torch.cat(mu_output, dim=0)
+
+                    logvar_tensor = logvar
+                    logvar_output.append(logvar_tensor)
+                    logvar_result = torch.cat(logvar_output, dim=0)
+
+            new_cols = [f"Autoencoder_{i}" for i in range(best_parameters["latent_dim"])]
+            self.dataframe = pd.DataFrame(mu_result.cpu().numpy(), columns=new_cols)
+            return self.dataframe
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            cols = X_train.columns
+
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+
+            traindata_set = DataBuilder(X_train)
+            testdata_set = DataBuilder(X_test)
+            trainloader = DataLoader(dataset=traindata_set, batch_size=4096)
+            testloader = DataLoader(dataset=testdata_set, batch_size=4096)
+            D_in = X_train.shape[1]
+            max_dims = X_train.shape[1]-1
+
+            # HYPERPARAMETER OPTIMIZATION
+            def objective(trial):
+                param = {
+                    'nb_epochs': trial.suggest_int('nb_epochs', 2, 20000),
+                    'h': trial.suggest_int('h', 2, 800),
+                    'h2': trial.suggest_int('h2', 2, 800),
+                    'latent_dim': trial.suggest_int('latent_dim', 1, max_dims)
+                }
+                model = Autoencoder(D_in, param["h"], param["h2"], param["latent_dim"]).to(device)
+                optimizer = optim.Adam(model.parameters(), lr=1e-3)
+                loss_mse = customLoss()
+                # train model
+                log_interval = 50
+                val_losses = []
+                train_losses = []
+                test_losses = []
+
+                def train(epoch):
+                    model.train()
+                    train_loss = 0
+                    for batch_idx, data in enumerate(trainloader):
+                        data = data.to(device)
+                        optimizer.zero_grad()
+                        recon_batch, mu, logvar = model(data)
+                        loss = loss_mse(recon_batch, data, mu, logvar)
+                        loss.backward()
+                        train_loss += loss.item()
+                        optimizer.step()
+                    if epoch % 200 == 0:
+                        print('====> Epoch: {} Average training loss: {:.4f}'.format(
+                            epoch, train_loss / len(trainloader.dataset)))
+                        train_losses.append(train_loss / len(trainloader.dataset))
+
+                def test(epoch):
+                    with torch.no_grad():
+                        test_loss = 0
+                        for batch_idx, data in enumerate(testloader):
+                            data = data.to(device)
+                            optimizer.zero_grad()
+                            recon_batch, mu, logvar = model(data)
+                            loss = loss_mse(recon_batch, data, mu, logvar)
+                            test_loss += loss.item()
+                            if epoch % 200 == 0:
+                                print('====> Epoch: {} Average test loss: {:.4f}'.format(
+                                    epoch, test_loss / len(testloader.dataset)))
+                            trial.report(test_loss, epoch)
+                            if trial.should_prune():
+                                raise optuna.exceptions.TrialPruned()
+                            test_losses.append(test_loss / len(testloader.dataset))
+
+                epochs = param["nb_epochs"]
+                optimizer = optim.Adam(model.parameters(), lr=1e-3)
+                for epoch in range(1, epochs + 1):
+                    train(epoch)
+                    test(epoch)
+                with torch.no_grad():
+                    for batch_idx, data in enumerate(testloader):
+                        data = data.to(device)
+                        optimizer.zero_grad()
+                        recon_batch, mu, logvar = model(data)
+                    try:
+                        loss_score = test_losses[-1] #np.sum(test_losses[-1] + abs(np.sum([test_losses[-1], train_losses[-1]]))**2)
+                    except IndexError:
+                        loss_score = 10000000000
+                    return loss_score #test_losses[-1]
+
+            algorithm = 'autoencoder_based_dimensionality_reduction'
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
+            study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm}")
+            study.optimize(objective,
+                           n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                           timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                           gc_after_trial=True,
+                           show_progress_bar=True)
+            self.optuna_studies[f"{algorithm}"] = {}
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                print("Plotting of hyperparameter performances failed. This usually implicates an error during training.")
+
+            # FINAL TRAINING
+            best_parameters = study.best_trial.params
+            H = best_parameters["h"]
+            H2 = best_parameters["h2"]
+            latent_dim = best_parameters["latent_dim"]
+            model = Autoencoder(D_in, H, H2, latent_dim).to(device)
+            optimizer = optim.Adam(model.parameters(), lr=1e-3)
+            loss_mse = customLoss()
+
+            # train model
+            log_interval = 50
+            val_losses = []
+            train_losses = []
+            test_losses = []
+
+            def train(epoch):
+                model.train()
+                train_loss = 0
+                for batch_idx, data in enumerate(trainloader):
+                    data = data.to(device)
+                    optimizer.zero_grad()
+                    recon_batch, mu, logvar = model(data)
+                    loss = loss_mse(recon_batch, data, mu, logvar)
+                    loss.backward()
+                    train_loss += loss.item()
+                    optimizer.step()
+                if epoch % 200 == 0:
+                    print('====> Epoch: {} Average training loss: {:.4f}'.format(
+                        epoch, train_loss / len(trainloader.dataset)))
+                    train_losses.append(train_loss / len(trainloader.dataset))
+
+
+            epochs = best_parameters["nb_epochs"]
+            optimizer = optim.Adam(model.parameters(), lr=1e-3)
+
+            for epoch in range(1, epochs + 1):
+                train(epoch)
+
+            model.eval()
+            test_loss = 0
+            # no_grad() bedeutet wir nehmen die vorher berechneten Gewichte und erneuern sie nicht
+            with torch.no_grad():
+                for i, data in enumerate(trainloader):
+                    data = data.to(device)
+                    recon_batch, mu, logvar = model(data)
+
+            new_cols = [f"Autoencoder_{i}" for i in range(best_parameters["latent_dim"])]
+
+            mu_output = []
+            logvar_output = []
+
+            with torch.no_grad():
+                for i, (data) in enumerate(trainloader):
+                    data = data.to(device)
+                    optimizer.zero_grad()
+                    recon_batch, mu, logvar = model(data)
+
+                    mu_tensor = mu
+                    mu_output.append(mu_tensor)
+                    mu_result = torch.cat(mu_output, dim=0)
+
+                    logvar_tensor = logvar
+                    logvar_output.append(logvar_tensor)
+                    logvar_result = torch.cat(logvar_output, dim=0)
+
+            print(mu_result.shape)
+            X_train = pd.DataFrame(mu_result.cpu().numpy(), columns=new_cols)
+
+            mu_output = []
+            logvar_output = []
+
+            with torch.no_grad():
+                for i, (data) in enumerate(testloader):
+                    data = data.to(device)
+                    optimizer.zero_grad()
+                    recon_batch, mu, logvar = model(data)
+
+                    mu_tensor = mu
+                    mu_output.append(mu_tensor)
+                    mu_result = torch.cat(mu_output, dim=0)
+
+                    logvar_tensor = logvar
+                    logvar_output.append(logvar_tensor)
+                    logvar_result = torch.cat(logvar_output, dim=0)
+
+            X_test = pd.DataFrame(mu_result.cpu().numpy(), columns=new_cols)
+
+            print(X_test)
+            print(X_test.shape)
+
+            self.preprocess_decisions[f"autoencoder_based_dimensionality_reduction_parameters"] = best_parameters
+            self.preprocess_decisions[f"autoencoder_based_dimensionality_reduction_model"] = model
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def final_pca_dimensionality_reduction(self):
         logging.info('Start final PCA dimensionality reduction.')
