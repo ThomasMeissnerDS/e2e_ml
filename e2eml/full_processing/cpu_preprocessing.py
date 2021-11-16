@@ -219,8 +219,54 @@ class PreProcessing:
             "final_pca_dimensionality_reduction": False,
             "sort_columns_alphabetically": True
         }
-        self.blueprint_step_selection_non_nlp_funcs = None
-        self.blueprint_step_selection_non_nlp_funcs_default_args = None
+
+        self.checkpoints = {
+            "automatic_type_detection_casting": False,
+            "early_numeric_only_feature_selection": False,
+            "remove_duplicate_column_names": False,
+            "reset_dataframe_index": False,
+            "regex_clean_text_data": False,
+            "handle_target_skewness": False,
+            "holistic_null_filling": True, # slow
+            "iterative_null_imputation": True,
+            "fill_infinite_values": True,
+            "datetime_converter": True,
+            "pos_tagging_pca": True, # slow with many categories
+            "append_text_sentiment_score": True,
+            "tfidf_vectorizer_to_pca": True, # slow with many categories
+            "tfidf_vectorizer": True,
+            "rare_feature_processing": True,
+            "cardinality_remover": True,
+            "delete_high_null_cols": True,
+            "numeric_binarizer_pca": True,
+            "onehot_pca": True,
+            "category_encoding": True,
+            "fill_nulls_static": True,
+            "data_binning": True,
+            "outlier_care": True,
+            "remove_collinearity": True,
+            "skewness_removal": True,
+            "autotuned_clustering": True,
+            "clustering_as_a_feature_dbscan": True,
+            "clustering_as_a_feature_kmeans_loop": True,
+            "clustering_as_a_feature_gaussian_mixture_loop": True,
+            "pca_clustering_results": True,
+            "reduce_memory_footprint": True,
+            "automated_feature_selection": True,
+            "bruteforce_random_feature_selection": True, # slow
+            "sort_columns_alphabetically": True,
+            "synthetic_data_augmentation": True,
+            "delete_unpredictable_training_rows": True,
+            "scale_data": True,
+            "smote": True,
+            "autoencoder_based_oversampling": True,
+            "final_pca_dimensionality_reduction": True
+        }
+        self.checkpoint_reached = {}
+        for key, value in self.checkpoints.items():
+            self.checkpoint_reached[key] = False
+
+        self.preprocessing_funcs = None
 
         self.blueprint_step_selection_nlp_transformers = {
             "train_test_split": True,
@@ -3586,7 +3632,10 @@ class PreProcessing:
 
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+            executed_classes = 0
             for i in range(len(unique_classes)):
+                executed_classes += 1
+                print(f"Progress after this step is {round((executed_classes/len(unique_classes))*100, 2)}%.")
                 target_class = unique_classes[i]
                 target_delta = deltas[i]
                 if target_delta == 0:
@@ -3606,8 +3655,8 @@ class PreProcessing:
                     traindata_set = DataBuilder(X_train_class_only)
                     testdata_set = DataBuilder(X_test_class_only)
 
-                    trainloader = DataLoader(dataset=traindata_set, batch_size=8192)
-                    testloader = DataLoader(dataset=testdata_set, batch_size=8192)
+                    trainloader = DataLoader(dataset=traindata_set, batch_size=9600)
+                    testloader = DataLoader(dataset=testdata_set, batch_size=9600)
 
                     #D_in = X_train_class_only.shape[1]
                     # HYPERPARAMETER OPTIMIZATION
@@ -3639,10 +3688,11 @@ class PreProcessing:
                                 loss.backward()
                                 train_loss += loss.item()
                                 optimizer.step()
-                            if epoch % 200 == 0:
-                                print('====> Epoch: {} Average training loss: {:.4f}'.format(
+                                if epoch % 200 == 0:
+                                    print('====> Epoch: {} Average training loss: {:.4f}'.format(
                                     epoch, train_loss / len(trainloader.dataset)))
                                 train_losses.append(train_loss / len(trainloader.dataset))
+                                torch.cuda.empty_cache()
 
                         def test(epoch):
                             with torch.no_grad():
@@ -3660,6 +3710,7 @@ class PreProcessing:
                                     if trial.should_prune():
                                         raise optuna.exceptions.TrialPruned()
                                     test_losses.append(test_loss / len(testloader.dataset))
+                                    torch.cuda.empty_cache()
 
 
 
