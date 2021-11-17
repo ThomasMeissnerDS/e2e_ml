@@ -8,6 +8,8 @@ import gc
 from e2eml.classification.classification_blueprints import ClassificationBluePrint
 from e2eml.regression.regression_blueprints import RegressionBluePrint
 from e2eml.full_processing import postprocessing
+from sklearn.metrics import matthews_corrcoef
+import gc
 
 
 class TimeTravel():
@@ -182,4 +184,100 @@ class TimeTravel():
             class_instance.regression_algorithms_functions[algorithm]()
 
         logging.info('Finished blueprint.')
+
+
+def timewalk_auto_exploration(class_instance, holdout_df, holdout_target):
+    # define algorithms to consider
+    algorithms = ["xgboost", "lgbm", "tabnet", "ridge", "ngboost", "sgd", "vowpal_wabbit"]
+
+    # we reduce the tuning rounds for all algorithms
+    class_instance.hyperparameter_tuning_rounds = {"xgboost": 3,
+                                                   "lgbm": 3,
+                                                   "sgd": 3,
+                                                   "tabnet": 3,
+                                                   "ngboost": 3,
+                                                   "sklearn_ensemble": 3,
+                                                   "ridge": 3,
+                                                   "elasticnet": 3,
+                                                   "catboost": 3,
+                                                   "bruteforce_random": 500,
+                                                   "autoencoder_based_oversampling": 20,
+                                                   "final_pca_dimensionality_reduction": 20}
+
+    # we also limit the time for hyperparameter tuning
+    class_instance.hyperparameter_tuning_max_runtime_secs = {"xgboost": 4*60*60,
+                                                             "sgd": 3*60*60,
+                                                             "lgbm": 3*60*60,
+                                                             "tabnet": 3*60*60,
+                                                             "ngboost": 3*60*60,
+                                                             "sklearn_ensemble": 3*60*60,
+                                                             "ridge": 3*60*60,
+                                                             "elasticnet": 3*60*60,
+                                                             "catboost": 4*60*60,
+                                                             "bruteforce_random": 3*60*60,
+                                                             "autoencoder_based_oversampling": 1*60*60,
+                                                             "final_pca_dimensionality_reduction": 1*60*60}
+
+    # we adjust default preprocessing
+    class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = True
+    class_instance.blueprint_step_selection_non_nlp["scale_data"] = True
+    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
+    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = True
+
+
+    # we want to store our results
+    matthews_results = []
+    algorithms_used = []
+    preprocessing_steps_used = []
+
+    # define checkpoints to load
+    checkpoints = ["scale_data", "autotuned_clustering", "early_numeric_only_feature_selection"]
+
+    # creating checkpoints and training the model
+    automl_travel = TimeTravel()
+
+    for checkpoint in checkpoints:
+        for alg in algorithms:
+            try:
+                if len(matthews_results) == 0:
+                    automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=False)
+                else:
+                    class_instance = automl_travel.load_checkpoint(checkpoint_to_load=checkpoint)
+                    if checkpoint == 'scale_data':
+                        class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
+                        class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
+                    elif checkpoint == "autotuned_clustering":
+                        class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
+                        class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
+                        class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
+                    elif checkpoint == "early_numeric_only_feature_selection":
+                        class_instance.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"] = False
+                        class_instance.blueprint_step_selection_non_nlp["data_binning"] = False
+                        class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
+                        class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
+                        class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
+                    automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=True)
+                automl_travel.timetravel_model_training(class_instance, alg)
+                automl_travel.create_time_travel_checkpoints(class_instance, df=holdout_df)
+                try:
+                    matthews = matthews_corrcoef(holdout_target, class_instance.predicted_classes[alg])
+                except Exception:
+                    print("Matthew failed.")
+                    matthews = 0
+            except Exception:
+                matthews = 0
+            matthews_results.append(matthews)
+            algorithms_used.append(alg)
+            preprocessing_steps_used.append(class_instance.blueprint_step_selection_non_nlp)
+            del class_instance
+            _ = gc.collect
+
+    results_dict = {
+        "Algorithm": algorithms_used,
+        "Matthews": matthews_results,
+        "Preprocessing applied": preprocessing_steps_used}
+
+    results_df = pd.DataFrame(results_dict)
+    print(results_df)
+    return results_df
 
