@@ -94,7 +94,7 @@ class TimeTravel():
                         "sgd": class_instance.ml_bp20_regression_full_processing_sgd
                         }
 
-    def create_time_travel_checkpoints(self, class_instance, checkpoint_file_path=None, df=None):
+    def create_time_travel_checkpoints(self, class_instance, checkpoint_file_path=None, df=None, reload_instance=False):
         """
         Runs a preprocessing blueprint only. Saves blueprints after certain checkpoints, which can be defined in
         :param class_instance: Accepts a an e2eml Classification or Regression class instance. This does not support
@@ -104,11 +104,14 @@ class TimeTravel():
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Saves the checkpoints locally.
         """
-        logging.info('Start blueprint.')
-        class_instance.runtime_warnings(warn_about="future_architecture_change")
-        class_instance.check_prediction_mode(df)
-        class_instance.train_test_split(how=class_instance.train_split_type)
-        self.last_checkpoint_reached = "train_test_split"
+        if not reload_instance:
+            logging.info('Start blueprint.')
+            class_instance.runtime_warnings(warn_about="future_architecture_change")
+            class_instance.check_prediction_mode(df)
+            class_instance.train_test_split(how=class_instance.train_split_type)
+            self.last_checkpoint_reached = "train_test_split"
+        else:
+            pass
 
         self.call_preprocessing_functions_mapping(class_instance=class_instance)
         if class_instance.class_problem in ["binary", 'multiclass']:
