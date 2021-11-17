@@ -32,7 +32,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_kmeans_loop"]:
             for nb_cluster in [3, 5, 7, 9]:
                 try:
-                    self.clustering_as_a_feature(algorithm='kmeans', nb_clusters=nb_cluster)
+                    self.clustering_as_a_feature(algorithm='kmeans', eps=0.3, n_jobs=-1, nb_clusters=nb_cluster, min_samples=10)
                 except ValueError:
                     print("Clustering as a feature skipped due to ValueError.")
 
@@ -40,7 +40,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_gaussian_mixture_loop"]:
             for nb_cluster in [2, 4, 6, 8, 10]:
                 try:
-                    self.clustering_as_a_feature(algorithm='gaussian', nb_clusters=nb_cluster)
+                    self.clustering_as_a_feature(algorithm='gaussian', eps=0.3, n_jobs=-1, nb_clusters=nb_cluster, min_samples=10)
                 except ValueError:
                     print("Clustering as a feature skipped due to ValueError.")
 

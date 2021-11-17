@@ -17,7 +17,7 @@ class TimeTravel():
             "remove_duplicate_column_names": {"func": class_instance.remove_duplicate_column_names, "args": None},
             "reset_dataframe_index": {"func": class_instance.reset_dataframe_index, "args": None},
             "fill_infinite_values": {"func": class_instance.fill_infinite_values, "args": None},
-            "early_numeric_only_feature_selection": {"func": class_instance.automated_feature_selection, "args": (True)},
+            "early_numeric_only_feature_selection": {"func": class_instance.automated_feature_selection, "args": (None, None, True)},
             "delete_high_null_cols": {"func": class_instance.delete_high_null_cols, "args": (0.05)},
             "data_binning": {"func": class_instance.data_binning, "args": None},
             "regex_clean_text_data": {"func": class_instance.regex_clean_text_data, "args": None},
@@ -45,7 +45,7 @@ class TimeTravel():
             "reduce_memory_footprint": {"func": class_instance.reduce_memory_footprint, "args": None},
             "scale_data": {"func": class_instance.data_scaling, "args": None},
             "smote": {"func": class_instance.smote_binary_multiclass, "args": None},
-            "automated_feature_selection": {"func": class_instance.automated_feature_selection, "args": (False)},
+            "automated_feature_selection": {"func": class_instance.automated_feature_selection, "args": (None, None, False)},
             "bruteforce_random_feature_selection": {"func": class_instance.bruteforce_random_feature_selection, "args": None}, # slow
             "delete_unpredictable_training_rows": {"func": class_instance.delete_unpredictable_training_rows, "args": None},
             "autoencoder_based_oversampling": {"func": class_instance.autoencoder_based_oversampling, "args": None},
@@ -71,25 +71,20 @@ class TimeTravel():
         self.call_preprocessing_functions_mapping(class_instance=class_instance)
 
         for key, value in class_instance.blueprint_step_selection_non_nlp.items():
-            print(class_instance.df_dict)
             if class_instance.blueprint_step_selection_non_nlp[key] and not class_instance.checkpoint_reached[key]:
                 if (key == "regex_clean_text_data" and len(class_instance.nlp_transformer_columns) > 0) or \
                         (key == "tfidf_vectorizer" and len(class_instance.nlp_transformer_columns) > 0) or \
                         (key == "append_text_sentiment_score" and len(class_instance.nlp_transformer_columns) > 0) or \
                         (key not in ["regex_clean_text_data", "tfidf_vectorizer", "append_text_sentiment_score",
                                      "train_test_split"]):
-                    try:
-                        if class_instance.preprocessing_funcs[key]["args"]:
-                            class_instance.preprocessing_funcs[key]["func"](class_instance.preprocessing_funcs[key]["args"])
-                        else:
-                            class_instance.preprocessing_funcs[key]["func"]()
-                            class_instance.checkpoint_reached[key] = True
-                    except Exception:
+                    if class_instance.preprocessing_funcs[key]["args"]:
+                        class_instance.preprocessing_funcs[key]["func"](class_instance.preprocessing_funcs[key]["args"])
+                    else:
                         class_instance.preprocessing_funcs[key]["func"]()
                 else:
                     print(f"Skipped preprocessing step {key} as it has not been selected by user.")
-
-                postprocessing.save_to_production(class_instance, file_name=f'blueprint_checkpoint_{key}')
+                class_instance.checkpoint_reached[key] = True
+                postprocessing.save_to_production(class_instance, file_name=f'blueprint_checkpoint_{key}', clean=False)
             else:
                 pass
 
