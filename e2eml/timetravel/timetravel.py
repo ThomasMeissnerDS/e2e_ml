@@ -54,9 +54,34 @@ class TimeTravel():
             "sort_columns_alphabetically": {"func": class_instance.sort_columns_alphabetically, "args": None},
         }
 
+    def call_classification_algorithm_mapping(self, class_instance):
+        class_instance.classification_algorithms_functions = {
+                        "ridge":  class_instance.ml_bp08_multiclass_full_processing_ridge,
+                        "catboost": class_instance.ml_bp09_multiclass_full_processing_catboost,
+                        "xgboost":  class_instance.ml_bp01_multiclass_full_processing_xgb_prob,
+                        "ngboost": class_instance.ml_bp04_multiclass_full_processing_ngboost,
+                        "lgbm": class_instance.ml_bp02_multiclass_full_processing_lgbm_prob,
+                        "tabnet": class_instance.ml_bp07_multiclass_full_processing_tabnet,
+                        "vowpal_wabbit": class_instance.ml_bp05_multiclass_full_processing_vowpal_wabbit,
+                        "sklearn_ensemble": class_instance.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble,
+                        "sgd": class_instance.ml_bp10_multiclass_full_processing_sgd,
+                        }
+
+    def call_regression_algorithm_mapping(self, class_instance):
+        class_instance.regression_algorithms_functions = {
+                        "ridge": class_instance.ml_bp18_regression_full_processing_ridge_reg,
+                        "catboost":  class_instance.ml_bp20_regression_full_processing_catboost,
+                        "xgboost": class_instance.ml_bp11_regression_full_processing_xgboost,
+                        "ngboost": class_instance.ml_bp14_regressions_full_processing_ngboost,
+                        "lgbm": class_instance.ml_bp12_regressions_full_processing_lgbm,
+                        "tabnet": class_instance.ml_bp17_regression_full_processing_tabnet_reg,
+                        "vowpal_wabbit": class_instance.ml_bp15_regression_full_processing_vowpal_wabbit_reg,
+                        "sklearn_ensemble": class_instance.ml_bp13_regression_full_processing_sklearn_stacking_ensemble,
+                        "sgd": class_instance.ml_bp20_regression_full_processing_sgd
+                        }
+
     def create_time_travel_checkpoints(self, class_instance, checkpoint_file_path=None, df=None):
         """
-        Our recommended blueprint for Tabnet testing.
         Runs a preprocessing blueprint only. This is useful for building custom pipelines.
         :param class_instance: Accepts a an e2eml Classification or Regression class instance. This does not support
         NLP transformers.
@@ -72,6 +97,10 @@ class TimeTravel():
         self.last_checkpoint_reached = "train_test_split"
 
         self.call_preprocessing_functions_mapping(class_instance=class_instance)
+        if class_instance.class_problem in ["binary", 'multiclass']:
+            self.call_classification_algorithm_mapping(class_instance=class_instance)
+        else:
+            self.call_regression_algorithm_mapping(class_instance=class_instance)
 
         for key, value in class_instance.blueprint_step_selection_non_nlp.items():
             if class_instance.blueprint_step_selection_non_nlp[key] and not class_instance.checkpoint_reached[key]:
