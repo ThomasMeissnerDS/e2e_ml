@@ -160,6 +160,7 @@ def test_timetravel(dataset='titanic'):
 
     automl_travel = timetravel.TimeTravel()
     automl_travel.create_time_travel_checkpoints(titanic_auto_ml)
+    automl_travel.timetravel_model_training(titanic_auto_ml, 'lgbm')
 
 
 if __name__ == '__main__':

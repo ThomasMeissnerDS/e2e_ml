@@ -148,4 +148,16 @@ class TimeTravel():
                                                                 file_path=checkpoint_file_path)
         return class_instance
 
+    def timetravel_model_training(self, class_instance, algorithm='lgbm'):
+        def overwrite_normal_preprocess_func(df=None):
+            return "overwritten"
+        # overwriting the preprocessing function as we have done this already
+        class_instance.std_preprocessing_pipeline = overwrite_normal_preprocess_func
+
+        if class_instance.class_problem in ["binary", 'multiclass']:
+            class_instance.classification_algorithms_functions[algorithm]()
+        else:
+            class_instance.regression_algorithms_functions[algorithm]()
+
+        logging.info('Finished blueprint.')
 
