@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import optuna
 import warnings
 import logging
 import dill as pickle
@@ -12,6 +13,13 @@ from e2eml.full_processing import postprocessing
 class TimeTravel():
 
     def call_preprocessing_functions_mapping(self, class_instance):
+        """
+        A static function, that stores preprocessing step names, function objects and default arguments in a dictionbary.
+        The order of items determines the order of preprocessing steps. We do not guarantee 100% success rate, if
+        the order gets exchanged.
+        :param class_instance:
+        :return: Adds a class attribute.
+        """
         class_instance.preprocessing_funcs = {
             "automatic_type_detection_casting": {"func": class_instance.automatic_type_detection_casting, "args": None},
             "remove_duplicate_column_names": {"func": class_instance.remove_duplicate_column_names, "args": None},
@@ -55,6 +63,12 @@ class TimeTravel():
         }
 
     def call_classification_algorithm_mapping(self, class_instance):
+        """
+        A static function, that stores ml algorithms and their function objects..
+        The order of items does not have any impact.
+        :param class_instance: e2eml ClassificationBlueprint or RegressionBlueprint class instance.
+        :return: Adds a class attribute.
+        """
         class_instance.classification_algorithms_functions = {
                         "ridge":  class_instance.ml_bp08_multiclass_full_processing_ridge,
                         "catboost": class_instance.ml_bp09_multiclass_full_processing_catboost,
@@ -82,7 +96,7 @@ class TimeTravel():
 
     def create_time_travel_checkpoints(self, class_instance, checkpoint_file_path=None, df=None):
         """
-        Runs a preprocessing blueprint only. This is useful for building custom pipelines.
+        Runs a preprocessing blueprint only. Saves blueprints after certain checkpoints, which can be defined in
         :param class_instance: Accepts a an e2eml Classification or Regression class instance. This does not support
         NLP transformers.
         :param checkpoint_file_path: (Optional). Takes a file path to store the saved class instance checkpoints.
@@ -103,7 +117,7 @@ class TimeTravel():
             self.call_regression_algorithm_mapping(class_instance=class_instance)
 
         for key, value in class_instance.blueprint_step_selection_non_nlp.items():
-            if class_instance.blueprint_step_selection_non_nlp[key] and not class_instance.checkpoint_reached[key]:
+            if class_instance.blueprint_step_selection_non_nlp[key] and (not class_instance.checkpoint_reached[key] or class_instance.prediction_mode):
                 if (key == "regex_clean_text_data" and len(class_instance.nlp_transformer_columns) > 0) or \
                         (key == "tfidf_vectorizer" and len(class_instance.nlp_transformer_columns) > 0) or \
                         (key == "append_text_sentiment_score" and len(class_instance.nlp_transformer_columns) > 0) or \
@@ -121,9 +135,14 @@ class TimeTravel():
                         class_instance.preprocessing_funcs[key]["func"]()
                 else:
                     print(f"Skipped preprocessing step {key} as it has not been selected by user.")
-                class_instance.checkpoint_reached[key] = True
-                self.last_checkpoint_reached = key
-                postprocessing.save_to_production(class_instance, file_name=f'blueprint_checkpoint_{key}', clean=False,
+
+                # save checkpoints, if not in predict
+                if class_instance.prediction_mode:
+                    pass
+                else:
+                    class_instance.checkpoint_reached[key] = True
+                    self.last_checkpoint_reached = key
+                    postprocessing.save_to_production(class_instance, file_name=f'blueprint_checkpoint_{key}', clean=False,
                                                   file_path=checkpoint_file_path)
             else:
                 pass

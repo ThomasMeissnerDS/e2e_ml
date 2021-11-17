@@ -132,36 +132,37 @@ def test_timetravel(dataset='titanic'):
                                                      nlp_transformer_columns='OriginalTweet'
                                                      )
 
-    titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 10,
-                                                    "lgbm": 15,
-                                                    "tabnet": 3,
-                                                    "ngboost": 10,
-                                                    "sklearn_ensemble": 3,
-                                                    "catboost": 10,
-                                                    "ridge": 25,
-                                                    "bruteforce_random": 10,
-                                                    "autoencoder_based_oversampling": 20,
-                                                    "autoencoder_based_dimensionality_reduction": 100,
-                                                    "final_pca_dimensionality_reduction": 20,
-                                                    "synthetic_data_augmentation": 100}
 
-    titanic_auto_ml.special_blueprint_algorithms = {"ridge": False, #titanic, #synthetic_multiclass
-                                                    "xgboost": False, #titanic
-                                                    "ngboost": False, #titanic, #synthetic_multiclass
-                                                    "lgbm": True, #titanic
-                                                    "tabnet": False, #titanic
-                                                    "vowpal_wabbit": False,
-                                                    "sklearn_ensemble": False, #titanic, #synthetic_multiclass
-                                                    "catboost": False
-                                                    }
     titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
-    titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = True
+    titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
     titanic_auto_ml.blueprint_step_selection_non_nlp["scale_data"] = False
 
+    # creating checkpoints and training the model
     automl_travel = timetravel.TimeTravel()
     automl_travel.create_time_travel_checkpoints(titanic_auto_ml)
     automl_travel.timetravel_model_training(titanic_auto_ml, 'lgbm')
 
+    # predicting on new data
+    automl_travel.create_time_travel_checkpoints(titanic_auto_ml, df=val_df)
+    automl_travel.timetravel_model_training(titanic_auto_ml, 'lgbm')
+
+    def get_matthews(algorithm):
+        # Assess prediction quality on holdout data
+        print(classification_report(pd.Series(val_df_target).astype(bool),
+                                    titanic_auto_ml.predicted_classes[algorithm]))
+        try:
+            matthews = matthews_corrcoef(pd.Series(val_df_target).astype(bool),
+                                         titanic_auto_ml.predicted_classes[algorithm])
+        except Exception:
+            print("Matthew failed.")
+            matthews = 0
+        print(matthews)
+
+    for i in ["lgbm"]:
+        print(f"---------Start evaluating {i}----------")
+        get_matthews(i)
+    finished = True
+    assert finished == True
 
 if __name__ == '__main__':
     test_timetravel('titanic')
