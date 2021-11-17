@@ -78,7 +78,13 @@ class TimeTravel():
                         (key not in ["regex_clean_text_data", "tfidf_vectorizer", "append_text_sentiment_score",
                                      "train_test_split"]):
                     if class_instance.preprocessing_funcs[key]["args"]:
-                        class_instance.preprocessing_funcs[key]["func"](class_instance.preprocessing_funcs[key]["args"])
+                        try:
+                            if len(np.array(class_instance.preprocessing_funcs[key]["args"])) == 1:
+                                class_instance.preprocessing_funcs[key]["func"](class_instance.preprocessing_funcs[key]["args"])
+                            else:
+                                class_instance.preprocessing_funcs[key]["func"](*class_instance.preprocessing_funcs[key]["args"])
+                        except TypeError:
+                            class_instance.preprocessing_funcs[key]["func"](class_instance.preprocessing_funcs[key]["args"])
                     else:
                         class_instance.preprocessing_funcs[key]["func"]()
                 else:
