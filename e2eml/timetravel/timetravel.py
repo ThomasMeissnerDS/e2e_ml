@@ -54,19 +54,22 @@ class TimeTravel():
             "sort_columns_alphabetically": {"func": class_instance.sort_columns_alphabetically, "args": None},
         }
 
-    def time_travel_pipeline(self, class_instance, df=None):
+    def create_time_travel_checkpoints(self, class_instance, checkpoint_file_path=None, df=None):
         """
         Our recommended blueprint for Tabnet testing.
         Runs a preprocessing blueprint only. This is useful for building custom pipelines.
-        :param df: Accepts a dataframe to run ml preprocessing on it.
-        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
-        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
-        :return: Updates class attributes.
+        :param class_instance: Accepts a an e2eml Classification or Regression class instance. This does not support
+        NLP transformers.
+        :param checkpoint_file_path: (Optional). Takes a file path to store the saved class instance checkpoints.
+        On default will save in current location.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :return: Saves the checkpoints locally.
         """
         logging.info('Start blueprint.')
         class_instance.runtime_warnings(warn_about="future_architecture_change")
         class_instance.check_prediction_mode(df)
         class_instance.train_test_split(how=class_instance.train_split_type)
+        self.last_checkpoint_reached = "train_test_split"
 
         self.call_preprocessing_functions_mapping(class_instance=class_instance)
 
@@ -90,7 +93,30 @@ class TimeTravel():
                 else:
                     print(f"Skipped preprocessing step {key} as it has not been selected by user.")
                 class_instance.checkpoint_reached[key] = True
-                postprocessing.save_to_production(class_instance, file_name=f'blueprint_checkpoint_{key}', clean=False)
+                self.last_checkpoint_reached = key
+                postprocessing.save_to_production(class_instance, file_name=f'blueprint_checkpoint_{key}', clean=False,
+                                                  file_path=checkpoint_file_path)
             else:
                 pass
+
+    def load_checkpoint(self, checkpoint_to_load=None, checkpoint_file_path=None):
+        """
+        This function loads saved checkpoints on demand. If no checkpoint is specified, it loads the most recent
+        checkpoint executed in the pipeline.
+        :param checkpoint_to_load: Takes a string, specifying the checkpoint to load. All strings can be looked up
+        in blueprint_step_selection_non_nlp class attribute. Only checkpoints, which have been saved explicitely can be
+        loaded. If no checkpoint is specified, it loads the most recent
+        checkpoint executed in the pipeline.
+        :param checkpoint_file_path: (Optional) Takes a string. On default loads checkpoint from current path. If specified,
+        loads the checkpoint from this path.
+        :return: Returns loaded checkpoint.
+        """
+        if not checkpoint_to_load:
+            class_instance = postprocessing.load_for_production(file_name=f'blueprint_checkpoint_{self.last_checkpoint_reached}',
+                                                                file_path=checkpoint_file_path)
+        else:
+            class_instance = postprocessing.load_for_production(file_name=f'blueprint_checkpoint_{checkpoint_to_load}',
+                                                                file_path=checkpoint_file_path)
+        return class_instance
+
 

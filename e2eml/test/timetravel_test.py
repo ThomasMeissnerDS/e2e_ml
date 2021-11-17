@@ -159,7 +159,7 @@ def test_timetravel(dataset='titanic'):
     titanic_auto_ml.blueprint_step_selection_non_nlp["scale_data"] = False
 
     automl_travel = timetravel.TimeTravel()
-    automl_travel.time_travel_pipeline(titanic_auto_ml)
+    automl_travel.create_time_travel_checkpoints(titanic_auto_ml)
 
 
 if __name__ == '__main__':
