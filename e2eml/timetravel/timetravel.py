@@ -206,7 +206,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     if isinstance(algs_to_test, list):
         algorithms = algs_to_test
     else:
-        algorithms = ["xgboost", "lgbm", "tabnet", "ridge", "ngboost", "sgd", "vowpal_wabbit"]
+        algorithms = ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "sgd", "vowpal_wabbit"]
 
     # we reduce the tuning rounds for all algorithms
     class_instance.hyperparameter_tuning_rounds = {"xgboost": 3,
@@ -265,8 +265,10 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     unique_indices_counter = 0
     for checkpoint in checkpoints:
         for alg in algorithms:
+            start = time.time()
+            print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+            print(f"Start iteration for algorithm {alg} at {start}.")
             try:
-                start = time.time()
                 unique_indices_counter += 1
                 if len(scoring_results) == 0:
                     automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=False)
@@ -288,16 +290,28 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                     automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=True)
                 automl_travel.timetravel_model_training(class_instance, alg)
                 automl_travel.create_time_travel_checkpoints(class_instance, df=holdout_df)
+                automl_travel.timetravel_model_training(class_instance, alg)
+
                 try:
                     if class_instance.class_problem in ["binary", "multiclass"]:
                         scoring = matthews_corrcoef(holdout_target, class_instance.predicted_classes[alg])
                     else:
-                        scoring = mean_absolute_error(holdout_target, class_instance.predicted_classes[alg])
+                        scoring = mean_absolute_error(holdout_target, class_instance.predicted_values[alg])
                 except Exception:
-                    print("Matthew failed.")
-                    scoring = 0
+                    try:
+                        if class_instance.class_problem in ["binary", "multiclass"]:
+                            scoring = matthews_corrcoef(pd.Series(holdout_target).astype(bool),
+                                                        class_instance.predicted_classes[alg])
+                        else:
+                            scoring = mean_absolute_error(pd.Series(holdout_target).astype(float), class_instance.predicted_values[alg])
+                    except Exception:
+                        print("Matthew failed.")
+                        scoring = 0
             except Exception:
                 scoring = 0
+
+            print(f"Score achieved on holdout dataset is: {scoring}.")
+
             end = time.time()
             elapsed_time = end - start
             elapsed_times.append(elapsed_time)
@@ -307,6 +321,17 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
             preprocessing_steps_used.append(class_instance.blueprint_step_selection_non_nlp)
             del class_instance
             _ = gc.collect
+            results_dict = {
+                "Trial number": unique_indices,
+                "Algorithm": algorithms_used,
+                metric: scoring_results,
+                "Preprocessing applied": preprocessing_steps_used,
+                "Runtime in seconds": elapsed_times}
+
+            results_df = pd.DataFrame(results_dict)
+            results_df.to_pickle(experiment_name)
+            print(f"End iteration for algorithm {alg} at {end}.")
+            print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
     results_dict = {
         "Trial number": unique_indices,
