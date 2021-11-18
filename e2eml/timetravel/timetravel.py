@@ -8,8 +8,10 @@ import gc
 from e2eml.classification.classification_blueprints import ClassificationBluePrint
 from e2eml.regression.regression_blueprints import RegressionBluePrint
 from e2eml.full_processing import postprocessing
-from sklearn.metrics import matthews_corrcoef
+from sklearn.metrics import matthews_corrcoef, mean_absolute_error
 import gc
+import time
+import plotly.express as px
 
 
 class TimeTravel():
@@ -186,9 +188,25 @@ class TimeTravel():
         logging.info('Finished blueprint.')
 
 
-def timewalk_auto_exploration(class_instance, holdout_df, holdout_target):
+def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_to_test=None, experiment_name="timewalk.pkl"):
+    """
+    Timewalk is an extension to TimeTravel. It executes different preprocessing steps an short model training to explore
+    the best combination. It returns a Pandas DataFrame with all results. Timewalk is meant to explore and is not suitable
+    for final training for various reasons. Timewalk will result in long runtimes.
+    :param class_instance: Expects a freshly instantiated e2eml ClassificationBlueprint or RegressionBlueprint class instance.
+    :param holdout_df: Expects a Pandas Dataframe, which will be only used for final evaluation. Is not alolowed to
+     include the target as it simulates prediction on new data. It is recommended to use the most recent datapoints as holdout.
+    :param holdout_target: Expects a Pandas Series with holdout targets.
+    :param algs_to_test: (Optional). Expects a list object with algorithms to test. Will test on default:
+    ["xgboost", "lgbm", "tabnet", "ridge", "ngboost", "sgd", "vowpal_wabbit"]
+    :param experiment_name: Expects string. Will determine the name of the exported results dataframe (as pickle file).
+    :return: Pandas DataFrame with results.
+    """
     # define algorithms to consider
-    algorithms = ["xgboost", "lgbm", "tabnet", "ridge", "ngboost", "sgd", "vowpal_wabbit"]
+    if isinstance(algs_to_test, list):
+        algorithms = algs_to_test
+    else:
+        algorithms = ["xgboost", "lgbm", "tabnet", "ridge", "ngboost", "sgd", "vowpal_wabbit"]
 
     # we reduce the tuning rounds for all algorithms
     class_instance.hyperparameter_tuning_rounds = {"xgboost": 3,
@@ -226,20 +244,31 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target):
 
 
     # we want to store our results
-    matthews_results = []
+    scoring_results = []
     algorithms_used = []
     preprocessing_steps_used = []
+    elapsed_times = []
+    unique_indices = []
 
     # define checkpoints to load
     checkpoints = ["scale_data", "autotuned_clustering", "early_numeric_only_feature_selection"]
 
+    # define the type of scoring
+    if class_instance.class_problem in ["binary", "multiclass"]:
+        metric = "Matthews"
+    else:
+        metric = "Mean absolute error"
+
     # creating checkpoints and training the model
     automl_travel = TimeTravel()
 
+    unique_indices_counter = 0
     for checkpoint in checkpoints:
         for alg in algorithms:
             try:
-                if len(matthews_results) == 0:
+                start = time.time()
+                unique_indices_counter += 1
+                if len(scoring_results) == 0:
                     automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=False)
                 else:
                     class_instance = automl_travel.load_checkpoint(checkpoint_to_load=checkpoint)
@@ -260,24 +289,41 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target):
                 automl_travel.timetravel_model_training(class_instance, alg)
                 automl_travel.create_time_travel_checkpoints(class_instance, df=holdout_df)
                 try:
-                    matthews = matthews_corrcoef(holdout_target, class_instance.predicted_classes[alg])
+                    if class_instance.class_problem in ["binary", "multiclass"]:
+                        scoring = matthews_corrcoef(holdout_target, class_instance.predicted_classes[alg])
+                    else:
+                        scoring = mean_absolute_error(holdout_target, class_instance.predicted_classes[alg])
                 except Exception:
                     print("Matthew failed.")
-                    matthews = 0
+                    scoring = 0
             except Exception:
-                matthews = 0
-            matthews_results.append(matthews)
+                scoring = 0
+            end = time.time()
+            elapsed_time = end - start
+            elapsed_times.append(elapsed_time)
+            scoring_results.append(scoring)
             algorithms_used.append(alg)
+            unique_indices.append(unique_indices_counter)
             preprocessing_steps_used.append(class_instance.blueprint_step_selection_non_nlp)
             del class_instance
             _ = gc.collect
 
     results_dict = {
+        "Trial number": unique_indices,
         "Algorithm": algorithms_used,
-        "Matthews": matthews_results,
-        "Preprocessing applied": preprocessing_steps_used}
+        metric: scoring_results,
+        "Preprocessing applied": preprocessing_steps_used,
+        "Runtime in seconds": elapsed_times}
 
     results_df = pd.DataFrame(results_dict)
-    print(results_df)
+    results_df.to_pickle(experiment_name)
+
+    try:
+        print(results_df.sort_values(by=[metric], ascending=[False]))
+        fig = px.line(results_df, x="Runtime in seconds", y=metric, color="Algorithm", text="Trial number")
+        fig.update_traces(textposition="bottom right")
+        fig.show()
+    except Exception:
+        pass
     return results_df
 

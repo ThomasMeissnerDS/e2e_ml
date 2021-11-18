@@ -139,7 +139,6 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             correct_found.append(estimated_pos_classes_found)
             audience_sizes.append(audience_size_needed)
 
-
     def classification_eval(self, algorithm, pred_probs=None, pred_class=None):
         """
         Takes in the algorithm name. This is needed to grab saved predictions and to store cvlassification scores
