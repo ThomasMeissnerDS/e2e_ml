@@ -75,6 +75,7 @@ class TimeTravel():
         :return: Adds a class attribute.
         """
         class_instance.classification_algorithms_functions = {
+                        "logistic_regression": class_instance.ml_bp00_train_test_binary_full_processing_log_reg_prob,
                         "ridge":  class_instance.ml_bp08_multiclass_full_processing_ridge,
                         "catboost": class_instance.ml_bp09_multiclass_full_processing_catboost,
                         "xgboost":  class_instance.ml_bp01_multiclass_full_processing_xgb_prob,
@@ -88,6 +89,8 @@ class TimeTravel():
 
     def call_regression_algorithm_mapping(self, class_instance):
         class_instance.regression_algorithms_functions = {
+                        "linear_regression": class_instance.ml_bp10_train_test_regression_full_processing_linear_reg,
+                        "elasticnet": class_instance.ml_bp19_regression_full_processing_elasticnet_reg,
                         "ridge": class_instance.ml_bp18_regression_full_processing_ridge_reg,
                         "catboost":  class_instance.ml_bp20_regression_full_processing_catboost,
                         "xgboost": class_instance.ml_bp11_regression_full_processing_xgboost,
@@ -189,7 +192,9 @@ class TimeTravel():
         logging.info('Finished blueprint.')
 
 
-def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_to_test=None, experiment_name="timewalk.pkl"):
+def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_to_test=None,
+                              speed_up_model_tuning=True,
+                              experiment_name="timewalk.pkl"):
     """
     Timewalk is an extension to TimeTravel. It executes different preprocessing steps an short model training to explore
     the best combination. It returns a Pandas DataFrame with all results. Timewalk is meant to explore and is not suitable
@@ -207,35 +212,56 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     if isinstance(algs_to_test, list):
         algorithms = algs_to_test
     else:
-        algorithms = ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "sgd", "vowpal_wabbit"]
+        algorithms = ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "sgd", "vowpal_wabbit", "logistic_regression",
+                      "linear_regression", "elasticnet"]
 
-    # we reduce the tuning rounds for all algorithms
-    class_instance.hyperparameter_tuning_rounds = {"xgboost": 3,
-                                                   "lgbm": 3,
-                                                   "sgd": 3,
-                                                   "tabnet": 3,
-                                                   "ngboost": 3,
-                                                   "sklearn_ensemble": 3,
-                                                   "ridge": 3,
-                                                   "elasticnet": 3,
-                                                   "catboost": 3,
-                                                   "bruteforce_random": 500,
-                                                   "autoencoder_based_oversampling": 20,
-                                                   "final_pca_dimensionality_reduction": 20}
+    # removing algorithms, that are not suitable for classification or regression tasks
+    if class_instance.class_problem in ["binary", "multiclass"]:
+        try:
+            algorithms.remove("linear_regression")
+        except Exception:
+            pass
 
-    # we also limit the time for hyperparameter tuning
-    class_instance.hyperparameter_tuning_max_runtime_secs = {"xgboost": 4*60*60,
-                                                             "sgd": 3*60*60,
-                                                             "lgbm": 3*60*60,
-                                                             "tabnet": 3*60*60,
-                                                             "ngboost": 3*60*60,
-                                                             "sklearn_ensemble": 3*60*60,
-                                                             "ridge": 3*60*60,
-                                                             "elasticnet": 3*60*60,
-                                                             "catboost": 4*60*60,
-                                                             "bruteforce_random": 3*60*60,
-                                                             "autoencoder_based_oversampling": 1*60*60,
-                                                             "final_pca_dimensionality_reduction": 1*60*60}
+        try:
+            algorithms.remove("elasticnet")
+        except Exception:
+            pass
+    else:
+        try:
+            algorithms.remove("logistic_regression")
+        except Exception:
+            pass
+
+    if speed_up_model_tuning:
+        # we reduce the tuning rounds for all algorithms
+        class_instance.hyperparameter_tuning_rounds = {"xgboost": 10,
+                                                       "lgbm": 10,
+                                                       "sgd": 10,
+                                                       "tabnet": 10,
+                                                       "ngboost": 3,
+                                                       "sklearn_ensemble": 10,
+                                                       "ridge": 10,
+                                                       "elasticnet": 10,
+                                                       "catboost": 10,
+                                                       "bruteforce_random": 500,
+                                                       "autoencoder_based_oversampling": 20,
+                                                       "final_pca_dimensionality_reduction": 20}
+
+        # we also limit the time for hyperparameter tuning
+        class_instance.hyperparameter_tuning_max_runtime_secs = {"xgboost": 4*60*60,
+                                                                 "sgd": 3*60*60,
+                                                                 "lgbm": 3*60*60,
+                                                                 "tabnet": 3*60*60,
+                                                                 "ngboost": 3*60*60,
+                                                                 "sklearn_ensemble": 3*60*60,
+                                                                 "ridge": 3*60*60,
+                                                                 "elasticnet": 3*60*60,
+                                                                 "catboost": 4*60*60,
+                                                                 "bruteforce_random": 3*60*60,
+                                                                 "autoencoder_based_oversampling": 1*60*60,
+                                                                 "final_pca_dimensionality_reduction": 1*60*60}
+    else:
+        pass
 
     # we adjust default preprocessing
     class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = True
