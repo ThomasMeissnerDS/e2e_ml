@@ -154,8 +154,8 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "sklearn_ensemble": False, #titanic, #synthetic_multiclass
                                                     "catboost": False
                                                     }
-    titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
-    titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
+    titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
+    titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = True
     titanic_auto_ml.blueprint_step_selection_non_nlp["scale_data"] = True
 
 

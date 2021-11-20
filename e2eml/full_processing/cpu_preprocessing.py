@@ -14,7 +14,7 @@ from sklearn.cluster import DBSCAN, KMeans
 from sklearn.mixture import GaussianMixture
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, SimpleImputer
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, KernelPCA
 from sklearn.model_selection import cross_val_score
 from sklearn.utils import class_weight
 from sklearn.metrics import make_scorer
@@ -217,6 +217,7 @@ class PreProcessing:
             "autoencoder_based_oversampling": False,
             "synthetic_data_augmentation": False,
             "final_pca_dimensionality_reduction": False,
+            "final_kernel_pca_dimensionality_reduction": False,
             "sort_columns_alphabetically": True
         }
 
@@ -3881,245 +3882,94 @@ class PreProcessing:
                     Y_train = Y_train.reset_index(drop=True)
                     self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def autoencoder_based_dimensionality_reduction(self):
-        class DataBuilder(Dataset):
-            def __init__(self, dataset):
-                self.x = dataset.values
-                self.x = torch.from_numpy(self.x).to(torch.float)
-                self.len = self.x.shape[0]
-
-            def __getitem__(self, index):
-                return self.x[index]
-
-            def __len__(self):
-                return self.len
-
-        class Autoencoder(nn.Module):
-            def __init__(self, D_in, H=50, H2=12, latent_dim=3):
-
-                #Encoder
-                super(Autoencoder, self).__init__()
-                self.linear1 = nn.Linear(D_in, H)
-                self.lin_bn1 = nn.BatchNorm1d(num_features=H)
-                self.linear2 = nn.Linear(H, H2)
-                self.lin_bn2 = nn.BatchNorm1d(num_features=H2)
-                self.linear3 = nn.Linear(H2, H2)
-                self.lin_bn3 = nn.BatchNorm1d(num_features=H2)
-
-                # Latent vectors mu and sigma
-                self.fc1 = nn.Linear(H2, latent_dim)
-                self.bn1 = nn.BatchNorm1d(num_features=latent_dim)
-                self.fc21 = nn.Linear(latent_dim, latent_dim)
-                self.fc22 = nn.Linear(latent_dim, latent_dim)
-
-                # Sampling vector
-                self.fc3 = nn.Linear(latent_dim, latent_dim)
-                self.fc_bn3 = nn.BatchNorm1d(latent_dim)
-                self.fc4 = nn.Linear(latent_dim, H2)
-                self.fc_bn4 = nn.BatchNorm1d(H2)
-
-                # Decoder
-                self.linear4 = nn.Linear(H2, H2)
-                self.lin_bn4 = nn.BatchNorm1d(num_features=H2)
-                self.linear5 = nn.Linear(H2, H)
-                self.lin_bn5 = nn.BatchNorm1d(num_features=H)
-                self.linear6 = nn.Linear(H, D_in)
-                self.lin_bn6 = nn.BatchNorm1d(num_features=D_in)
-
-                self.relu = nn.ReLU()
-
-            def encode(self, x):
-                lin1 = self.relu(self.lin_bn1(self.linear1(x)))
-                lin2 = self.relu(self.lin_bn2(self.linear2(lin1)))
-                lin3 = self.relu(self.lin_bn3(self.linear3(lin2)))
-
-                fc1 = F.relu(self.bn1(self.fc1(lin3)))
-
-                r1 = self.fc21(fc1)
-                r2 = self.fc22(fc1)
-
-                return r1, r2
-
-            def reparameterize(self, mu, logvar):
-                if self.training:
-                    std = logvar.mul(0.5).exp_()
-                    eps = Variable(std.data.new(std.size()).normal_())
-                    return eps.mul(std).add_(mu)
-                else:
-                    return mu
-
-            def decode(self, z):
-                fc3 = self.relu(self.fc_bn3(self.fc3(z)))
-                fc4 = self.relu(self.fc_bn4(self.fc4(fc3)))
-
-                lin4 = self.relu(self.lin_bn4(self.linear4(fc4)))
-                lin5 = self.relu(self.lin_bn5(self.linear5(lin4)))
-                return self.lin_bn6(self.linear6(lin5))
-
-            def forward(self, x):
-                mu, logvar = self.encode(x)
-                z = self.reparameterize(mu, logvar)
-                return self.decode(z), mu, logvar
-
-        class customLoss(nn.Module):
-            def __init__(self):
-                super(customLoss, self).__init__()
-                self.mse_loss = nn.MSELoss(reduction="sum")
-
-            def forward(self, x_recon, x, mu, logvar):
-                loss_MSE = self.mse_loss(x_recon, x)
-                loss_KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-
-                return loss_MSE + loss_KLD
-
+    def final_kernel_pca_dimensionality_reduction(self):
+        logging.info('Start final PCA dimensionality reduction.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
-            best_parameters = self.preprocess_decisions[f"autoencoder_based_dimensionality_reduction_parameters"]
-            model = self.preprocess_decisions[f"autoencoder_based_dimensionality_reduction_model"]
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            pred_set = DataBuilder(self.dataframe)
-            predloader = DataLoader(dataset=pred_set, batch_size=8192)
-            if best_parameters["optimizer_choice"] == "Adam":
-                optimizer = optim.Adam(model.parameters(), lr=best_parameters["optim_learning_rate"], weight_decay=best_parameters["optim_weight_decay"])
-            elif best_parameters["optimizer_choice"] == "RMSprop":
-                optimizer = optim.RMSprop(model.parameters(), lr=best_parameters["optim_learning_rate"], weight_decay=best_parameters["optim_weight_decay"])
-            elif best_parameters["optimizer_choice"] == "LBFGS":
-                optimizer = optim.LBFGS(model.parameters(), lr=best_parameters["optim_learning_rate"])
-            elif best_parameters["optimizer_choice"] == "SGD":
-                optimizer = optim.SGD(model.parameters(), lr=best_parameters["optim_learning_rate"])
-            elif best_parameters["optimizer_choice"] == "SparseAdam":
-                optimizer = optim.SparseAdam(model.parameters(), lr=best_parameters["optim_learning_rate"])
-            elif best_parameters["optimizer_choice"] == "AdamW":
-                optimizer = optim.AdamW(model.parameters(), lr=best_parameters["optim_learning_rate"])
-            else:
-                optimizer = optim.Adam(model.parameters(), lr=best_parameters["optim_learning_rate"])
-            loss_mse = customLoss()
-
-            mu_output = []
-            logvar_output = []
-
-            with torch.no_grad():
-                for i, (data) in enumerate(predloader):
-                    data = data.to(device)
-                    optimizer.zero_grad()
-                    recon_batch, mu, logvar = model(data)
-
-                    mu_tensor = mu
-                    mu_output.append(mu_tensor)
-                    mu_result = torch.cat(mu_output, dim=0)
-
-                    logvar_tensor = logvar
-                    logvar_output.append(logvar_tensor)
-                    logvar_result = torch.cat(logvar_output, dim=0)
-
-            new_cols = [f"Autoencoder_{i}" for i in range(best_parameters["latent_dim"])]
-            self.dataframe = pd.DataFrame(mu_result.cpu().numpy(), columns=new_cols)
-            return self.dataframe
+            best_parameters = self.preprocess_decisions[f"final_pca_dimensionality_reduction_parameters"]
+            pca = self.preprocess_decisions[f"final_pca_dimensionality_reduction_model"]
+            dataframe_comps = pca.transform(self.dataframe)
+            new_cols = [f"PCA_{i}" for i in range(dataframe_comps.shape[1])]
+            self.dataframe = pd.DataFrame(dataframe_comps, columns=new_cols)
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            cols = X_train.columns
+            if self.final_pca_dimensionality_reduction_sample_size > len(X_train.index):
+                sample_size = len(X_train.index)
+            else:
+                sample_size = self.final_pca_dimensionality_reduction_sample_size
 
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            print(f"Number of columns before dimensionality reduction is: {len(X_train.columns.to_list())}")
 
-            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train_sample = X_train.copy()
+            X_train_sample[self.target_variable] = Y_train
+            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            Y_train_sample = X_train_sample[self.target_variable]
+            X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
+            if self.class_problem == 'binary':
+                metric = make_scorer(matthews_corrcoef)
+            elif self.class_problem == 'multiclass':
+                metric = make_scorer(matthews_corrcoef)
+            elif self.class_problem == 'regression':
+                metric = 'neg_mean_squared_error'
 
-            traindata_set = DataBuilder(X_train)
-            testdata_set = DataBuilder(X_test)
-            trainloader = DataLoader(dataset=traindata_set, batch_size=4096)
-            testloader = DataLoader(dataset=testdata_set, batch_size=4096)
-            D_in = X_train.shape[1]
-            max_dims = X_train.shape[1]-1
-
-            # HYPERPARAMETER OPTIMIZATION
             def objective(trial):
-                optimizer_choice = trial.suggest_categorical("optimizer_choice", ["Adam",
-                                                                                  "AdamW",
-                                                                                 "RMSprop",
-                                                                                  "LBFGS",
-                                                                                  "SGD",
-                                                                                  "SparseAdam"])
                 param = {
-                    'nb_epochs': trial.suggest_int('nb_epochs', 2, 20000),
-                    'h': trial.suggest_int('h', 2, 800),
-                    'h2': trial.suggest_int('h2', 2, 800),
-                    'latent_dim': trial.suggest_int('latent_dim', 1, max_dims),
-                    'optim_weight_decay': trial.suggest_uniform('optim_weight_decay', 0.0, 0.9),
-                    'optim_learning_rate': trial.suggest_loguniform('optim_learning_rate', 1e-5, 0.3)
+                    'coef0': trial.suggest_loguniform('coef0', 1e-5, 1),
+                    'degree': trial.suggest_int('degree', 2, 10),
+                    'kernel': trial.suggest_categorical('kernel', ['linear', 'poly', 'rbf', 'sigmoid', 'cosine'])
                 }
-                model = Autoencoder(D_in, param["h"], param["h2"], param["latent_dim"]).to(device)
-                if optimizer_choice == "Adam":
-                    optimizer = optim.Adam(model.parameters(), lr=param["optim_learning_rate"], weight_decay=param["optim_weight_decay"])
-                elif optimizer_choice == "RMSprop":
-                    optimizer = optim.RMSprop(model.parameters(), lr=param["optim_learning_rate"], weight_decay=param["optim_weight_decay"])
-                elif optimizer_choice == "LBFGS":
-                    optimizer = optim.LBFGS(model.parameters(), lr=param["optim_learning_rate"])
-                elif optimizer_choice == "SGD":
-                    optimizer = optim.SGD(model.parameters(), lr=param["optim_learning_rate"])
-                elif optimizer_choice == "SparseAdam":
-                    optimizer = optim.SparseAdam(model.parameters(), lr=param["optim_learning_rate"])
-                elif optimizer_choice == "AdamW":
-                    optimizer = optim.AdamW(model.parameters(), lr=param["optim_learning_rate"])
+                pca = KernelPCA(coef0=param["coef0"],
+                                degree=param["degree"],
+                                kernel=param["kernel"],
+                                random_state=1000)
+                try:
+                    train_comps = pca.fit_transform(X_train_sample)
+                    test_comps = pca.transform(X_test)
+                    new_cols = [f"PCA_{i}" for i in range(train_comps.shape[1])]
+                    X_train_branch = pd.DataFrame(train_comps, columns=new_cols)
+                    X_test_branch = pd.DataFrame(test_comps, columns=new_cols)
+                except ValueError:
+                    X_train_branch = X_train
+                    X_test_branch = X_test
+
+                if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+                    model = lgb.LGBMClassifier(random_state=42)
                 else:
-                    optimizer = optim.Adam(model.parameters(), lr=param["optim_learning_rate"])
-                loss_mse = customLoss()
-                # train model
-                log_interval = 50
-                val_losses = []
-                train_losses = []
-                test_losses = []
+                    model = lgb.LGBMRegressor(random_state=42)
 
-                def train(epoch):
-                    model.train()
-                    train_loss = 0
-                    for batch_idx, data in enumerate(trainloader):
-                        data = data.to(device)
-                        optimizer.zero_grad()
-                        recon_batch, mu, logvar = model(data)
-                        loss = loss_mse(recon_batch, data, mu, logvar)
-                        loss.backward()
-                        train_loss += loss.item()
-                        optimizer.step()
-                    if epoch % 200 == 0:
-                        print('====> Epoch: {} Average training loss: {:.4f}'.format(
-                            epoch, train_loss / len(trainloader.dataset)))
-                        train_losses.append(train_loss / len(trainloader.dataset))
+                try:
+                    scores = cross_val_score(model, X_train_branch, Y_train_sample, cv=10, scoring=metric)
+                    train_mae = np.mean(scores)
+                    if self.class_problem in ["binary", "multiclass"]:
+                        train_mae *= 100
+                except Exception:
+                    train_mae = 0
 
-                def test(epoch):
-                    with torch.no_grad():
-                        test_loss = 0
-                        for batch_idx, data in enumerate(testloader):
-                            data = data.to(device)
-                            optimizer.zero_grad()
-                            recon_batch, mu, logvar = model(data)
-                            loss = loss_mse(recon_batch, data, mu, logvar)
-                            test_loss += loss.item()
-                            if epoch % 200 == 0:
-                                print('====> Epoch: {} Average test loss: {:.4f}'.format(
-                                    epoch, test_loss / len(testloader.dataset)))
-                            trial.report(test_loss, epoch)
-                            if trial.should_prune():
-                                raise optuna.exceptions.TrialPruned()
-                            test_losses.append(test_loss / len(testloader.dataset))
+                print(train_mae)
 
-                epochs = param["nb_epochs"]
-                optimizer = optim.Adam(model.parameters(), lr=1e-3)
-                for epoch in range(1, epochs + 1):
-                    train(epoch)
-                    test(epoch)
-                with torch.no_grad():
-                    for batch_idx, data in enumerate(testloader):
-                        data = data.to(device)
-                        optimizer.zero_grad()
-                        recon_batch, mu, logvar = model(data)
-                    try:
-                        loss_score = test_losses[-1] #np.sum(test_losses[-1] + abs(np.sum([test_losses[-1], train_losses[-1]]))**2)
-                    except IndexError:
-                        loss_score = 10000000000
-                    return loss_score #test_losses[-1]
+                model.fit(X_train_branch, Y_train_sample)
+                scores_2_test = model.predict(X_test_branch)
 
-            algorithm = 'autoencoder_based_dimensionality_reduction'
+                try:
+                    if self.class_problem in ["binary", "multiclass"]:
+                        matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
+                        test_mae = matthew_2*100
+                    else:
+                        test_mae = mean_squared_error(Y_test, scores_2_test, squared=True)
+                        test_mae *= -1
+                except Exception:
+                    test_mae = 0
+
+                print(test_mae)
+
+                meissner_score = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
+                return meissner_score
+
+            algorithm = 'final_pca_dimensionality_reduction'
+
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
-            study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm}")
+            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
             study.optimize(objective,
                            n_trials=self.hyperparameter_tuning_rounds[algorithm],
                            timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
@@ -4133,109 +3983,33 @@ class PreProcessing:
             except ZeroDivisionError:
                 print("Plotting of hyperparameter performances failed. This usually implicates an error during training.")
 
-            # FINAL TRAINING
             best_parameters = study.best_trial.params
-            H = best_parameters["h"]
-            H2 = best_parameters["h2"]
-            latent_dim = best_parameters["latent_dim"]
-            model = Autoencoder(D_in, H, H2, latent_dim).to(device)
-            if best_parameters["optimizer_choice"] == "Adam":
-                optimizer = optim.Adam(model.parameters(), lr=best_parameters["optim_learning_rate"], weight_decay=best_parameters["optim_weight_decay"])
-            elif best_parameters["optimizer_choice"] == "RMSprop":
-                optimizer = optim.RMSprop(model.parameters(), lr=best_parameters["optim_learning_rate"], weight_decay=best_parameters["optim_weight_decay"])
-            elif best_parameters["optimizer_choice"] == "LBFGS":
-                optimizer = optim.LBFGS(model.parameters(), lr=best_parameters["optim_learning_rate"])
-            elif best_parameters["optimizer_choice"] == "SGD":
-                optimizer = optim.SGD(model.parameters(), lr=best_parameters["optim_learning_rate"])
-            elif best_parameters["optimizer_choice"] == "SparseAdam":
-                optimizer = optim.SparseAdam(model.parameters(), lr=best_parameters["optim_learning_rate"])
-            elif best_parameters["optimizer_choice"] == "AdamW":
-                optimizer = optim.AdamW(model.parameters(), lr=best_parameters["optim_learning_rate"])
-            else:
-                optimizer = optim.Adam(model.parameters(), lr=best_parameters["optim_learning_rate"])
+            pca = KernelPCA(coef0=best_parameters["coef0"],
+                      degree=best_parameters["degree"],
+                      kernel=best_parameters["kernel"],
+                      random_state=1000)
+            train_comps = pca.fit_transform(X_train)
+            test_comps = pca.transform(X_test)
+            new_cols = [f"PCA_{i}" for i in range(train_comps.shape[1])]
+            X_train = pd.DataFrame(train_comps, columns=new_cols)
+            X_test = pd.DataFrame(test_comps, columns=new_cols)
+            self.preprocess_decisions[f"final_pca_dimensionality_reduction_parameters"] = best_parameters
+            self.preprocess_decisions[f"final_pca_dimensionality_reduction_model"] = pca
 
+            print(f"Number of columns after dimensionality reduction is: {len(X_train.columns.to_list())}")
 
-            loss_mse = customLoss()
-
-            # train model
-            log_interval = 50
-            val_losses = []
-            train_losses = []
-            test_losses = []
-
-            def train(epoch):
-                model.train()
-                train_loss = 0
-                for batch_idx, data in enumerate(trainloader):
-                    data = data.to(device)
-                    optimizer.zero_grad()
-                    recon_batch, mu, logvar = model(data)
-                    loss = loss_mse(recon_batch, data, mu, logvar)
-                    loss.backward()
-                    train_loss += loss.item()
-                    optimizer.step()
-                if epoch % 200 == 0:
-                    print('====> Epoch: {} Average training loss: {:.4f}'.format(
-                        epoch, train_loss / len(trainloader.dataset)))
-                    train_losses.append(train_loss / len(trainloader.dataset))
-
-
-            epochs = best_parameters["nb_epochs"]
-
-            for epoch in range(1, epochs + 1):
-                train(epoch)
-
-            model.eval()
-            test_loss = 0
-            # no_grad() bedeutet wir nehmen die vorher berechneten Gewichte und erneuern sie nicht
-            with torch.no_grad():
-                for i, data in enumerate(trainloader):
-                    data = data.to(device)
-                    recon_batch, mu, logvar = model(data)
-
-            new_cols = [f"Autoencoder_{i}" for i in range(best_parameters["latent_dim"])]
-
-            mu_output = []
-            logvar_output = []
-
-            with torch.no_grad():
-                for i, (data) in enumerate(trainloader):
-                    data = data.to(device)
-                    optimizer.zero_grad()
-                    recon_batch, mu, logvar = model(data)
-
-                    mu_tensor = mu
-                    mu_output.append(mu_tensor)
-                    mu_result = torch.cat(mu_output, dim=0)
-
-                    logvar_tensor = logvar
-                    logvar_output.append(logvar_tensor)
-                    logvar_result = torch.cat(logvar_output, dim=0)
-
-            X_train = pd.DataFrame(mu_result.cpu().numpy(), columns=new_cols)
-
-            mu_output = []
-            logvar_output = []
-
-            with torch.no_grad():
-                for i, (data) in enumerate(testloader):
-                    data = data.to(device)
-                    optimizer.zero_grad()
-                    recon_batch, mu, logvar = model(data)
-
-                    mu_tensor = mu
-                    mu_output.append(mu_tensor)
-                    mu_result = torch.cat(mu_output, dim=0)
-
-                    logvar_tensor = logvar
-                    logvar_output.append(logvar_tensor)
-                    logvar_result = torch.cat(logvar_output, dim=0)
-
-            X_test = pd.DataFrame(mu_result.cpu().numpy(), columns=new_cols)
-
-            self.preprocess_decisions[f"autoencoder_based_dimensionality_reduction_parameters"] = best_parameters
-            self.preprocess_decisions[f"autoencoder_based_dimensionality_reduction_model"] = model
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            try:
+                del pca
+                del train_comps
+                del test_comps
+                del study
+                del sampler
+            except Exception:
+                pass
+
+        logging.info('Finished final PCA dimensionality reduction.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
 
     def final_pca_dimensionality_reduction(self):
         logging.info('Start final PCA dimensionality reduction.')

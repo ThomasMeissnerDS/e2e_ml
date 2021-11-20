@@ -64,6 +64,7 @@ class TimeTravel():
             "autoencoder_based_oversampling": {"func": class_instance.autoencoder_based_oversampling, "args": None},
             "synthetic_data_augmentation": {"func": class_instance.synthetic_data_augmentation, "args": None},
             "final_pca_dimensionality_reduction": {"func": class_instance.final_pca_dimensionality_reduction, "args": None},
+            "final_kernel_pca_dimensionality_reduction": {"func": class_instance.final_kernel_pca_dimensionality_reduction, "args": None},
             "sort_columns_alphabetically": {"func": class_instance.sort_columns_alphabetically, "args": None},
         }
 

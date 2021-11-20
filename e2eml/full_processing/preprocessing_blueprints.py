@@ -154,7 +154,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.delete_unpredictable_training_rows()
         if self.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"]:
             self.autoencoder_based_oversampling()
-        #self.autoencoder_based_dimensionality_reduction()
+        if self.blueprint_step_selection_non_nlp["final_kernel_pca_dimensionality_reduction"]:
+            self.final_kernel_pca_dimensionality_reduction()
         if self.blueprint_step_selection_non_nlp["synthetic_data_augmentation"]:
             self.synthetic_data_augmentation()
         if self.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"]:
