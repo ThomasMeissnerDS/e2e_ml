@@ -203,6 +203,9 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     :param holdout_df: Expects a Pandas Dataframe, which will be only used for final evaluation. Is not alolowed to
      include the target as it simulates prediction on new data. It is recommended to use the most recent datapoints as holdout.
     :param holdout_target: Expects a Pandas Series with holdout targets.
+    :param speed_up_model_tuning: If True, timewalk will run with reduced rounds of hyprparameter tuning. If False,
+    timewalk will use hyperparameter tuning rounds and maximum runtime from the imported e2eml class. If False, users can
+    control these parameter by adjusting them after e2eml class instantiation and before importing the class to timewalk.
     :param algs_to_test: (Optional). Expects a list object with algorithms to test. Will test on default:
     ["xgboost", "lgbm", "tabnet", "ridge", "ngboost", "sgd", "vowpal_wabbit"]
     :param experiment_name: Expects string. Will determine the name of the exported results dataframe (as pickle file).
