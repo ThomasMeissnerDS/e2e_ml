@@ -3616,22 +3616,51 @@ class PreProcessing:
 
                     return loss_MSE + loss_KLD
 
+
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             cols = X_train.columns
-            # in this part we count how much less rows than the main class we have for all other classes
-            # get unique values
-            unique_classes = np.unique(Y_train.values)
-            # get counts
-            unique, counts = np.unique(Y_train.values, return_counts=True)
-            results = np.asarray((unique, counts))
-            # get highest count
-            results[1].max()
-            # get array with delta of each element count compared to max count
-            max_count = results[1].max()
-            deltas = max_count - results[1]
-            class_deltas = np.vstack((results[0], deltas)) # contains classes and how much they miss until max count
+
+            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+                # in this part we count how much less rows than the main class we have for all other classes
+                # get unique values
+                unique_classes = np.unique(Y_train.values)
+                # get counts
+                unique, counts = np.unique(Y_train.values, return_counts=True)
+                results = np.asarray((unique, counts))
+                # get highest count
+                results[1].max()
+                # get array with delta of each element count compared to max count
+                max_count = results[1].max()
+                deltas = max_count - results[1]
+                class_deltas = np.vstack((results[0], deltas)) # contains classes and how much they miss until max count
+            else:
+                X_train[self.target_variable] = Y_train
+                # sort on A
+                X_train.sort_values(self.target_variable, inplace=True)
+                # create bins
+                X_train['bin'] = pd.cut(X_train[self.target_variable], 10, labels=False, duplicates="drop")
+                # group on bin
+                group = X_train.groupby('bin')
+                # list comprehension to split groups into list of dataframes
+                dfs = [group.get_group(x) for x in group.groups]
+
+                Y_train_original = X_train[self.target_variable]
+                Y_train = X_train['bin']#.astype('float')
+                X_train = X_train.drop(self.target_variable, axis=1)
+
+                unique_classes = X_train['bin'].unique()
+                # get counts
+                unique, counts = np.unique(X_train['bin'].values, return_counts=True)
+                results = np.asarray((unique, counts))
+                # get highest count
+                results[1].max()
+                # get array with delta of each element count compared to max count
+                max_count = results[1].max()
+                deltas = max_count - results[1]
+                class_deltas = np.vstack((results[0], deltas)) # contains classes and how much they miss until max count
 
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            #torch.cuda.set_device(0)
 
             executed_classes = 0
             for i in range(len(unique_classes)):
@@ -3644,8 +3673,42 @@ class PreProcessing:
                 else:
                     X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
+                    if self.class_problem == 'regression':
+                        X_train[self.target_variable] = Y_train
+                        X_train['bin'] = pd.cut(X_train[self.target_variable], 10, labels=False, duplicates="drop")
+                        #print(X_train["bin"])
+                        # group on bin
+                        group = X_train.groupby('bin')
+                        # list comprehension to split groups into list of dataframes
+                        dfs = [group.get_group(x) for x in group.groups]
+
+                        Y_train_original = X_train[self.target_variable]
+                        Y_train = X_train['bin']#.astype('float')
+                        X_train = X_train.drop(self.target_variable, axis=1)
+
+                        unique_classes = X_train['bin'].unique()
+                        # get counts
+                        unique, counts = np.unique(X_train['bin'].values, return_counts=True)
+                        X_train = X_train.drop("bin", axis=1)
+                        results = np.asarray((unique, counts))
+                        # get highest count
+                        results[1].max()
+                        # get array with delta of each element count compared to max count
+                        max_count = results[1].max()
+                        deltas = max_count - results[1]
+                        class_deltas = np.vstack((results[0], deltas)) # contains classes and how much they miss until max count
+
+                        X_test[self.target_variable] = Y_test
+                        X_test['bin'] = pd.qcut(X_test[self.target_variable], 10, labels=False, duplicates='drop')
+                        Y_test_original = X_test[self.target_variable]
+                        Y_test = X_test['bin']#.astype('float')
+                        X_test = X_test.drop(self.target_variable, axis=1)
+                        X_test = X_test.drop("bin", axis=1)
+
                     X_train_class_only = X_train.iloc[np.where(Y_train == target_class)[0]]
                     Y_train_class_only = Y_train.iloc[np.where(Y_train == target_class)[0]]
+
+
 
                     X_train_other_classes = X_train.iloc[np.where(Y_train != target_class)[0]]
                     Y_train_other_classes = Y_train.iloc[np.where(Y_train != target_class)[0]]
@@ -3858,6 +3921,11 @@ class PreProcessing:
 
                     with torch.no_grad():
                         pred = model.decode(z).cpu().numpy()
+
+                    if self.class_problem == 'regression':
+                        target_class = Y_test_original.iloc[np.where(Y_train == target_class)[0]]
+                    else:
+                        pass
 
 
                     df_fake = pd.DataFrame(pred)

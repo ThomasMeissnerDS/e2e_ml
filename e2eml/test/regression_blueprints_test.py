@@ -64,7 +64,7 @@ def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender
                                                     "bruteforce_random": 10,
                                                     "elasticnet": 10,
                                                     "autoencoder_based_oversampling": 20,
-                                                    "autoencoder_based_dimensionality_reduction": 100,
+                                                    "final_kernel_pca_dimensionality_reduction": 100,
                                                     "final_pca_dimensionality_reduction": 20,
                                                     "synthetic_data_augmentation": 100}
 
@@ -79,7 +79,7 @@ def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender
                                                     "elasticnet": False
                                                     }
     titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
-    titanic_auto_ml.blueprint_step_selection_non_nlp["synthetic_data_augmentation"] = True
+    titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
     titanic_auto_ml.blueprint_step_selection_non_nlp["scaling"] = True
     titanic_auto_ml.hyperparameter_tuning_sample_size = 800
 
