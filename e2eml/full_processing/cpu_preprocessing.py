@@ -1295,11 +1295,17 @@ class PreProcessing:
         """
         self.get_current_timestamp(task='Execute numerical binning')
 
+        def random_noise(a_series, noise_reduction=1000000):
+            return (np.random.random(len(a_series))*a_series.std()/noise_reduction)-(a_series.std()/(2*noise_reduction))
+
         def binning_on_data(dataframe, cols_to_bin=None):
             num_columns = cols_to_bin.select_dtypes(include=[vartype]).columns
             for col in num_columns:
                 dataframe[str(col) + '_binned'] = pd.cut(dataframe[col].replace(np.inf, np.nan).dropna(), bins=nb_bins, labels=False)
+                dataframe[str(col) + '_equal_binned'] = pd.cut(dataframe[col]+random_noise(dataframe[col]),
+                                                              nb_bins, labels=False)
                 self.new_sin_cos_col_names.append(str(col) + '_binned')
+                self.new_sin_cos_col_names.append(str(col) + '_equal_binned')
             del num_columns
             _ = gc.collect()
             return dataframe
@@ -3510,10 +3516,12 @@ class PreProcessing:
                 sample_size = self.hyperparameter_tuning_sample_size
 
             X_train[self.target_variable] = Y_train
-            X_train_sample = X_train.sample(sample_size, random_state=42)
+            X_train_sample = X_train.sample(sample_size, random_state=42).copy()
             X_train_sample = X_train_sample.reset_index(drop=True)
-            Y_train_sample = X_train_sample[self.target_variable]
+            Y_train_sample = X_train_sample[self.target_variable]#.copy()
+
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+            #Y_train_sample = Y_train_sample.reset_index(drop=True)
 
             try:
                 del X_train[self.target_variable]
@@ -3616,6 +3624,22 @@ class PreProcessing:
 
                     return loss_MSE + loss_KLD
 
+            def random_noise(a_series, noise_reduction=1000000):
+                return (np.random.random(len(a_series))*a_series.std()/noise_reduction)-(a_series.std()/(2*noise_reduction))
+
+            def handle_rarity(all_data, threshold=10, mask_as=99, rarity_cols=None, normalize=False):
+                if isinstance(rarity_cols, list):
+                    for col in rarity_cols:
+                        frequencies = all_data[col].value_counts(normalize=normalize)
+                        condition = frequencies < threshold
+                        mask_obs = frequencies[condition].index
+                        mask_dict = dict.fromkeys(mask_obs, mask_as)
+                        all_data[col] = all_data[col].replace(mask_dict)  # or you could make a copy not to modify original data
+                    del rarity_cols
+                else:
+                    pass
+                return all_data
+
 
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             cols = X_train.columns
@@ -3637,15 +3661,26 @@ class PreProcessing:
                 X_train[self.target_variable] = Y_train
                 # sort on A
                 X_train.sort_values(self.target_variable, inplace=True)
-                # create bins
-                X_train['bin'] = pd.cut(X_train[self.target_variable], 10, labels=False, duplicates="drop")
-                # group on bin
-                group = X_train.groupby('bin')
-                # list comprehension to split groups into list of dataframes
-                dfs = [group.get_group(x) for x in group.groups]
+
+                for bins in [10, 9, 8, 7, 6, 5, 4, 3, 2]:
+                    # create bins
+                    X_train['bin'] = pd.cut(X_train[self.target_variable]+random_noise(X_train[self.target_variable]),
+                                         bins, labels=False)
+                    bins_dist = X_train['bin'].value_counts()
+                    print(f"For {bins} bins the smallest bin contains {bins_dist.min()} samples.")
+                    if bins_dist.min() > 5:
+                        print(f"Enough minimum samples found with {bins} bins.")
+                        break
+                    else:
+                        print(f"Not enough minimum samples found with {bins} bins. Reducing no. of bins...")
+
+                if bins_dist.min() == 2:
+                    X_train = handle_rarity(X_train, rarity_cols=["bin"], threshold=5, mask_as=99)
 
                 Y_train_original = X_train[self.target_variable]
                 Y_train = X_train['bin']#.astype('float')
+
+                #Y_train_original = X_train[self.target_variable]
                 X_train = X_train.drop(self.target_variable, axis=1)
 
                 unique_classes = X_train['bin'].unique()
@@ -3658,14 +3693,17 @@ class PreProcessing:
                 max_count = results[1].max()
                 deltas = max_count - results[1]
                 class_deltas = np.vstack((results[0], deltas)) # contains classes and how much they miss until max count
+                X_train = X_train.drop("bin", axis=1)
 
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             #torch.cuda.set_device(0)
 
             executed_classes = 0
+
             for i in range(len(unique_classes)):
                 executed_classes += 1
-                print(f"Progress after this step is {round((executed_classes/len(unique_classes))*100, 2)}%.")
+                print(f"""Starting oversampling for class {i}. 
+                Progress after this step is {round((executed_classes/len(unique_classes))*100, 2)}%.""")
                 target_class = unique_classes[i]
                 target_delta = deltas[i]
                 if target_delta == 0:
@@ -3675,12 +3713,23 @@ class PreProcessing:
 
                     if self.class_problem == 'regression':
                         X_train[self.target_variable] = Y_train
-                        X_train['bin'] = pd.cut(X_train[self.target_variable], 10, labels=False, duplicates="drop")
-                        #print(X_train["bin"])
-                        # group on bin
-                        group = X_train.groupby('bin')
-                        # list comprehension to split groups into list of dataframes
-                        dfs = [group.get_group(x) for x in group.groups]
+                        bins_needed = 0
+                        for bins in [10, 9, 8, 7, 6, 5, 4, 3, 2]:
+                            # create bins
+                            X_train['bin'] = pd.cut(X_train[self.target_variable]+random_noise(X_train[self.target_variable]),
+                                                    bins, labels=False)
+                            bins_dist = X_train['bin'].value_counts()
+                            print(f"For {bins} bins the smallest bin contains {bins_dist.min()} samples.")
+                            if bins_dist.min() > 5:
+                                print(f"Enough minimum samples found with {bins} bins.")
+                                bins_needed = bins
+                                break
+                            else:
+                                print(f"Not enough minimum samples found with {bins} bins. Reducing no. of bins...")
+
+                            if bins_dist.min() == 2:
+                                X_train = handle_rarity(X_train, rarity_cols=["bin"], threshold=5, mask_as=99)
+                                bins_needed = 2
 
                         Y_train_original = X_train[self.target_variable]
                         Y_train = X_train['bin']#.astype('float')
@@ -3699,16 +3748,20 @@ class PreProcessing:
                         class_deltas = np.vstack((results[0], deltas)) # contains classes and how much they miss until max count
 
                         X_test[self.target_variable] = Y_test
-                        X_test['bin'] = pd.qcut(X_test[self.target_variable], 10, labels=False, duplicates='drop')
+
+                        if bins_dist.min() == 2:
+                            X_test = handle_rarity(X_test, rarity_cols=["bin"], threshold=5, mask_as=99)
+                        else:
+                            X_test['bin'] = X_test['bin'] = pd.cut(X_test[self.target_variable]+random_noise(X_test[self.target_variable]),
+                                                                   bins_needed, labels=False)
                         Y_test_original = X_test[self.target_variable]
                         Y_test = X_test['bin']#.astype('float')
                         X_test = X_test.drop(self.target_variable, axis=1)
                         X_test = X_test.drop("bin", axis=1)
 
+
                     X_train_class_only = X_train.iloc[np.where(Y_train == target_class)[0]]
                     Y_train_class_only = Y_train.iloc[np.where(Y_train == target_class)[0]]
-
-
 
                     X_train_other_classes = X_train.iloc[np.where(Y_train != target_class)[0]]
                     Y_train_other_classes = Y_train.iloc[np.where(Y_train != target_class)[0]]
@@ -3719,8 +3772,8 @@ class PreProcessing:
                     traindata_set = DataBuilder(X_train_class_only)
                     testdata_set = DataBuilder(X_test_class_only)
 
-                    trainloader = DataLoader(dataset=traindata_set, batch_size=9600)
-                    testloader = DataLoader(dataset=testdata_set, batch_size=9600)
+                    trainloader = DataLoader(dataset=traindata_set, batch_size=256)
+                    testloader = DataLoader(dataset=testdata_set, batch_size=256)
 
                     #D_in = X_train_class_only.shape[1]
                     # HYPERPARAMETER OPTIMIZATION
@@ -3796,8 +3849,6 @@ class PreProcessing:
                                         raise optuna.exceptions.TrialPruned()
                                     test_losses.append(test_loss / len(testloader.dataset))
                                     torch.cuda.empty_cache()
-
-
 
                         epochs = param["nb_epochs"]
                         optimizer = optim.Adam(model.parameters(), lr=1e-3)
@@ -3923,14 +3974,11 @@ class PreProcessing:
                         pred = model.decode(z).cpu().numpy()
 
                     if self.class_problem == 'regression':
-                        target_class = Y_test_original.iloc[np.where(Y_train == target_class)[0]]
+                        Y_train_class_only = Y_train_original.iloc[np.where(Y_train == target_class)[0]]
+                        Y_train_other_classes = Y_train_original.iloc[np.where(Y_train != target_class)[0]]
+                        Y_test = Y_test_original
                     else:
                         pass
-
-
-                    df_fake = pd.DataFrame(pred)
-                    df_fake.columns = cols
-                    df_fake['Class'] = target_class
 
                     q = torch.distributions.Normal(mu.mean(axis=0), sigma.mean(axis=0))
                     z = q.rsample(sample_shape=torch.Size([int(target_delta)]))
@@ -3948,6 +3996,12 @@ class PreProcessing:
 
                     X_train = X_train.reset_index(drop=True)
                     Y_train = Y_train.reset_index(drop=True)
+
+                    print(X_train)
+                    print(Y_train)
+
+                    print(X_train.shape)
+                    print(Y_train.shape)
                     self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def final_kernel_pca_dimensionality_reduction(self):
