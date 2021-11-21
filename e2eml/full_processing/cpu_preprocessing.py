@@ -3997,11 +3997,6 @@ class PreProcessing:
                     X_train = X_train.reset_index(drop=True)
                     Y_train = Y_train.reset_index(drop=True)
 
-                    print(X_train)
-                    print(Y_train)
-
-                    print(X_train.shape)
-                    print(Y_train.shape)
                     self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def final_kernel_pca_dimensionality_reduction(self):
