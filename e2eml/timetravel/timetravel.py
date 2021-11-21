@@ -9,7 +9,9 @@ import gc
 from e2eml.classification.classification_blueprints import ClassificationBluePrint
 from e2eml.regression.regression_blueprints import RegressionBluePrint
 from e2eml.full_processing import postprocessing
-from sklearn.metrics import matthews_corrcoef, mean_absolute_error
+from sklearn.metrics import matthews_corrcoef, roc_auc_score, f1_score
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, median_absolute_error, accuracy_score, recall_score
+from sklearn.metrics import confusion_matrix, classification_report
 import gc
 import time
 import plotly.express as px
@@ -276,6 +278,9 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
 
     # we want to store our results
     scoring_results = []
+    scoring_2_results = []
+    scoring_3_results = []
+    scoring_4_results = []
     algorithms_used = []
     preprocessing_steps_used = []
     elapsed_times = []
@@ -287,8 +292,14 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     # define the type of scoring
     if class_instance.class_problem in ["binary", "multiclass"]:
         metric = "Matthews"
+        metric_2 = "Accuracy"
+        metric_3 = "Recall"
+        ascending = False
     else:
         metric = "Mean absolute error"
+        metric_2 = "R2 score"
+        metric_3 = "RMSE"
+        ascending = True
 
     # creating checkpoints and training the model
     automl_travel = TimeTravel()
@@ -325,21 +336,50 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
 
                 try:
                     if class_instance.class_problem in ["binary", "multiclass"]:
+                        scoring_2 = accuracy_score(holdout_target, class_instance.predicted_classes[alg])
+                        scoring_3 = recall_score(holdout_target, class_instance.predicted_classes[alg], average='weighted')
                         scoring = matthews_corrcoef(holdout_target, class_instance.predicted_classes[alg])
+                        full_classification_report = classification_report(holdout_target, class_instance.predicted_classes[alg])
+                        print(full_classification_report)
                     else:
                         scoring = mean_absolute_error(holdout_target, class_instance.predicted_values[alg])
+                        scoring_2 = r2_score(holdout_target, class_instance.predicted_values[alg])
+                        scoring_3 = mean_squared_error(holdout_target, class_instance.predicted_values[alg], squared=True)
                 except Exception:
                     try:
                         if class_instance.class_problem in ["binary", "multiclass"]:
                             scoring = matthews_corrcoef(pd.Series(holdout_target).astype(bool),
                                                         class_instance.predicted_classes[alg])
+                            scoring_2 = accuracy_score(pd.Series(holdout_target).astype(bool),
+                                                       class_instance.predicted_classes[alg])
+                            scoring_3 = recall_score(pd.Series(holdout_target).astype(bool),
+                                                     class_instance.predicted_classes[alg], average='weighted')
+                            full_classification_report = classification_report(pd.Series(holdout_target).astype(bool),
+                                                                               class_instance.predicted_classes[alg])
+                            print(full_classification_report)
                         else:
                             scoring = mean_absolute_error(pd.Series(holdout_target).astype(float), class_instance.predicted_values[alg])
+                            scoring_2 = r2_score(pd.Series(holdout_target).astype(float), class_instance.predicted_values[alg])
+                            scoring_3 = mean_squared_error(pd.Series(holdout_target).astype(float), class_instance.predicted_values[alg], squared=True)
                     except Exception:
-                        print("Matthew failed.")
-                        scoring = 0
+                        print("Evaluation on holdout failed.")
+                        if class_instance.class_problem in ["binary", "multiclass"]:
+                            scoring = 0
+                            scoring_2 = 0
+                            scoring_3 = 0
+                        else:
+                            scoring = 999999999
+                            scoring_2 = -1
+                            scoring_3 = 99999999
             except Exception:
-                scoring = 0
+                if class_instance.class_problem in ["binary", "multiclass"]:
+                    scoring = 0
+                    scoring_2 = 0
+                    scoring_3 = 0
+                else:
+                    scoring = 999999999
+                    scoring_2 = -1
+                    scoring_3 = 99999999
 
             print(f"Score achieved on holdout dataset is: {scoring}.")
 
@@ -347,6 +387,8 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
             elapsed_time = end - start
             elapsed_times.append(elapsed_time)
             scoring_results.append(scoring)
+            scoring_2_results.append(scoring_2)
+            scoring_3_results.append(scoring_3)
             algorithms_used.append(alg)
             unique_indices.append(unique_indices_counter)
             preprocessing_steps_used.append(class_instance.blueprint_step_selection_non_nlp)
@@ -368,6 +410,8 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         "Trial number": unique_indices,
         "Algorithm": algorithms_used,
         metric: scoring_results,
+        metric_2: scoring_2_results,
+        metric_3: scoring_3_results,
         "Preprocessing applied": preprocessing_steps_used,
         "Runtime in seconds": elapsed_times}
 
@@ -375,7 +419,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     results_df.to_pickle(experiment_name)
 
     try:
-        print(results_df.sort_values(by=[metric], ascending=[False]))
+        print(results_df.sort_values(by=[metric], ascending=[ascending]))
         fig = px.line(results_df, x="Runtime in seconds", y=metric, color="Algorithm", text="Trial number")
         fig.update_traces(textposition="bottom right")
         fig.show()
