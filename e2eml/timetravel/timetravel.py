@@ -15,6 +15,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 import gc
 import time
 import plotly.express as px
+from datetime import datetime
 
 
 class TimeTravel():
@@ -196,8 +197,9 @@ class TimeTravel():
 
 
 def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_to_test=None,
-                              speed_up_model_tuning=True,
-                              experiment_name="timewalk.pkl"):
+                              speed_up_model_tuning=True, name_of_exist_experiment=None,
+                              experiment_name="timewalk.pkl",
+                              experiment_comment=f'Experiment run at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'):
     """
     Timewalk is an extension to TimeTravel. It executes different preprocessing steps an short model training to explore
     the best combination. It returns a Pandas DataFrame with all results. Timewalk is meant to explore and is not suitable
@@ -209,9 +211,14 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     :param speed_up_model_tuning: If True, timewalk will run with reduced rounds of hyprparameter tuning. If False,
     timewalk will use hyperparameter tuning rounds and maximum runtime from the imported e2eml class. If False, users can
     control these parameter by adjusting them after e2eml class instantiation and before importing the class to timewalk.
+    :param name_of_exist_experiment: Expects a string. Name of a locally saved file with results from a past experiment
+    can be provided. In this case timewalk will load the file as a dataframe and concatenate old and new results into
+    one dataframe.
     :param algs_to_test: (Optional). Expects a list object with algorithms to test. Will test on default:
     ["xgboost", "lgbm", "tabnet", "ridge", "ngboost", "sgd", "vowpal_wabbit"]
     :param experiment_name: Expects string. Will determine the name of the exported results dataframe (as pickle file).
+    :param experiment_comment: Expects a string. This will add a comment of choice to the results dataframe. On default
+    it will add a string stating when the experiment has been started.
     :return: Pandas DataFrame with results.
     """
     # define algorithms to consider
@@ -402,6 +409,16 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                 "Runtime in seconds": elapsed_times}
 
             results_df = pd.DataFrame(results_dict)
+            results_df["experiment_comment"] = experiment_comment
+            if isinstance(str, name_of_exist_experiment):
+                try:
+                    print("Try to load former experiment data.")
+                    loaded_experiment = pd.read_pickle(name_of_exist_experiment)
+                    results_df = pd.concat([results_df, loaded_experiment])
+                except Exception:
+                    print("Loading former experiment data failed. Will export running experiment only.")
+            else:
+                pass
             results_df.to_pickle(experiment_name)
             print(f"End iteration for algorithm {alg} at {end}.")
             print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
@@ -416,6 +433,16 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         "Runtime in seconds": elapsed_times}
 
     results_df = pd.DataFrame(results_dict)
+    results_df["experiment_comment"] = experiment_comment
+    if isinstance(str, name_of_exist_experiment):
+        try:
+            print("Try to load former experiment data.")
+            loaded_experiment = pd.read_pickle(name_of_exist_experiment)
+            results_df = pd.concat([results_df, loaded_experiment])
+        except Exception:
+            print("Loading former experiment data failed. Will export running experiment only.")
+    else:
+        pass
     results_df.to_pickle(experiment_name)
 
     try:
