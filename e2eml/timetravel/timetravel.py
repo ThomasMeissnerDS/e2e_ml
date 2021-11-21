@@ -410,7 +410,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
 
             results_df = pd.DataFrame(results_dict)
             results_df["experiment_comment"] = experiment_comment
-            if isinstance(str, name_of_exist_experiment):
+            if isinstance(name_of_exist_experiment, str):
                 try:
                     print("Try to load former experiment data.")
                     loaded_experiment = pd.read_pickle(name_of_exist_experiment)
@@ -434,7 +434,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
 
     results_df = pd.DataFrame(results_dict)
     results_df["experiment_comment"] = experiment_comment
-    if isinstance(str, name_of_exist_experiment):
+    if isinstance(name_of_exist_experiment, str):
         try:
             print("Try to load former experiment data.")
             loaded_experiment = pd.read_pickle(name_of_exist_experiment)
