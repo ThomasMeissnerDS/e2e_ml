@@ -198,7 +198,7 @@ class TimeTravel():
 
 def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_to_test=None,
                               speed_up_model_tuning=True, name_of_exist_experiment=None,
-                              experiment_name="timewalk.pkl",
+                              experiment_name=f"timewalk.pkl",
                               experiment_comment=f'Experiment run at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'):
     """
     Timewalk is an extension to TimeTravel. It executes different preprocessing steps an short model training to explore
@@ -247,32 +247,32 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
 
     if speed_up_model_tuning:
         # we reduce the tuning rounds for all algorithms
-        class_instance.hyperparameter_tuning_rounds = {"xgboost": 10,
-                                                       "lgbm": 10,
-                                                       "sgd": 10,
-                                                       "tabnet": 10,
-                                                       "ngboost": 3,
-                                                       "sklearn_ensemble": 10,
-                                                       "ridge": 10,
-                                                       "elasticnet": 10,
-                                                       "catboost": 10,
-                                                       "bruteforce_random": 500,
-                                                       "autoencoder_based_oversampling": 20,
-                                                       "final_pca_dimensionality_reduction": 20}
+        class_instance.hyperparameter_tuning_rounds["xgboost"] = 10
+        class_instance.hyperparameter_tuning_rounds["lgbm"] = 10
+        class_instance.hyperparameter_tuning_rounds["sgd"] = 10
+        class_instance.hyperparameter_tuning_rounds["tabnet"] = 10
+        class_instance.hyperparameter_tuning_rounds["ngboost"] = 3
+        class_instance.hyperparameter_tuning_rounds["sklearn_ensemble"] = 10
+        class_instance.hyperparameter_tuning_rounds["ridge"] = 10
+        class_instance.hyperparameter_tuning_rounds["elasticnet"] = 10
+        class_instance.hyperparameter_tuning_rounds["catboost"] = 3
+        class_instance.hyperparameter_tuning_rounds["bruteforce_random"] = 50
+        class_instance.hyperparameter_tuning_rounds["autoencoder_based_oversampling"] = 10
+        class_instance.hyperparameter_tuning_rounds["final_pca_dimensionality_reduction"] = 50
 
         # we also limit the time for hyperparameter tuning
-        class_instance.hyperparameter_tuning_max_runtime_secs = {"xgboost": 4*60*60,
-                                                                 "sgd": 3*60*60,
-                                                                 "lgbm": 3*60*60,
-                                                                 "tabnet": 3*60*60,
-                                                                 "ngboost": 3*60*60,
-                                                                 "sklearn_ensemble": 3*60*60,
-                                                                 "ridge": 3*60*60,
-                                                                 "elasticnet": 3*60*60,
-                                                                 "catboost": 4*60*60,
-                                                                 "bruteforce_random": 3*60*60,
-                                                                 "autoencoder_based_oversampling": 1*60*60,
-                                                                 "final_pca_dimensionality_reduction": 1*60*60}
+        class_instance.hyperparameter_tuning_max_runtime_secs["xgboost"] = 4*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["sgd"] = 3*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["lgbm"] = 3*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["tabnet"] = 3*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["ngboost"] = 3*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["sklearn_ensemble"] = 3*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["ridge"] = 3*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["elasticnet"] = 3*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["catboost"] = 4*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["bruteforce_random"] = 3*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["autoencoder_based_oversampling"] = 1*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["final_pca_dimensionality_reduction"] = 1*60*60
     else:
         pass
 
@@ -294,7 +294,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     unique_indices = []
 
     # define checkpoints to load
-    checkpoints = ["scale_data", "autotuned_clustering", "early_numeric_only_feature_selection"]
+    checkpoints = ["default", "scale_data", "autotuned_clustering", "delete_high_null_cols", "early_numeric_only_feature_selection"]
 
     # define the type of scoring
     if class_instance.class_problem in ["binary", "multiclass"]:
@@ -313,34 +313,54 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
 
     unique_indices_counter = 0
     for checkpoint in checkpoints:
-        for alg in algorithms:
-            start = time.time()
-            print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-            print(f"Start iteration for algorithm {alg} at {start}.")
-            try:
-                unique_indices_counter += 1
-                if len(scoring_results) == 0:
-                    automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=False)
-                else:
-                    class_instance = automl_travel.load_checkpoint(checkpoint_to_load=checkpoint)
-                    if checkpoint == 'scale_data':
-                        class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
-                        class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
-                    elif checkpoint == "autotuned_clustering":
-                        class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
-                        class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
-                        class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
-                    elif checkpoint == "early_numeric_only_feature_selection":
-                        class_instance.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"] = False
-                        class_instance.blueprint_step_selection_non_nlp["data_binning"] = False
-                        class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
-                        class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
-                        class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
-                    automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=True)
+        preprocess_runtime = 0
+        preprocess_start = time.time()
+        print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        print(f"Start iteration for checkpoint {checkpoint} at {preprocess_start}.")
+        try:
+            unique_indices_counter += 1
+            if len(scoring_results) == 0:
+                automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=False)
+            else:
+                class_instance = automl_travel.load_checkpoint(checkpoint_to_load=checkpoint)
+                if checkpoint == 'scale_data':
+                    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
+                    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
+                elif checkpoint == "autotuned_clustering":
+                    class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
+                    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
+                    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
+                elif checkpoint == "delete_high_null_cols":
+                    class_instance.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"] = False
+                    class_instance.blueprint_step_selection_non_nlp["data_binning"] = False
+                    class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
+                    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
+                    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
+                elif checkpoint == "early_numeric_only_feature_selection":
+                    class_instance.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"] = False
+                    class_instance.blueprint_step_selection_non_nlp["data_binning"] = False
+                    class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
+                    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
+                    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
+                    class_instance.blueprint_step_selection_non_nlp["skewness_removal"] = False
+                    class_instance.blueprint_step_selection_non_nlp["holistic_null_filling"] = False
+                    class_instance.blueprint_step_selection_non_nlp["onehot_pca"] = False
+                    class_instance.blueprint_step_selection_non_nlp["clustering_as_a_feature_dbscan"] = False
+                    class_instance.blueprint_step_selection_non_nlp["clustering_as_a_feature_kmeans_loop"] = False
+                    class_instance.blueprint_step_selection_non_nlp["clustering_as_a_feature_gaussian_mixture_loop"] = False
+                    class_instance.blueprint_step_selection_non_nlp["pca_clustering_results"] = False
+                automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=True)
+                preprocess_end = time.time()
+                preprocess_runtime = preprocess_end - preprocess_start
+            for alg in algorithms:
+                start = time.time()
+                print(f"Start iteration for algorithm {alg} at {start}.")
+                class_instance = automl_travel.load_checkpoint(checkpoint_to_load="sort_columns_alphabetically")  # gets latest checkpoint
+                print(f"Successfully loaded checkpoint last checkpoint.")
+                automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=True)
                 automl_travel.timetravel_model_training(class_instance, alg)
                 automl_travel.create_time_travel_checkpoints(class_instance, df=holdout_df)
                 automl_travel.timetravel_model_training(class_instance, alg)
-
                 try:
                     if class_instance.class_problem in ["binary", "multiclass"]:
                         scoring_2 = accuracy_score(holdout_target, class_instance.predicted_classes[alg])
@@ -378,18 +398,51 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                             scoring = 999999999
                             scoring_2 = -1
                             scoring_3 = 99999999
-            except Exception:
-                if class_instance.class_problem in ["binary", "multiclass"]:
-                    scoring = 0
-                    scoring_2 = 0
-                    scoring_3 = 0
+
+
+                print(f"Score achieved on holdout dataset is: {scoring}.")
+
+                end = time.time()
+                elapsed_time = end - start
+                elapsed_times.append(elapsed_time)
+                scoring_results.append(scoring)
+                scoring_2_results.append(scoring_2)
+                scoring_3_results.append(scoring_3)
+                algorithms_used.append(alg)
+                unique_indices.append(unique_indices_counter)
+                preprocessing_steps_used.append(class_instance.blueprint_step_selection_non_nlp)
+                results_dict = {
+                    "Trial number": unique_indices,
+                    "Algorithm": algorithms_used,
+                    metric: scoring_results,
+                    "Preprocessing applied": preprocessing_steps_used,
+                    "ML model runtime in seconds": elapsed_times}
+
+                results_df = pd.DataFrame(results_dict)
+                results_df["experiment_comment"] = experiment_comment
+                results_df["preprocessing_runtime_sec"] = preprocess_runtime
+                if isinstance(name_of_exist_experiment, str):
+                    try:
+                        print("Try to load former experiment data.")
+                        loaded_experiment = pd.read_pickle(name_of_exist_experiment)
+                        results_df = pd.concat([results_df, loaded_experiment])
+                    except Exception:
+                        print("Loading former experiment data failed. Will export running experiment only.")
                 else:
-                    scoring = 999999999
-                    scoring_2 = -1
-                    scoring_3 = 99999999
+                    pass
+                results_df.to_pickle(experiment_name)
+                print(f"End iteration for algorithm {alg} at {end}.")
+                print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
-            print(f"Score achieved on holdout dataset is: {scoring}.")
-
+        except Exception:
+            if class_instance.class_problem in ["binary", "multiclass"]:
+                scoring = 0
+                scoring_2 = 0
+                scoring_3 = 0
+            else:
+                scoring = 999999999
+                scoring_2 = -1
+                scoring_3 = 99999999
             end = time.time()
             elapsed_time = end - start
             elapsed_times.append(elapsed_time)
@@ -399,17 +452,16 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
             algorithms_used.append(alg)
             unique_indices.append(unique_indices_counter)
             preprocessing_steps_used.append(class_instance.blueprint_step_selection_non_nlp)
-            del class_instance
-            _ = gc.collect
             results_dict = {
                 "Trial number": unique_indices,
                 "Algorithm": algorithms_used,
                 metric: scoring_results,
                 "Preprocessing applied": preprocessing_steps_used,
-                "Runtime in seconds": elapsed_times}
+                "ML model runtime in seconds": elapsed_times}
 
             results_df = pd.DataFrame(results_dict)
             results_df["experiment_comment"] = experiment_comment
+            results_df["preprocessing_runtime_sec"] = preprocess_runtime
             if isinstance(name_of_exist_experiment, str):
                 try:
                     print("Try to load former experiment data.")
@@ -430,10 +482,11 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         metric_2: scoring_2_results,
         metric_3: scoring_3_results,
         "Preprocessing applied": preprocessing_steps_used,
-        "Runtime in seconds": elapsed_times}
+        "ML model runtime in seconds": elapsed_times}
 
     results_df = pd.DataFrame(results_dict)
     results_df["experiment_comment"] = experiment_comment
+    results_df["preprocessing_runtime_sec"] = preprocess_runtime
     if isinstance(name_of_exist_experiment, str):
         try:
             print("Try to load former experiment data.")
