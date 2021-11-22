@@ -279,8 +279,8 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     # we adjust default preprocessing
     class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = True
     class_instance.blueprint_step_selection_non_nlp["scale_data"] = True
-    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
-    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = True
+    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
+    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
 
 
     # we want to store our results
@@ -294,7 +294,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     unique_indices = []
 
     # define checkpoints to load
-    checkpoints = ["default", "scale_data", "autotuned_clustering", "delete_high_null_cols", "early_numeric_only_feature_selection"]
+    checkpoints = ["default", "autotuned_clustering", "delete_high_null_cols", "early_numeric_only_feature_selection"]
 
     # define the type of scoring
     if class_instance.class_problem in ["binary", "multiclass"]:
@@ -323,10 +323,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                 automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=False)
             else:
                 class_instance = automl_travel.load_checkpoint(checkpoint_to_load=checkpoint)
-                if checkpoint == 'scale_data':
-                    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
-                    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
-                elif checkpoint == "autotuned_clustering":
+                if checkpoint == "autotuned_clustering":
                     class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
                     class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
                     class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
