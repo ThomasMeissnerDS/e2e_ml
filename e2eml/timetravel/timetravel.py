@@ -375,9 +375,9 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                             scoring = matthews_corrcoef(pd.Series(holdout_target).astype(bool),
                                                         class_instance.predicted_classes[alg])
                             scoring_2 = accuracy_score(pd.Series(holdout_target).astype(bool),
-                                                       class_instance.predicted_classes[alg])
+                                                       class_instance.predicted_classes[alg].astype(bool))
                             scoring_3 = recall_score(pd.Series(holdout_target).astype(bool),
-                                                     class_instance.predicted_classes[alg], average='weighted')
+                                                     class_instance.predicted_classes[alg].astype(bool), average='weighted')
                             full_classification_report = classification_report(pd.Series(holdout_target).astype(bool),
                                                                                class_instance.predicted_classes[alg])
                             print(full_classification_report)
