@@ -318,7 +318,6 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         print(f"Start iteration for checkpoint {checkpoint} at {preprocess_start}.")
         try:
-            unique_indices_counter += 1
             if len(scoring_results) == 0:
                 automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=False)
             else:
@@ -347,9 +346,13 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                     class_instance.blueprint_step_selection_non_nlp["clustering_as_a_feature_gaussian_mixture_loop"] = False
                     class_instance.blueprint_step_selection_non_nlp["pca_clustering_results"] = False
                 automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=True)
-                preprocess_end = time.time()
-                preprocess_runtime = preprocess_end - preprocess_start
+        except Exception:
+            pass
+        preprocess_end = time.time()
+        preprocess_runtime = preprocess_end - preprocess_start
+        try:
             for alg in algorithms:
+                unique_indices_counter += 1
                 start = time.time()
                 print(f"Start iteration for algorithm {alg} at {start}.")
                 class_instance = automl_travel.load_checkpoint(checkpoint_to_load="sort_columns_alphabetically")  # gets latest checkpoint
@@ -496,7 +499,6 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     results_df.to_pickle(experiment_name)
 
     try:
-        print(results_df.sort_values(by=[metric], ascending=[ascending]))
         fig = px.line(results_df, x="Runtime in seconds", y=metric, color="Algorithm", text="Trial number")
         fig.update_traces(textposition="bottom right")
         fig.show()

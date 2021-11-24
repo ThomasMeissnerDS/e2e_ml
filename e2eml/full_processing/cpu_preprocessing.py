@@ -3664,7 +3664,7 @@ class PreProcessing:
 
                 for bins in [10, 9, 8, 7, 6, 5, 4, 3, 2]:
                     # create bins
-                    X_train['bin'] = pd.cut(X_train[self.target_variable]+random_noise(X_train[self.target_variable]),
+                    X_train['bin'] = pd.cut(X_train[self.target_variable],
                                          bins, labels=False)
                     bins_dist = X_train['bin'].value_counts()
                     print(f"For {bins} bins the smallest bin contains {bins_dist.min()} samples.")
@@ -3684,6 +3684,8 @@ class PreProcessing:
                 X_train = X_train.drop(self.target_variable, axis=1)
 
                 unique_classes = X_train['bin'].unique()
+                print("Unique classes are...")
+                print(X_train['bin'].value_counts())
                 # get counts
                 unique, counts = np.unique(X_train['bin'].values, return_counts=True)
                 results = np.asarray((unique, counts))
@@ -3716,7 +3718,7 @@ class PreProcessing:
                         bins_needed = 0
                         for bins in [10, 9, 8, 7, 6, 5, 4, 3, 2]:
                             # create bins
-                            X_train['bin'] = pd.cut(X_train[self.target_variable]+random_noise(X_train[self.target_variable]),
+                            X_train['bin'] = pd.cut(X_train[self.target_variable],
                                                     bins, labels=False)
                             bins_dist = X_train['bin'].value_counts()
                             print(f"For {bins} bins the smallest bin contains {bins_dist.min()} samples.")
@@ -3735,7 +3737,7 @@ class PreProcessing:
                         Y_train = X_train['bin']#.astype('float')
                         X_train = X_train.drop(self.target_variable, axis=1)
 
-                        unique_classes = X_train['bin'].unique()
+                        unique_classes = X_train['bin'].unique().tolist()
                         # get counts
                         unique, counts = np.unique(X_train['bin'].values, return_counts=True)
                         X_train = X_train.drop("bin", axis=1)
