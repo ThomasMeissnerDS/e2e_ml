@@ -1975,7 +1975,7 @@ class PreProcessing:
                 pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            outlier_detector = IsolationForest(contamination=0.7)
+            outlier_detector = IsolationForest(contamination="auto")
             if how == 'append':
                 outlier_detector.fit(X_train)
                 outlier_predictions_train = outlier_detector.decision_function(X_train)
