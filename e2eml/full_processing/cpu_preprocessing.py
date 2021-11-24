@@ -10,6 +10,7 @@ from category_encoders import *
 from category_encoders.wrapper import NestedCVWrapper
 from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import IsolationForest
+from sklearn.svm import OneClassSVM
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.mixture import GaussianMixture
 from sklearn.experimental import enable_iterative_imputer
@@ -207,6 +208,7 @@ class PreProcessing:
             "clustering_as_a_feature_kmeans_loop": True,
             "clustering_as_a_feature_gaussian_mixture_loop": True,
             "pca_clustering_results": True,
+            "svm_outlier_detection_loop": True,
             "autotuned_clustering": False,
             "reduce_memory_footprint": False,
             "scale_data": False,
@@ -252,6 +254,7 @@ class PreProcessing:
             "clustering_as_a_feature_kmeans_loop": True,
             "clustering_as_a_feature_gaussian_mixture_loop": True,
             "pca_clustering_results": True,
+            "svm_outlier_detection_loop": True,
             "reduce_memory_footprint": True,
             "automated_feature_selection": True,
             "bruteforce_random_feature_selection": True, # slow
@@ -1954,6 +1957,40 @@ class PreProcessing:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train = X_train.replace([np.inf, -np.inf], filler)
             X_test = X_test.replace([np.inf, -np.inf], filler)
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def svm_outlier_detection(self, nu=0.1):
+        """
+        Uses SVM oneclass to append outlier scores to the DataFrame.
+        :param nu: Float between >0 and <1. Indicates how much of the values in percent shall be flagged as outliers.
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp('Started SVM outlier detection.')
+        logging.info('Started outlier handling.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        if self.prediction_mode:
+            onesvm = OneClassSVM(kernel='rbf', nu=nu)
+            onesvm.fit(self.dataframe)
+            outlier_flags = onesvm.predict(self.dataframe)
+            self.dataframe[f"svm_outlier_score_nu_{nu}"] = outlier_flags
+            logging.info('Started outlier handling.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            self.get_current_timestamp('Finished SVM outlier detection.')
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            onesvm = OneClassSVM(kernel='rbf', nu=nu)
+            onesvm.fit(X_train)
+            outlier_flags = onesvm.predict(X_train)
+            X_train[f"svm_outlier_score_nu_{nu}"] = outlier_flags
+
+            onesvm = OneClassSVM(kernel='rbf', nu=nu)
+            onesvm.fit(X_test)
+            outlier_flags = onesvm.predict(X_test)
+            X_test[f"svm_outlier_score_nu_{nu}"] = outlier_flags
+
+            logging.info('Started outlier handling.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            self.get_current_timestamp('Finished SVM outlier detection.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def isolation_forest_identifier(self, how='append', threshold=0):

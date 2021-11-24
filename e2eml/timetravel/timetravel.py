@@ -58,6 +58,7 @@ class TimeTravel():
             "clustering_as_a_feature_gaussian_mixture_loop": {"func": class_instance.gaussian_mixture_clustering_loop, "args": None},
             "pca_clustering_results": {"func": class_instance.pca_clustering_results, "args": None},
             "autotuned_clustering": {"func": class_instance.auto_tuned_clustering, "args": None},
+            "svm_outlier_detection_loop": {"func": class_instance.svm_outlier_detection_loop, "args": None},
             "reduce_memory_footprint": {"func": class_instance.reduce_memory_footprint, "args": None},
             "scale_data": {"func": class_instance.data_scaling, "args": None},
             "smote": {"func": class_instance.smote_binary_multiclass, "args": None},
@@ -345,6 +346,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                     class_instance.blueprint_step_selection_non_nlp["clustering_as_a_feature_kmeans_loop"] = False
                     class_instance.blueprint_step_selection_non_nlp["clustering_as_a_feature_gaussian_mixture_loop"] = False
                     class_instance.blueprint_step_selection_non_nlp["pca_clustering_results"] = False
+                    class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = False
                 automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=True)
         except Exception:
             pass

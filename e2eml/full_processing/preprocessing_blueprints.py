@@ -44,6 +44,14 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
                 except ValueError:
                     print("Clustering as a feature skipped due to ValueError.")
 
+    def svm_outlier_detection_loop(self):
+        if self.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"]:
+            for nu in [0.01, 0.03, 0.05, 0.1, 0.2, 0.3]:
+                try:
+                    self.svm_outlier_detection(nu=nu)
+                except Exception:
+                    print("SVM outlier detection skipped due to error..")
+
     def smote_binary_multiclass(self):
         if self.class_problem == 'binary' or self.class_problem == 'multiclass':
             self.smote_data()
@@ -136,6 +144,12 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.pca_clustering_results()
         if self.blueprint_step_selection_non_nlp["autotuned_clustering"]:
             self.auto_tuned_clustering()
+        if self.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"]:
+            for nu in [0.01, 0.03, 0.05, 0.1, 0.2, 0.3]:
+                try:
+                    self.svm_outlier_detection(nu=nu)
+                except Exception:
+                    print("SVM outlier detection skipped due to error.")
         if self.blueprint_step_selection_non_nlp["reduce_memory_footprint"]:
             if self.low_memory_mode:
                 self.reduce_memory_footprint()
