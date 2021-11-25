@@ -264,6 +264,7 @@ class PreProcessing:
             "scale_data": True,
             "smote": True,
             "autoencoder_based_oversampling": True,
+            "final_kernel_pca_dimensionality_reduction": False,
             "final_pca_dimensionality_reduction": True
         }
         self.checkpoint_reached = {}
@@ -374,8 +375,8 @@ class PreProcessing:
                                              "sgd": 25,
                                              "bruteforce_random": 400,
                                              "synthetic_data_augmentation": 100,
-                                             "autoencoder_based_oversampling": 20,
-                                             "autoencoder_based_dimensionality_reduction": 50,
+                                             "autoencoder_based_oversampling": 50,
+                                             "final_kernel_pca_dimensionality_reduction": 50,
                                              "final_pca_dimensionality_reduction": 50}
 
         self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
@@ -390,7 +391,7 @@ class PreProcessing:
                                                        "bruteforce_random": 2*60*60,
                                                        "synthetic_data_augmentation": 1*60*60,
                                                        "autoencoder_based_oversampling": 2*60*60,
-                                                       "autoencoder_based_dimensionality_reduction": 4*60*60,
+                                                       "final_kernel_pca_dimensionality_reduction": 4*60*60,
                                                        "final_pca_dimensionality_reduction": 2*60*60}
 
         self.feature_selection_sample_size = 100000
@@ -4042,8 +4043,8 @@ class PreProcessing:
         logging.info('Start final PCA dimensionality reduction.')
         logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
         if self.prediction_mode:
-            best_parameters = self.preprocess_decisions[f"final_pca_dimensionality_reduction_parameters"]
-            pca = self.preprocess_decisions[f"final_pca_dimensionality_reduction_model"]
+            best_parameters = self.preprocess_decisions[f"final_kernel_pca_dimensionality_reduction_reduction_parameters"]
+            pca = self.preprocess_decisions[f"final_kernel_pca_dimensionality_reduction_model"]
             dataframe_comps = pca.transform(self.dataframe)
             new_cols = [f"PCA_{i}" for i in range(dataframe_comps.shape[1])]
             self.dataframe = pd.DataFrame(dataframe_comps, columns=new_cols)
@@ -4122,7 +4123,7 @@ class PreProcessing:
                 meissner_score = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
                 return meissner_score
 
-            algorithm = 'final_pca_dimensionality_reduction'
+            algorithm = 'final_kernel_pca_dimensionality_reduction'
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
             study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
@@ -4149,8 +4150,8 @@ class PreProcessing:
             new_cols = [f"PCA_{i}" for i in range(train_comps.shape[1])]
             X_train = pd.DataFrame(train_comps, columns=new_cols)
             X_test = pd.DataFrame(test_comps, columns=new_cols)
-            self.preprocess_decisions[f"final_pca_dimensionality_reduction_parameters"] = best_parameters
-            self.preprocess_decisions[f"final_pca_dimensionality_reduction_model"] = pca
+            self.preprocess_decisions[f"final_kernel_pca_dimensionality_reduction_reduction_parameters"] = best_parameters
+            self.preprocess_decisions[f"final_kernel_pca_dimensionality_reduction_reduction_model"] = pca
 
             print(f"Number of columns after dimensionality reduction is: {len(X_train.columns.to_list())}")
 
