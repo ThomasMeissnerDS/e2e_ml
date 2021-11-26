@@ -327,12 +327,12 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                     class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
                     class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
                     class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
-                    class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = True
                     class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = True
                 elif checkpoint == "delete_high_null_cols":
                     class_instance.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"] = False
                     class_instance.blueprint_step_selection_non_nlp["data_binning"] = False
                     class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
+                    class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = False
                     class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
                     class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
                 elif checkpoint == "early_numeric_only_feature_selection":

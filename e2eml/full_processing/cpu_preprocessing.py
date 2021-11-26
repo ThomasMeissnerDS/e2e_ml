@@ -375,7 +375,7 @@ class PreProcessing:
                                              "sgd": 25,
                                              "bruteforce_random": 400,
                                              "synthetic_data_augmentation": 100,
-                                             "autoencoder_based_oversampling": 25,
+                                             "autoencoder_based_oversampling": 200,
                                              "final_kernel_pca_dimensionality_reduction": 50,
                                              "final_pca_dimensionality_reduction": 50}
 
@@ -3894,7 +3894,6 @@ class PreProcessing:
                                     torch.cuda.empty_cache()
 
                         epochs = param["nb_epochs"]
-                        optimizer = optim.Adam(model.parameters(), lr=1e-3)
                         for epoch in range(1, epochs + 1):
                             train(epoch)
                             test(epoch)
@@ -3990,7 +3989,6 @@ class PreProcessing:
                                 test_losses.append(test_loss / len(testloader.dataset))
 
                     epochs = best_parameters["nb_epochs"]
-                    optimizer = optim.Adam(model.parameters(), lr=1e-3)
                     for epoch in range(1, epochs + 1):
                         train(epoch)
                         test(epoch)
