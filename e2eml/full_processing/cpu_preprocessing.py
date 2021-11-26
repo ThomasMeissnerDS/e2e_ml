@@ -3820,8 +3820,10 @@ class PreProcessing:
                     def objective(trial):
                         optimizer_choice = trial.suggest_categorical("optimizer_choice", ["Adam",
                                                                                           "AdamW",
-                                                                                          "RMSprop"
-                                                                                          ])
+                                                                                          "RMSprop",
+                                                                                          "LBFGS",
+                                                                                          "SGD",
+                                                                                          "SparseAdam"])
                         param = {
                             'nb_epochs': trial.suggest_int('nb_epochs', 2, 20000),
                             'h': trial.suggest_int('h', 20, 50),
@@ -3835,10 +3837,17 @@ class PreProcessing:
                             optimizer = optim.Adam(model.parameters(), lr=param["optim_learning_rate"], weight_decay=param["optim_weight_decay"])
                         elif optimizer_choice == "RMSprop":
                             optimizer = optim.RMSprop(model.parameters(), lr=param["optim_learning_rate"], weight_decay=param["optim_weight_decay"])
+                        elif optimizer_choice == "LBFGS":
+                            optimizer = optim.LBFGS(model.parameters(), lr=param["optim_learning_rate"])
+                        elif optimizer_choice == "SGD":
+                            optimizer = optim.SGD(model.parameters(), lr=param["optim_learning_rate"])
+                        elif optimizer_choice == "SparseAdam":
+                            optimizer = optim.SparseAdam(model.parameters(), lr=param["optim_learning_rate"])
                         elif optimizer_choice == "AdamW":
                             optimizer = optim.AdamW(model.parameters(), lr=param["optim_learning_rate"])
                         else:
                             optimizer = optim.Adam(model.parameters(), lr=param["optim_learning_rate"])
+
 
                         model = Autoencoder(D_in, param["h"], param["h2"], param["latent_dim"]).to(device)
                         loss_mse = customLoss()
