@@ -375,7 +375,7 @@ class PreProcessing:
                                              "sgd": 25,
                                              "bruteforce_random": 400,
                                              "synthetic_data_augmentation": 100,
-                                             "autoencoder_based_oversampling": 50,
+                                             "autoencoder_based_oversampling": 25,
                                              "final_kernel_pca_dimensionality_reduction": 50,
                                              "final_pca_dimensionality_reduction": 50}
 
@@ -3820,10 +3820,8 @@ class PreProcessing:
                     def objective(trial):
                         optimizer_choice = trial.suggest_categorical("optimizer_choice", ["Adam",
                                                                                           "AdamW",
-                                                                                          "RMSprop",
-                                                                                          "LBFGS",
-                                                                                          "SGD",
-                                                                                          "SparseAdam"])
+                                                                                          "RMSprop"
+                                                                                          ])
                         param = {
                             'nb_epochs': trial.suggest_int('nb_epochs', 2, 20000),
                             'h': trial.suggest_int('h', 2, 800),
@@ -3837,12 +3835,6 @@ class PreProcessing:
                             optimizer = optim.Adam(model.parameters(), lr=param["optim_learning_rate"], weight_decay=param["optim_weight_decay"])
                         elif optimizer_choice == "RMSprop":
                             optimizer = optim.RMSprop(model.parameters(), lr=param["optim_learning_rate"], weight_decay=param["optim_weight_decay"])
-                        elif optimizer_choice == "LBFGS":
-                            optimizer = optim.LBFGS(model.parameters(), lr=param["optim_learning_rate"])
-                        elif optimizer_choice == "SGD":
-                            optimizer = optim.SGD(model.parameters(), lr=param["optim_learning_rate"])
-                        elif optimizer_choice == "SparseAdam":
-                            optimizer = optim.SparseAdam(model.parameters(), lr=param["optim_learning_rate"])
                         elif optimizer_choice == "AdamW":
                             optimizer = optim.AdamW(model.parameters(), lr=param["optim_learning_rate"])
                         else:
