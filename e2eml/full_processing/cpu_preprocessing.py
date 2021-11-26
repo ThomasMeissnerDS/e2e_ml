@@ -208,7 +208,7 @@ class PreProcessing:
             "clustering_as_a_feature_kmeans_loop": True,
             "clustering_as_a_feature_gaussian_mixture_loop": True,
             "pca_clustering_results": True,
-            "svm_outlier_detection_loop": True,
+            "svm_outlier_detection_loop": False,
             "autotuned_clustering": False,
             "reduce_memory_footprint": False,
             "scale_data": False,
@@ -3817,7 +3817,7 @@ class PreProcessing:
 
                     #D_in = X_train_class_only.shape[1]
                     # HYPERPARAMETER OPTIMIZATION
-                    """def objective(trial):
+                    def objective(trial):
                         optimizer_choice = trial.suggest_categorical("optimizer_choice", ["Adam",
                                                                                           "AdamW",
                                                                                           "RMSprop",
@@ -3846,21 +3846,13 @@ class PreProcessing:
                         elif optimizer_choice == "AdamW":
                             optimizer = optim.AdamW(model.parameters(), lr=param["optim_learning_rate"])
                         else:
-                            optimizer = optim.Adam(model.parameters(), lr=param["optim_learning_rate"])"""
+                            optimizer = optim.Adam(model.parameters(), lr=param["optim_learning_rate"])
 
-                    def objective(trial):
-                        param = {
-                            'nb_epochs': trial.suggest_int('nb_epochs', 2, 20000),
-                            'h': trial.suggest_int('h', 2, 800),
-                            'h2': trial.suggest_int('h2', 2, 800),
-                            'latent_dim': trial.suggest_int('latent_dim', 1, 10)
-                        }
                         model = Autoencoder(D_in, param["h"], param["h2"], param["latent_dim"]).to(device)
-                        optimizer = optim.Adam(model.parameters(), lr=1e-3)
                         loss_mse = customLoss()
 
                         # train model
-                        log_interval = 50
+                        log_interval = 1000
                         val_losses = []
                         train_losses = []
                         test_losses = []
@@ -3943,7 +3935,7 @@ class PreProcessing:
                     latent_dim = best_parameters["latent_dim"]
 
                     model = Autoencoder(D_in, H, H2, latent_dim).to(device)
-                    """if best_parameters["optimizer_choice"] == "Adam":
+                    if best_parameters["optimizer_choice"] == "Adam":
                         optimizer = optim.Adam(model.parameters(), lr=best_parameters["optim_learning_rate"], weight_decay=best_parameters["optim_weight_decay"])
                     elif best_parameters["optimizer_choice"] == "RMSprop":
                         optimizer = optim.RMSprop(model.parameters(), lr=best_parameters["optim_learning_rate"], weight_decay=best_parameters["optim_weight_decay"])
@@ -3956,8 +3948,8 @@ class PreProcessing:
                     elif best_parameters["optimizer_choice"] == "AdamW":
                         optimizer = optim.AdamW(model.parameters(), lr=best_parameters["optim_learning_rate"])
                     else:
-                        optimizer = optim.Adam(model.parameters(), lr=best_parameters["optim_learning_rate"])"""
-                    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+                        optimizer = optim.Adam(model.parameters(), lr=best_parameters["optim_learning_rate"])
+
                     loss_mse = customLoss()
 
                     # train model
