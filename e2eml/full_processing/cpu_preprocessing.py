@@ -3824,9 +3824,9 @@ class PreProcessing:
                                                                                           ])
                         param = {
                             'nb_epochs': trial.suggest_int('nb_epochs', 2, 20000),
-                            'h': trial.suggest_int('h', 2, 800),
-                            'h2': trial.suggest_int('h2', 2, 800),
-                            'latent_dim': trial.suggest_int('latent_dim', 1, 10),
+                            'h': trial.suggest_int('h', 20, 50),
+                            'h2': trial.suggest_int('h2', 2, 19),
+                            'latent_dim': trial.suggest_int('latent_dim', 1, 3),
                             'optim_weight_decay': trial.suggest_uniform('optim_weight_decay', 0.0, 0.9),
                             'optim_learning_rate': trial.suggest_loguniform('optim_learning_rate', 1e-5, 0.3)
                         }
