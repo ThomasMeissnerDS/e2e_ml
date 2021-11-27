@@ -228,6 +228,10 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     else:
         algorithms = ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "sgd", "vowpal_wabbit", "logistic_regression",
                       "linear_regression", "elasticnet"]
+        if len(class_instance.dataframe.index) > 10000:
+            algorithms.remove("ngboost")
+        else:
+            pass
 
     # removing algorithms, that are not suitable for classification or regression tasks
     if class_instance.class_problem in ["binary", "multiclass"]:
@@ -282,6 +286,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     class_instance.blueprint_step_selection_non_nlp["scale_data"] = True
     class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
     class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
+    class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = True
 
 
     # we want to store our results
@@ -324,6 +329,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
             else:
                 class_instance = automl_travel.load_checkpoint(checkpoint_to_load=checkpoint)
                 if checkpoint == "autotuned_clustering":
+                    class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = True
                     class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
                     class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
                     class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
@@ -365,33 +371,38 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                 automl_travel.timetravel_model_training(class_instance, alg)
                 automl_travel.create_time_travel_checkpoints(class_instance, df=holdout_df)
                 automl_travel.timetravel_model_training(class_instance, alg)
+                if class_instance.labels_encoded:
+                    hold_df_target = class_instance.label_encoder_decoder(holdout_target, mode='transform')
+                else:
+                    hold_df_target = holdout_target
+
                 try:
                     if class_instance.class_problem in ["binary", "multiclass"]:
-                        scoring_2 = accuracy_score(holdout_target, class_instance.predicted_classes[alg])
-                        scoring_3 = recall_score(holdout_target, class_instance.predicted_classes[alg], average='weighted')
-                        scoring = matthews_corrcoef(holdout_target, class_instance.predicted_classes[alg])
-                        full_classification_report = classification_report(holdout_target, class_instance.predicted_classes[alg])
+                        scoring_2 = accuracy_score(hold_df_target, class_instance.predicted_classes[alg])
+                        scoring_3 = recall_score(hold_df_target, class_instance.predicted_classes[alg], average='weighted')
+                        scoring = matthews_corrcoef(hold_df_target, class_instance.predicted_classes[alg])
+                        full_classification_report = classification_report(hold_df_target, class_instance.predicted_classes[alg])
                         print(full_classification_report)
                     else:
-                        scoring = mean_absolute_error(holdout_target, class_instance.predicted_values[alg])
-                        scoring_2 = r2_score(holdout_target, class_instance.predicted_values[alg])
-                        scoring_3 = mean_squared_error(holdout_target, class_instance.predicted_values[alg], squared=True)
+                        scoring = mean_absolute_error(hold_df_target, class_instance.predicted_values[alg])
+                        scoring_2 = r2_score(hold_df_target, class_instance.predicted_values[alg])
+                        scoring_3 = mean_squared_error(hold_df_target, class_instance.predicted_values[alg], squared=True)
                 except Exception:
                     try:
                         if class_instance.class_problem in ["binary", "multiclass"]:
-                            scoring = matthews_corrcoef(pd.Series(holdout_target).astype(bool),
+                            scoring = matthews_corrcoef(pd.Series(hold_df_target).astype(bool),
                                                         class_instance.predicted_classes[alg])
-                            scoring_2 = accuracy_score(pd.Series(holdout_target).astype(bool),
+                            scoring_2 = accuracy_score(pd.Series(hold_df_target).astype(bool),
                                                        class_instance.predicted_classes[alg].astype(bool))
-                            scoring_3 = recall_score(pd.Series(holdout_target).astype(bool),
+                            scoring_3 = recall_score(pd.Series(hold_df_target).astype(bool),
                                                      class_instance.predicted_classes[alg].astype(bool), average='weighted')
-                            full_classification_report = classification_report(pd.Series(holdout_target).astype(bool),
+                            full_classification_report = classification_report(pd.Series(hold_df_target).astype(bool),
                                                                                class_instance.predicted_classes[alg])
                             print(full_classification_report)
                         else:
-                            scoring = mean_absolute_error(pd.Series(holdout_target).astype(float), class_instance.predicted_values[alg])
-                            scoring_2 = r2_score(pd.Series(holdout_target).astype(float), class_instance.predicted_values[alg])
-                            scoring_3 = mean_squared_error(pd.Series(holdout_target).astype(float), class_instance.predicted_values[alg], squared=True)
+                            scoring = mean_absolute_error(pd.Series(hold_df_target).astype(float), class_instance.predicted_values[alg])
+                            scoring_2 = r2_score(pd.Series(hold_df_target).astype(float), class_instance.predicted_values[alg])
+                            scoring_3 = mean_squared_error(pd.Series(hold_df_target).astype(float), class_instance.predicted_values[alg], squared=True)
                     except Exception:
                         print("Evaluation on holdout failed.")
                         if class_instance.class_problem in ["binary", "multiclass"]:
