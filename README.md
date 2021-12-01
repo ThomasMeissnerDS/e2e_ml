@@ -248,6 +248,8 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 3.0.0
+- updated Plotly dependency to 5.4.0
 * 2.9.6
 - Added TimeTravel and timewalk: TimeTravel will save the class instance after each preprocessing step, timewalk will
  automatically try different preprocessing steps with different algorithms to find the best combination

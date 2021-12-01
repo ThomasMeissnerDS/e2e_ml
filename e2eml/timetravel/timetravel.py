@@ -414,7 +414,6 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                             scoring_2 = -1
                             scoring_3 = 99999999
 
-
                 print(f"Score achieved on holdout dataset is: {scoring}.")
 
                 end = time.time()
@@ -448,6 +447,9 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                 results_df.to_pickle(experiment_name)
                 print(f"End iteration for algorithm {alg} at {end}.")
                 print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+                del class_instance.trained_models[alg]
+                del class_instance
+                _ = gc.collect()
 
         except Exception:
             if class_instance.class_problem in ["binary", "multiclass"]:
@@ -489,6 +491,9 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
             results_df.to_pickle(experiment_name)
             print(f"End iteration for algorithm {alg} at {end}.")
             print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+            del class_instance.trained_models[alg]
+            del class_instance
+            _ = gc.collect()
 
     results_dict = {
         "Trial number": unique_indices,

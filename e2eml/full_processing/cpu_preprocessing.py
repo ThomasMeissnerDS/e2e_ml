@@ -3822,7 +3822,7 @@ class PreProcessing:
                                                                                           "AdamW",
                                                                                           "RMSprop"])
                         param = {
-                            'nb_epochs': trial.suggest_int('nb_epochs', 2, 20000),
+                            'nb_epochs': trial.suggest_int('nb_epochs', 2, 30000),
                             'h': trial.suggest_int('h', 20, 50),
                             'h2': trial.suggest_int('h2', 2, 19),
                             'latent_dim': trial.suggest_int('latent_dim', 1, 3),

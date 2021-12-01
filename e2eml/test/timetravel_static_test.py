@@ -133,24 +133,24 @@ def test_timetravel(dataset='titanic'):
                                                      )
 
 
-    titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
+    titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
     titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
     titanic_auto_ml.blueprint_step_selection_non_nlp["scale_data"] = False
 
     # creating checkpoints and training the model
     automl_travel = timetravel.TimeTravel()
     automl_travel.create_time_travel_checkpoints(titanic_auto_ml)
-    automl_travel.timetravel_model_training(titanic_auto_ml, 'lgbm')
+    automl_travel.timetravel_model_training(titanic_auto_ml, 'xgboost')
 
     #loading checkpoint and adjusting the preprocessing
     titanic_auto_ml = automl_travel.load_checkpoint(checkpoint_to_load="automated_feature_selection")
     titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = True
     automl_travel.create_time_travel_checkpoints(titanic_auto_ml, reload_instance=True)
-    automl_travel.timetravel_model_training(titanic_auto_ml, 'lgbm')
+    automl_travel.timetravel_model_training(titanic_auto_ml, 'xgboost')
 
     # predicting on new data
     automl_travel.create_time_travel_checkpoints(titanic_auto_ml, df=val_df)
-    automl_travel.timetravel_model_training(titanic_auto_ml, 'lgbm')
+    automl_travel.timetravel_model_training(titanic_auto_ml, 'xgboost')
 
     def get_matthews(algorithm):
         # Assess prediction quality on holdout data

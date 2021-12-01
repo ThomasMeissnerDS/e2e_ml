@@ -1059,20 +1059,12 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 classes_weights = class_weight.compute_sample_weight(
                     class_weight='balanced',
                     y=Y_train)
-                if self.binary_unbalanced:
-                    D_train = xgb.DMatrix(X_train, label=Y_train, weight=classes_weights)
-                else:
-                    D_train = xgb.DMatrix(X_train, label=Y_train)
                 D_test = xgb.DMatrix(X_test, label=Y_test)
 
                 x_train, y_train = self.get_hyperparameter_tuning_sample_df()
                 classes_weights_sample = class_weight.compute_sample_weight(
                     class_weight='balanced',
                     y=y_train)
-                if self.binary_unbalanced:
-                    d_train = xgb.DMatrix(x_train, label=y_train, weight=classes_weights_sample)
-                else:
-                    d_train = xgb.DMatrix(x_train, label=y_train)
                 d_test = xgb.DMatrix(X_test, label=Y_test)
                 # get sample size to run brute force feature selection against
 
@@ -1098,7 +1090,13 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                             'steps': trial.suggest_int('steps', 2, 70000), #100
                             'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 5) #2
                         }
+                        sample_weight = trial.suggest_categorical('sample_weight', [True, False])
+                        if sample_weight:
+                            d_train = xgb.DMatrix(x_train, label=y_train, weight=classes_weights_sample)
+                        else:
+                            d_train = xgb.DMatrix(x_train, label=y_train)
                         pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-mlogloss")
+
                         if tune_mode == 'simple':
                             eval_set = [(d_train, 'train'), (d_test, 'test')]
                             model = xgb.train(param, d_train, num_boost_round=param['steps'], early_stopping_rounds=10,
@@ -1156,11 +1154,12 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                         'steps': lgbm_best_param["steps"],
                         'num_parallel_tree': lgbm_best_param["num_parallel_tree"]
                     }
+                    sample_weight = lgbm_best_param["sample_weight"]
                     try:
                         X_train = X_train.drop(self.target_variable, axis=1)
                     except Exception:
                         pass
-                    if self.binary_unbalanced:
+                    if sample_weight:
                         D_train = xgb.DMatrix(X_train, label=Y_train, weight=classes_weights)
                     else:
                         D_train = xgb.DMatrix(X_train, label=Y_train)
@@ -1199,6 +1198,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                             'steps': trial.suggest_int('steps', 2, 70000),
                             'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 5)
                         }
+                        sample_weight = trial.suggest_categorical('sample_weight', [True, False])
+                        if sample_weight:
+                            d_train = xgb.DMatrix(x_train, label=y_train, weight=classes_weights_sample)
+                        else:
+                            d_train = xgb.DMatrix(x_train, label=y_train)
                         pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-mlogloss")
                         if tune_mode == 'simple':
                             eval_set = [(d_train, 'train'), (d_test, 'test')]
@@ -1260,11 +1264,12 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                         'steps': lgbm_best_param["steps"],
                         'num_parallel_tree': lgbm_best_param["num_parallel_tree"]
                     }
+                    sample_weight = lgbm_best_param["sample_weight"]
                     try:
                         X_train = X_train.drop(self.target_variable, axis=1)
                     except Exception:
                         pass
-                    if self.binary_unbalanced:
+                    if sample_weight:
                         D_train = xgb.DMatrix(X_train, label=Y_train, weight=classes_weights)
                     else:
                         D_train = xgb.DMatrix(X_train, label=Y_train)
