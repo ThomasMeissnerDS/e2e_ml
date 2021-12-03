@@ -201,7 +201,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            model = LogisticRegression(random_state=0).fit(X_train, Y_train)
+            try:
+                model = LogisticRegression(random_state=0).fit(X_train, Y_train)
+            except AttributeError:
+                model = LogisticRegression(random_state=0, solver='liblinear').fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
@@ -496,7 +499,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
 
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
-            partial_probs = model.decision_function(self.dataframe)
+            partial_probs = model.predict_proba(self.dataframe)
 
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
@@ -507,7 +510,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
-            partial_probs = model.decision_function(X_test)
+            partial_probs = model.predict_proba(X_test)
 
             if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])

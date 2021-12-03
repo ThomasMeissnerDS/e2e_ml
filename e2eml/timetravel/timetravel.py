@@ -1,3 +1,5 @@
+import copy
+
 import pandas as pd
 pd.set_option('display.max_colwidth', None)
 import numpy as np
@@ -221,14 +223,14 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     it will add a string stating when the experiment has been started.
     :return: Pandas DataFrame with results.
     """
-    class_instance = class_instance.copy()
+    class_instance = copy.copy(class_instance)
 
     # define algorithms to consider
     if isinstance(algs_to_test, list):
         algorithms = algs_to_test
     else:
-        algorithms = ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "sgd", "vowpal_wabbit", "logistic_regression",
-                      "linear_regression", "elasticnet"]
+        algorithms = ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
+                      "linear_regression", "elasticnet", "sgd"]
         if len(class_instance.dataframe.index) > 10000:
             algorithms.remove("ngboost")
         else:

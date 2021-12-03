@@ -44,6 +44,7 @@ import os
 import psutil
 import time
 import random
+from copy import copy
 warnings.filterwarnings("ignore")
 #from copy import deepcopy
 #from IPython.display import clear_output
@@ -365,14 +366,14 @@ class PreProcessing:
                                 "max_epochs": 1000}
 
         self.hyperparameter_tuning_rounds = {"xgboost": 100,
-                                             "lgbm": 100,
+                                             "lgbm": 500,
                                              "tabnet": 25,
                                              "ngboost": 25,
                                              "sklearn_ensemble": 10,
-                                             "ridge": 100,
+                                             "ridge": 500,
                                              "elasticnet": 100,
                                              "catboost": 25,
-                                             "sgd": 25,
+                                             "sgd": 2000,
                                              "bruteforce_random": 400,
                                              "synthetic_data_augmentation": 100,
                                              "autoencoder_based_oversampling": 200,
