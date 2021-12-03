@@ -5,7 +5,6 @@ import optuna
 import warnings
 import logging
 import dill as pickle
-import gc
 from e2eml.classification.classification_blueprints import ClassificationBluePrint
 from e2eml.regression.regression_blueprints import RegressionBluePrint
 from e2eml.full_processing import postprocessing
@@ -222,6 +221,8 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     it will add a string stating when the experiment has been started.
     :return: Pandas DataFrame with results.
     """
+    class_instance = class_instance.copy()
+
     # define algorithms to consider
     if isinstance(algs_to_test, list):
         algorithms = algs_to_test
@@ -345,6 +346,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                     class_instance.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"] = False
                     class_instance.blueprint_step_selection_non_nlp["data_binning"] = False
                     class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
+                    class_instance.blueprint_step_selection_non_nlp["numeric_binarizer_pca"] = False
                     class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
                     class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
                     class_instance.blueprint_step_selection_non_nlp["skewness_removal"] = False
@@ -435,6 +437,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                 results_df = pd.DataFrame(results_dict)
                 results_df["experiment_comment"] = experiment_comment
                 results_df["preprocessing_runtime_sec"] = preprocess_runtime
+                results_df["Total runtime"] = results_df["ML model runtime in seconds"] + results_df["preprocessing_runtime_sec"]
                 if isinstance(name_of_exist_experiment, str):
                     try:
                         print("Try to load former experiment data.")
@@ -479,6 +482,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
             results_df = pd.DataFrame(results_dict)
             results_df["experiment_comment"] = experiment_comment
             results_df["preprocessing_runtime_sec"] = preprocess_runtime
+            results_df["Total runtime"] = results_df["ML model runtime in seconds"] + results_df["preprocessing_runtime_sec"]
             if isinstance(name_of_exist_experiment, str):
                 try:
                     print("Try to load former experiment data.")
@@ -507,6 +511,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     results_df = pd.DataFrame(results_dict)
     results_df["experiment_comment"] = experiment_comment
     results_df["preprocessing_runtime_sec"] = preprocess_runtime
+    results_df["Total runtime"] = results_df["ML model runtime in seconds"] + results_df["preprocessing_runtime_sec"]
     if isinstance(name_of_exist_experiment, str):
         try:
             print("Try to load former experiment data.")
@@ -519,7 +524,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     results_df.to_pickle(experiment_name)
 
     try:
-        fig = px.line(results_df, x="Runtime in seconds", y=metric, color="Algorithm", text="Trial number")
+        fig = px.line(results_df, x="Total runtime", y=metric, color="Algorithm", text="Trial number")
         fig.update_traces(textposition="bottom right")
         fig.show()
     except Exception:
