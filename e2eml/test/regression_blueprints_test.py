@@ -55,7 +55,7 @@ def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender
                                              tune_mode='accurate',
                                              ml_task='regression')
     titanic_auto_ml.hyperparameter_tuning_rounds = {"xgboost": 10,
-                                                    "lgbm": 10,
+                                                    "lgbm": 500,
                                                     "tabnet": 3,
                                                     "ngboost": 10,
                                                     "sklearn_ensemble": 3,
@@ -79,8 +79,8 @@ def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender
                                                     "elasticnet": False
                                                     }
     titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
-    titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
-    titanic_auto_ml.blueprint_step_selection_non_nlp["scaling"] = True
+    titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
+    titanic_auto_ml.blueprint_step_selection_non_nlp["scaling"] = False
     titanic_auto_ml.hyperparameter_tuning_sample_size = 800
 
     titanic_auto_ml.ml_special_regression_full_processing_multimodel_avg_blender()

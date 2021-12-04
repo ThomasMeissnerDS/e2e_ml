@@ -364,6 +364,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
             pass
         preprocess_end = time.time()
         preprocess_runtime = preprocess_end - preprocess_start
+        print(f"All algorithms to be tested are: {algorithms}.")
         try:
             for alg in algorithms:
                 unique_indices_counter += 1
@@ -452,10 +453,12 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                 results_df.to_pickle(experiment_name)
                 print(f"End iteration for algorithm {alg} at {end}.")
                 print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-                del class_instance.trained_models[alg]
-                del class_instance
-                _ = gc.collect()
-
+                try:
+                    del class_instance.trained_models[alg]
+                    del class_instance
+                    _ = gc.collect()
+                except KeyError:
+                    pass
         except Exception:
             if class_instance.class_problem in ["binary", "multiclass"]:
                 scoring = 0
@@ -497,9 +500,12 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
             results_df.to_pickle(experiment_name)
             print(f"End iteration for algorithm {alg} at {end}.")
             print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-            del class_instance.trained_models[alg]
-            del class_instance
-            _ = gc.collect()
+            try:
+                del class_instance.trained_models[alg]
+                del class_instance
+                _ = gc.collect()
+            except KeyError:
+                pass
 
     results_dict = {
         "Trial number": unique_indices,

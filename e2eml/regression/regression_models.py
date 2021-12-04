@@ -1052,7 +1052,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 param = {
                     # TODO: Move to additional folder with pyfile "constants" (use OS absolute path)
                     'objective': 'regression',
-                    'metric': 'gamma',
+                    'metric': 'mean_squared_error',
                     'num_boost_round': trial.suggest_int('num_boost_round', 100, 70000),
                     'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
                     'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
@@ -1075,12 +1075,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = mean_absolute_error(Y_test, preds)
                     return mae
                 else:
-                    pruning_callback = optuna.integration.LightGBMPruningCallback(trial, "gamma")
+                    pruning_callback = optuna.integration.LightGBMPruningCallback(trial, "l2")
                     result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
                                     stratified=False, callbacks=[pruning_callback],
                                     early_stopping_rounds=10, seed=42,
                                     verbose_eval=False)
-                    avg_result = result['gamma-mean'][-1]
+                    avg_result = result['l2-mean'][-1]
                     return avg_result
 
             algorithm = 'lgbm'
@@ -1104,7 +1104,7 @@ class RegressionModels(postprocessing.FullPipeline):
             lgbm_best_param = study.best_trial.params
             param = {
                 'objective': 'regression',
-                'metric': 'huber', #'gamma'
+                'metric': 'mean_squared_error', #'gamma'
                 'num_boost_round': lgbm_best_param["num_boost_round"],
                 'lambda_l1': lgbm_best_param["lambda_l1"],
                 'lambda_l2': lgbm_best_param["lambda_l2"],
