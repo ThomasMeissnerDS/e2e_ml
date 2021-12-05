@@ -212,7 +212,7 @@ class PreProcessing:
             "svm_outlier_detection_loop": False,
             "autotuned_clustering": False,
             "reduce_memory_footprint": False,
-            "scale_data": False,
+            "scale_data": True,
             "smote": False,
             "automated_feature_selection": True,
             "bruteforce_random_feature_selection": False, # slow
@@ -221,6 +221,7 @@ class PreProcessing:
             "synthetic_data_augmentation": False,
             "final_pca_dimensionality_reduction": False,
             "final_kernel_pca_dimensionality_reduction": False,
+            "delete_low_variance_features": True,
             "sort_columns_alphabetically": True
         }
 
@@ -266,7 +267,8 @@ class PreProcessing:
             "smote": True,
             "autoencoder_based_oversampling": True,
             "final_kernel_pca_dimensionality_reduction": False,
-            "final_pca_dimensionality_reduction": True
+            "final_pca_dimensionality_reduction": True,
+            "delete_low_variance_features": True
         }
         self.checkpoint_reached = {}
         for key, value in self.checkpoints.items():
@@ -1533,6 +1535,38 @@ class PreProcessing:
             logging.info('Finished adding autotuned clusters as additional features.')
             logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def delete_low_variance_features(self):
+        """
+        Takes a dataframe removes columns with very low variance.
+        :return: Updates class attributes/dataframes.
+        """
+        self.get_current_timestamp('Start deleting low variance features')
+        logging.info('Start deleting low variance features.')
+        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        if not self.data_scaled:
+            self.data_scaling()
+
+        if self.prediction_mode:
+            variable = self.preprocess_decisions[f"delete_low_variance_features_columns_left"]
+            self.dataframe = self.dataframe[variable]
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            variance = X_train.var()
+            columns = X_train.columns
+            variable = []
+
+            for i in range(0, len(variance)):
+                if variance[i] >= 0.006: #setting the threshold as 1%
+                    variable.append(columns[i])
+
+            X_train = X_train[variable]
+            X_test = X_test[variable]
+
+            self.preprocess_decisions[f"delete_low_variance_features_columns_left"] = variable
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            logging.info('Finished deleting low variance features.')
+            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
 
 
     def clustering_as_a_feature(self, algorithm='dbscan', nb_clusters=2, eps=0.3, n_jobs=-1, min_samples=50):

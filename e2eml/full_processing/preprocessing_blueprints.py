@@ -174,6 +174,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.synthetic_data_augmentation()
         if self.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"]:
             self.final_pca_dimensionality_reduction()
+        if self.blueprint_step_selection_non_nlp["delete_low_variance_features"]:
+            self.delete_low_variance_features()
         if self.blueprint_step_selection_non_nlp["sort_columns_alphabetically"]:
             self.sort_columns_alphabetically()
 

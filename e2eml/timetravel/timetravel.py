@@ -70,6 +70,7 @@ class TimeTravel():
             "synthetic_data_augmentation": {"func": class_instance.synthetic_data_augmentation, "args": None},
             "final_pca_dimensionality_reduction": {"func": class_instance.final_pca_dimensionality_reduction, "args": None},
             "final_kernel_pca_dimensionality_reduction": {"func": class_instance.final_kernel_pca_dimensionality_reduction, "args": None},
+            "delete_low_variance_features": {"func": class_instance.delete_low_variance_features, "args": None},
             "sort_columns_alphabetically": {"func": class_instance.sort_columns_alphabetically, "args": None},
         }
 
@@ -287,9 +288,9 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     # we adjust default preprocessing
     class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = True
     class_instance.blueprint_step_selection_non_nlp["scale_data"] = True
-    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
+    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
     class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
-    class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = True
+    class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = False
 
 
     # we want to store our results
@@ -334,7 +335,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                 if checkpoint == "autotuned_clustering":
                     class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = True
                     class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
-                    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
+                    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
                     class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
                     class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = True
                 elif checkpoint == "delete_high_null_cols":
