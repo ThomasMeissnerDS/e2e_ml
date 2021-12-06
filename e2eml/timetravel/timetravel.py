@@ -93,6 +93,7 @@ class TimeTravel():
                         "sklearn_ensemble": class_instance.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble,
                         "sgd": class_instance.ml_bp10_multiclass_full_processing_sgd,
                         "quadratic_discriminant_analysis": class_instance.ml_bp11_multiclass_full_processing_quadratic_discriminant_analysis,
+                        "svm": class_instance.ml_bp12_multiclass_full_processing_svm
                         }
 
     def call_regression_algorithm_mapping(self, class_instance):
@@ -107,7 +108,8 @@ class TimeTravel():
                         "tabnet": class_instance.ml_bp17_regression_full_processing_tabnet_reg,
                         "vowpal_wabbit": class_instance.ml_bp15_regression_full_processing_vowpal_wabbit_reg,
                         "sklearn_ensemble": class_instance.ml_bp13_regression_full_processing_sklearn_stacking_ensemble,
-                        "sgd": class_instance.ml_bp20_regression_full_processing_sgd
+                        "sgd": class_instance.ml_bp20_regression_full_processing_sgd,
+                        #"ransac": class_instance.ml_bp21_regression_full_processing_ransac
                         }
 
     def create_time_travel_checkpoints(self, class_instance, checkpoint_file_path=None, df=None, reload_instance=False):
@@ -219,7 +221,8 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     can be provided. In this case timewalk will load the file as a dataframe and concatenate old and new results into
     one dataframe.
     :param algs_to_test: (Optional). Expects a list object with algorithms to test. Will test on default:
-    ["xgboost", "lgbm", "tabnet", "ridge", "ngboost", "sgd", "vowpal_wabbit"]
+    ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
+                      "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis", "svm"]
     :param experiment_name: Expects string. Will determine the name of the exported results dataframe (as pickle file).
     :param experiment_comment: Expects a string. This will add a comment of choice to the results dataframe. On default
     it will add a string stating when the experiment has been started.
@@ -232,7 +235,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         algorithms = algs_to_test
     else:
         algorithms = ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
-                      "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis"]
+                      "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis", "svm"]
         if len(class_instance.dataframe.index) > 10000:
             algorithms.remove("ngboost")
         else:
@@ -249,6 +252,12 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
             algorithms.remove("elasticnet")
         except Exception:
             pass
+
+        try:
+            algorithms.remove("ransac")
+        except Exception:
+            pass
+
     else:
         try:
             algorithms.remove("logistic_regression")
@@ -259,6 +268,12 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
             algorithms.remove("quadratic_discriminant_analysis")
         except Exception:
             pass
+
+        try:
+            algorithms.remove("svm")
+        except Exception:
+            pass
+
 
     if speed_up_model_tuning:
         # we reduce the tuning rounds for all algorithms

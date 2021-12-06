@@ -42,7 +42,7 @@ extras_require = {
 
 setup(
     name="e2eml",
-    version="2.9.7",
+    version="2.9.8",
     author="Thomas Meißner",
     author_email="meissnercorporation@gmx.de",
     description="An end to end solution for automl.",
