@@ -248,6 +248,8 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 2.9.8
+- Added Quadrant Discriminent Analysis
 * 2.9.7
 - updated Plotly dependency to 5.4.0
 - Improved Xgboost for imbalanced data

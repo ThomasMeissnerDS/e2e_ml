@@ -272,6 +272,85 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             del model
             _ = gc.collect()
 
+    def quadratic_discriminant_analysis_train(self):
+        """
+        Trains a simple Linear regression model.
+        :return: Trained model.
+        """
+        self.get_current_timestamp(task='Train logistic regression model')
+        algorithm = 'quadratic_discriminant_analysis'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = QuadraticDiscriminantAnalysis().fit(X_train, Y_train)
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
+            return self.trained_models
+
+    def quadratic_discriminant_analysis_predict(self, feat_importance=True, importance_alg='permutation'):
+        """
+        Loads the pretrained model from the class itself and predicts on new data.
+        :param feat_importance: Set True, if feature importance shall be calculated.
+        :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
+        GPU acceleration). (Default: 'permutation')
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp(task='Predict with Quadratic Discriminant Analysis')
+        algorithm = 'quadratic_discriminant_analysis'
+        if self.prediction_mode:
+            model = self.trained_models[f"{algorithm}"]
+            partial_probs = model.predict_proba(self.dataframe)
+            if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+            else:
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+            self.predicted_probs[f"{algorithm}"] = {}
+            self.predicted_classes[f"{algorithm}"] = {}
+            self.predicted_probs[f"{algorithm}"] = predicted_probs
+            self.predicted_classes[f"{algorithm}"] = predicted_classes
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = self.trained_models[f"{algorithm}"]
+            partial_probs = model.predict_proba(X_test)
+            if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+            else:
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+
+            if feat_importance and importance_alg == 'SHAP':
+                self.runtime_warnings(warn_about='shap_cpu')
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            elif feat_importance and importance_alg == 'permutation':
+                result = permutation_importance(
+                    model, X_test, Y_test.astype(int), n_repeats=10, random_state=42, n_jobs=-1)
+                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                fig, ax = plt.subplots()
+                permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
+                ax.set_title("Feature importances using permutation on full model")
+                ax.set_ylabel("Mean accuracy decrease")
+                fig.tight_layout()
+                plt.show()
+            else:
+                pass
+            self.predicted_probs[f"{algorithm}"] = {}
+            self.predicted_classes[f"{algorithm}"] = {}
+            self.predicted_probs[f"{algorithm}"] = predicted_probs
+            self.predicted_classes[f"{algorithm}"] = predicted_classes
+            del model
+            _ = gc.collect()
+
     def ridge_classifier_train(self):
         """
         Trains a simple ridge regression classifier.

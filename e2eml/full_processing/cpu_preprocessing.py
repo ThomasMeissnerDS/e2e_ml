@@ -1553,7 +1553,8 @@ class PreProcessing:
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             variance = X_train.var()
-            columns = X_train.columns
+            columns = X_train.columns.to_list()
+            print(f"Features before low variance deletion: {len(columns)}")
             variable = []
 
             for i in range(0, len(variance)):
@@ -1562,6 +1563,8 @@ class PreProcessing:
 
             X_train = X_train[variable]
             X_test = X_test[variable]
+
+            print(f"Features before low variance deletion: {len(variable)}")
 
             self.preprocess_decisions[f"delete_low_variance_features_columns_left"] = variable
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)

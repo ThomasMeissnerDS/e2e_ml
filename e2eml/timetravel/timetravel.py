@@ -92,6 +92,7 @@ class TimeTravel():
                         "vowpal_wabbit": class_instance.ml_bp05_multiclass_full_processing_vowpal_wabbit,
                         "sklearn_ensemble": class_instance.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble,
                         "sgd": class_instance.ml_bp10_multiclass_full_processing_sgd,
+                        "quadratic_discriminant_analysis": class_instance.ml_bp11_multiclass_full_processing_quadratic_discriminant_analysis,
                         }
 
     def call_regression_algorithm_mapping(self, class_instance):
@@ -231,7 +232,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         algorithms = algs_to_test
     else:
         algorithms = ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
-                      "linear_regression", "elasticnet", "sgd"]
+                      "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis"]
         if len(class_instance.dataframe.index) > 10000:
             algorithms.remove("ngboost")
         else:
@@ -251,6 +252,11 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     else:
         try:
             algorithms.remove("logistic_regression")
+        except Exception:
+            pass
+
+        try:
+            algorithms.remove("quadratic_discriminant_analysis")
         except Exception:
             pass
 
