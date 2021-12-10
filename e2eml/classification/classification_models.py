@@ -233,30 +233,32 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     model training. The attributes "predicted_classes" and "predicted_probs" store dictionaries (model names are dictionary keys)
     with predicted classes and probabilities (classification tasks) while "predicted_values" stores regression based
     predictions. The attribute "evaluation_scores" keeps track of model evaluation metrics (in dictionary format).
+    
     :param datasource: Expects a Pandas dataframe (containing the target feature as a column)
     :param target_variable: Name of the target feature's column within the datasource dataframe.
     :param date_columns: Date columns can be passed as lists additionally for respective preprocessing. If not provided
-    e2eml will try to detect datetime columns automatically. Date format is expected as YYYY-MM-DD anyway.
+        e2eml will try to detect datetime columns automatically. Date format is expected as YYYY-MM-DD anyway.
     :param categorical_columns: Categorical columns can be passed as lists additionally for respective preprocessing.
-    If not provided e2eml will try to detect categorical columns automatically.
+        If not provided e2eml will try to detect categorical columns automatically.
     :param nlp_columns: NLP columns can be passed specifically. This only makes sense, if the chosen blueprint runs under 'nlp' processing.
-    If NLP columns are not declared, categorical columns will be interpreted as such.
+        If NLP columns are not declared, categorical columns will be interpreted as such.
     :param unique_identifier: A unique identifier (i.e. an ID column) can be passed as well to preserve this information
-     for later processing.
+        for later processing.
     :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
     :param preferred_training_mode: Must be 'cpu', if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
-    Can be set to 'gpu', if LGBM and Xgboost have been installed with GPU support. The default 'auto' will detect GPU support
-    and optimize accordingly. (Default: 'auto'). Only TabNet can only run on GPU and will not be impacted from this parameter.
+        Can be set to 'gpu', if LGBM and Xgboost have been installed with GPU support. The default 'auto' will detect GPU support
+        and optimize accordingly. (Default: 'auto'). Only TabNet can only run on GPU and will not be impacted from this parameter.
     :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
     :param low_memory_mode: Adds a preprocessing feature to reduce dataframe memory footprint. Will lead to a loss in
-    model performance. Will be extended by further memory savings features in future releases.
-    However we highly recommend GPU usage to heavily decrease model training times.
+        model performance. Will be extended by further memory savings features in future releases.
+        However we highly recommend GPU usage to heavily decrease model training times.
     """
 
     def threshold_refiner(self, probs, targets, algorithm):
         """
         Loops through predicted class probabilities in binary contexts and measures performance with
         Matthew correlation.
+
         :param probs: Takes predicted class probabilities.
         :param targets: Takes actual targets.
         :return: Stores the best threshold as class attribute.
@@ -290,6 +292,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def logistic_regression_train(self):
         """
         Trains a simple Logistic regression classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train logistic regression model")
@@ -315,9 +318,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with Logistic Regression")
@@ -559,6 +563,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def quadratic_discriminant_analysis_train(self):
         """
         Trains a simple Quadratic Discriminant model.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train Quadratic Discriminant model")
@@ -579,9 +584,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with Quadratic Discriminant Analysis")
@@ -663,6 +669,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def ridge_classifier_train(self):
         """
         Trains a simple ridge regression classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train Ridge classifier model")
@@ -752,9 +759,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with Ridge classifier")
@@ -828,6 +836,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def svm_train(self):
         """
         Trains a simple Support Vector Machine classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train Support Vector Machine classifier model")
@@ -916,9 +925,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def svm_predict(self, feat_importance=True, importance_alg="permutation"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(
@@ -1140,6 +1150,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def sgd_classifier_train(self):
         """
         Trains a simple sgd classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train SGD classifier model")
@@ -1242,9 +1253,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with SGD classifier")
@@ -1318,6 +1330,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def catboost_train(self):
         """
         Trains a Ridge regression model.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train catboost regression model")
@@ -1424,9 +1437,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def catboost_predict(self, feat_importance=True, importance_alg="permutation"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with catboost regression")
@@ -1499,6 +1513,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def tabnet_train(self):
         """
         Trains a simple Linear regression classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train Tabnet classification model")
@@ -1776,9 +1791,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def tabnet_predict(self):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with Tabnet classification")
@@ -1830,6 +1846,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def vowpal_wabbit_train(self):
         """
         Trains a simple Logistic regression classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train Vowpal Wabbit model")
@@ -1848,9 +1865,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def vowpal_wabbit_predict(self, feat_importance=True, importance_alg="permutation"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with Vowpal Wabbit")
@@ -1934,11 +1952,12 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     ):
         """
         Trains an XGboost model by the given parameters.
+
         :param param: Takes a dictionary with custom parameter settings.
         :param steps: Integer higher than 0. Defines maximum training steps, iuf not in autotune mode.
         :param autotune: Set "True" for automatic hyperparameter optimization. (Default: true)
         :param tune_mode: 'Simple' for simple 80-20 split validation. 'Accurate': Each hyperparameter set will be validated
-        with 5-fold crossvalidation. Longer runtimes, but higher performance. (Default: 'Accurate')
+            with 5-fold crossvalidation. Longer runtimes, but higher performance. (Default: 'Accurate')
         """
         self.get_current_timestamp(task="Train Xgboost")
         self.check_gpu_support(algorithm="xgboost")
@@ -2365,6 +2384,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def xgboost_predict(self, feat_importance=True, importance_alg="auto"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated based on SHAP values.
         :return: Updates class attributes.
         """
@@ -2460,10 +2480,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def lgbm_train(self, tune_mode="accurate", gpu_use_dp=True):  # noqa: C901
         """
         Trains an LGBM model by the given parameters.
+
         :param tune_mode: 'Simple' for simple 80-20 split validation. 'Accurate': Each hyperparameter set will be validated
-        with 10-fold cross validation. Longer runtimes, but higher performance. (Default: 'Accurate')
+            with 10-fold cross validation. Longer runtimes, but higher performance. (Default: 'Accurate')
         :param gpu_use_dp: If True and when GPU accelerated, LGBM will use bigger floats for higher accuracy, but at the
-        cost of longer runtimes (Default: True)
+            cost of longer runtimes (Default: True)
         """
         self.get_current_timestamp(task="Train LGBM")
         self.check_gpu_support(algorithm="lgbm")
@@ -2764,6 +2785,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def lgbm_predict(self, feat_importance=True, importance_alg="auto"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated based on SHAP values.
         :return: Updates class attributes.
         """
@@ -2848,6 +2870,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         """
         Trains an sklearn stacking classifier ensemble. Will automatically test different stacked classifier combinations.
         Expect very long runtimes due to CPU usage.
+
         :return: Updates class attributes by its predictions.
         """
         self.get_current_timestamp(task="Train sklearn ensemble")
@@ -3132,9 +3155,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with sklearn ensemble")
@@ -3221,6 +3245,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def ngboost_train(self, tune_mode="accurate"):  # noqa: C901
         """
         Trains an Ngboost regressor.
+
         :return: Updates class attributes by its predictions.
         """
         self.get_current_timestamp(task="Train Ngboost")
@@ -3415,9 +3440,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def ngboost_predict(self, feat_importance=True, importance_alg="SHAP"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with Ngboost")
