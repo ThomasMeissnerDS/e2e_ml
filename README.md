@@ -1,7 +1,6 @@
 # e2e ML
 
-
-> An end to end solution for automl. .
+> An end to end solution for automl.
 
 
 Pass in your data, add some information about it and get a full pipelines in
