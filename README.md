@@ -1,5 +1,5 @@
 # e2e ML
-> An end to end solution for automl. .
+> An end to end solution for automl.
 
 Pass in your data, add some information about it and get a full pipelines in return. Data preprocessing,
 feature creation, modelling and evaluation with just a few lines of code.
@@ -390,4 +390,3 @@ Consultant: Gabriel Stephen Alexander – [Github](https://github.com/bitsofstev
 
 
 [e2e-ml Github repository](https://github.com/ThomasMeissnerDS/e2e_ml)
-
