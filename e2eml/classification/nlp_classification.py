@@ -1,24 +1,44 @@
-import pandas as pd
+import gc
+import logging
+import os
+import random
+
 import numpy as np
+import pandas as pd
+import psutil
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler, Dataset
 import transformers
-from transformers import AutoModel, AutoTokenizer, AdamW, BertModel, RobertaModel, RobertaTokenizer, BertTokenizer, ElectraTokenizer, ElectraForSequenceClassification, XLNetForSequenceClassification
-from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
 from sklearn.metrics import matthews_corrcoef, mean_squared_error
-from tqdm import tqdm
-import logging
-import psutil
-import os
-import gc
 from sklearn.utils.class_weight import compute_class_weight
-from e2eml.full_processing import postprocessing, cpu_processing_nlp
-import random
+from torch.utils.data import (
+    DataLoader,
+    Dataset,
+    RandomSampler,
+    SequentialSampler,
+    TensorDataset,
+)
+from tqdm import tqdm
+from transformers import (
+    AdamW,
+    AutoModel,
+    AutoTokenizer,
+    BertModel,
+    BertTokenizer,
+    ElectraForSequenceClassification,
+    ElectraTokenizer,
+    RobertaModel,
+    RobertaTokenizer,
+    XLNetForSequenceClassification,
+    get_cosine_schedule_with_warmup,
+    get_linear_schedule_with_warmup,
+)
+
+from e2eml.full_processing import cpu_processing_nlp, postprocessing
 
 # specify GPU
 scaler = torch.cuda.amp.GradScaler()  # GPU
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class BERTDataSet(Dataset):
@@ -38,20 +58,20 @@ class BERTDataSet(Dataset):
             sentence,
             None,
             add_special_tokens=True,
-            max_length=int(self.max_sen_length*1.2),  # changed from static 300
-            padding='max_length',
+            max_length=int(self.max_sen_length * 1.2),  # changed from static 300
+            padding="max_length",
             return_token_type_ids=True,
-            truncation=True
+            truncation=True,
         )
-        ids = inputs['input_ids']
-        mask = inputs['attention_mask']
+        ids = inputs["input_ids"]
+        mask = inputs["attention_mask"]
         token_type_ids = inputs["token_type_ids"]
 
         return {
-            'ids': torch.tensor(ids, dtype=torch.long),
-            'mask': torch.tensor(mask, dtype=torch.long),
-            'token_type_ids': torch.tensor(token_type_ids, dtype=torch.long),
-            'target': torch.tensor(target, dtype=torch.long)
+            "ids": torch.tensor(ids, dtype=torch.long),
+            "mask": torch.tensor(mask, dtype=torch.long),
+            "token_type_ids": torch.tensor(token_type_ids, dtype=torch.long),
+            "target": torch.tensor(target, dtype=torch.long),
         }
 
 
@@ -73,7 +93,9 @@ class BERTDataSet(Dataset):
         return self.out(output)"""
 
 
-class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing, BERTDataSet):
+class NlpModel(
+    postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing, BERTDataSet
+):
     """
     This class stores all model training and prediction methods for classification tasks.
     This class stores all pipeline relevant information (inherited from cpu preprocessing).
@@ -100,35 +122,64 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
     model performance. Will be extended by further memory savings features in future releases.
     However we highly recommend GPU usage to heavily decrease model training times.
     """
+
     def create_train_dataset(self):
-        logging.info('Create NLP train dataset.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Create NLP train dataset.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
-        train_dataset = BERTDataSet(X_train[self.nlp_transformer_columns], Y_train, tokenizer, self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"])
+        tokenizer = self.preprocess_decisions[f"nlp_transformers"][
+            f"transformer_tokenizer_{self.transformer_chosen}"
+        ]
+        train_dataset = BERTDataSet(
+            X_train[self.nlp_transformer_columns],
+            Y_train,
+            tokenizer,
+            self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"],
+        )
         return train_dataset
 
     def create_test_dataset(self):
-        logging.info('Create NLP test dataset.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Create NLP test dataset.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
-        test_dataset = BERTDataSet(X_test[self.nlp_transformer_columns], Y_test, tokenizer, self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"])
+        tokenizer = self.preprocess_decisions[f"nlp_transformers"][
+            f"transformer_tokenizer_{self.transformer_chosen}"
+        ]
+        test_dataset = BERTDataSet(
+            X_test[self.nlp_transformer_columns],
+            Y_test,
+            tokenizer,
+            self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"],
+        )
         return test_dataset
 
     def create_pred_dataset(self):
-        logging.info('Create NLP prediction dataset.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Create NLP prediction dataset.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
             self.dataframe[self.target_variable] = 999  # creating dummy column
             dummy_target = self.dataframe[self.target_variable]
             self.dataframe.drop(self.target_variable, axis=1)
-            tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
-            pred_dataset = BERTDataSet(self.dataframe[self.nlp_transformer_columns], dummy_target, tokenizer, self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"])
+            tokenizer = self.preprocess_decisions[f"nlp_transformers"][
+                f"transformer_tokenizer_{self.transformer_chosen}"
+            ]
+            pred_dataset = BERTDataSet(
+                self.dataframe[self.nlp_transformer_columns],
+                dummy_target,
+                tokenizer,
+                self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"],
+            )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            tokenizer = self.preprocess_decisions[f"nlp_transformers"][f"transformer_tokenizer_{self.transformer_chosen}"]
-            pred_dataset = BERTDataSet(X_test[self.nlp_transformer_columns], Y_test, tokenizer, self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"])
+            tokenizer = self.preprocess_decisions[f"nlp_transformers"][
+                f"transformer_tokenizer_{self.transformer_chosen}"
+            ]
+            pred_dataset = BERTDataSet(
+                X_test[self.nlp_transformer_columns],
+                Y_test,
+                tokenizer,
+                self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"],
+            )
         return pred_dataset
 
     def create_train_dataloader(self, train_batch_size=None, workers=None):
@@ -141,11 +192,17 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
             pass
         else:
             workers = self.transformer_settings["num_workers"]
-        logging.info('Create NLP train dataloader.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Create NLP train dataloader.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         train_dataset = self.create_train_dataset()
-        train_dataloader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=workers,
-                                      pin_memory=True, drop_last=True)
+        train_dataloader = DataLoader(
+            train_dataset,
+            batch_size=train_batch_size,
+            shuffle=True,
+            num_workers=workers,
+            pin_memory=True,
+            drop_last=True,
+        )
         return train_dataloader
 
     def create_test_dataloader(self, test_batch_size=None, workers=None):
@@ -158,11 +215,17 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
             pass
         else:
             workers = self.transformer_settings["num_workers"]
-        logging.info('Create NLP test dataloader.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Create NLP test dataloader.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         test_dataset = self.create_test_dataset()
-        test_dataloader = DataLoader(test_dataset, batch_size=test_batch_size, shuffle=False, num_workers=workers,
-                                     pin_memory=True, drop_last=True)
+        test_dataloader = DataLoader(
+            test_dataset,
+            batch_size=test_batch_size,
+            shuffle=False,
+            num_workers=workers,
+            pin_memory=True,
+            drop_last=True,
+        )
         return test_dataloader
 
     def pred_dataloader(self, pred_batch_size=None, workers=None):
@@ -175,11 +238,16 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
             pass
         else:
             workers = self.transformer_settings["num_workers"]
-        logging.info('Create NLP prediction dataloader.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Create NLP prediction dataloader.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         pred_dataset = self.create_pred_dataset()
-        pred_dataloader = DataLoader(pred_dataset, batch_size=pred_batch_size, shuffle=False, num_workers=workers,
-                                     pin_memory=True)
+        pred_dataloader = DataLoader(
+            pred_dataset,
+            batch_size=pred_batch_size,
+            shuffle=False,
+            num_workers=workers,
+            pin_memory=True,
+        )
         return pred_dataloader
 
     def loss_fn(self, output, target):
@@ -191,19 +259,29 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         if self.prediction_mode:
             pass
         else:
-            logging.info('Define NLP model.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Define NLP model.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.create_bert_classification_model(self.transformer_chosen)
             model.to(device)
             model.train()
             param_optimizer = list(model.named_parameters())
-            no_decay = ['bias', 'gamma', 'beta']
+            no_decay = ["bias", "gamma", "beta"]
             optimizer_grouped_parameters = [
-                {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
-                 'weight_decay_rate': 0.01},
-                {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
-                 'weight_decay_rate': 0.0}
+                {
+                    "params": [
+                        p
+                        for n, p in param_optimizer
+                        if not any(nd in n for nd in no_decay)
+                    ],
+                    "weight_decay_rate": 0.01,
+                },
+                {
+                    "params": [
+                        p for n, p in param_optimizer if any(nd in n for nd in no_decay)
+                    ],
+                    "weight_decay_rate": 0.0,
+                },
             ]
 
             LR = 2e-5
@@ -213,15 +291,21 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
             else:
                 epochs = self.transformer_settings["epochs"]
             epochs = epochs
-            train_steps = int(len(X_train) / self.transformer_settings["train_batch_size"] * epochs)
+            train_steps = int(
+                len(X_train) / self.transformer_settings["train_batch_size"] * epochs
+            )
             num_steps = int(train_steps * 0.1)
-            scheduler = get_linear_schedule_with_warmup(optimizer, num_steps, train_steps)
-            self.preprocess_decisions[f"nlp_transformers"][f"sheduler_{self.transformer_chosen}"] = scheduler
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer, num_steps, train_steps
+            )
+            self.preprocess_decisions[f"nlp_transformers"][
+                f"sheduler_{self.transformer_chosen}"
+            ] = scheduler
             return model, optimizer, train_steps, num_steps, scheduler
 
     def training(self, train_dataloader, model, optimizer, scheduler):
-        logging.info('Start NLP training loop.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Start NLP training loop.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         model.train()
         allpreds = []
         alltargets = []
@@ -265,8 +349,8 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         return losses, train_rme_loss
 
     def validating(self, valid_dataloader, model):
-        logging.info('Start NLP validation loop.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Start NLP validation loop.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         model.eval()
         allpreds = []
         alltargets = []
@@ -301,8 +385,8 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         return allpreds, losses, valid_rme_loss
 
     def predicting(self, pred_dataloader, model, pathes):
-        logging.info('Start NLP prediction loop.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Start NLP prediction loop.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         allpreds = []
         model_no = 0
         mode_cols = []
@@ -343,31 +427,41 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         return allpreds, mode_cols
 
     def load_model_states(self, path=None):
-        logging.info('Load model save states.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Load model save states.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if path:
             pass
         else:
             path = os.getcwd()
         if self.prediction_mode:
-            pthes = [os.path.join(f"{path}/", s) for s in os.listdir(f"{path}/") if ".pth" in s]
+            pthes = [
+                os.path.join(f"{path}/", s)
+                for s in os.listdir(f"{path}/")
+                if ".pth" in s
+            ]
             return pthes
         else:
-            pthes = [os.path.join(f"{path}/", s) for s in os.listdir(f"{path}/") if ".pth" in s]
+            pthes = [
+                os.path.join(f"{path}/", s)
+                for s in os.listdir(f"{path}/")
+                if ".pth" in s
+            ]
             return pthes
 
     def transformer_train(self):
         if self.prediction_mode:
             pass
         else:
-            logging.info('Start NLP transformer training.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Start NLP transformer training.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             self.reset_test_train_index()
 
             train_dataloader = self.create_train_dataloader()
             test_dataloader = self.create_test_dataloader()
             model, optimizer, train_steps, num_steps, scheduler = self.model_setup()
-            scheduler = get_linear_schedule_with_warmup(optimizer, num_steps, train_steps)
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer, num_steps, train_steps
+            )
 
             trainlosses = []
             vallosses = []
@@ -377,7 +471,9 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
 
             for epoch in tqdm(range(self.transformer_settings["epochs"])):
                 print("---------------" + str(epoch) + "start-------------")
-                trainloss, trainscore = self.training(train_dataloader, model, optimizer, scheduler)
+                trainloss, trainscore = self.training(
+                    train_dataloader, model, optimizer, scheduler
+                )
                 trainlosses.append(trainloss)
                 trainscores.append(trainscore)
                 print("trainscore is " + str(trainscore))
@@ -390,9 +486,9 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
                     bestscore = valscore
                     print("Save first model")
                     state = {
-                        'state_dict': model.state_dict(),
-                        'optimizer_dict': optimizer.state_dict(),
-                        "bestscore": bestscore
+                        "state_dict": model.state_dict(),
+                        "optimizer_dict": optimizer.state_dict(),
+                        "bestscore": bestscore,
                     }
                     torch.save(state, "model0.pth")
 
@@ -400,9 +496,9 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
                     bestscore = valscore
                     print("found better point")
                     state = {
-                        'state_dict': model.state_dict(),
-                        'optimizer_dict': optimizer.state_dict(),
-                        "bestscore": bestscore
+                        "state_dict": model.state_dict(),
+                        "optimizer_dict": optimizer.state_dict(),
+                        "bestscore": bestscore,
                     }
                     torch.save(state, "model0.pth")
                 else:
@@ -425,20 +521,37 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
                 model.to(device)
 
                 param_optimizer = list(model.named_parameters())
-                no_decay = ['bias', 'gamma', 'beta']
+                no_decay = ["bias", "gamma", "beta"]
                 optimizer_grouped_parameters = [
-                    {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
-                     'weight_decay_rate': 0.01},
-                    {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
-                     'weight_decay_rate': 0.0}
+                    {
+                        "params": [
+                            p
+                            for n, p in param_optimizer
+                            if not any(nd in n for nd in no_decay)
+                        ],
+                        "weight_decay_rate": 0.01,
+                    },
+                    {
+                        "params": [
+                            p
+                            for n, p in param_optimizer
+                            if any(nd in n for nd in no_decay)
+                        ],
+                        "weight_decay_rate": 0.0,
+                    },
                 ]
 
                 LR = 2e-5
                 optimizer = AdamW(optimizer_grouped_parameters, LR)  # AdamW optimizer
                 train_steps = int(
-                    len(X_train) / self.transformer_settings["train_batch_size"] * self.transformer_settings["epochs"])
+                    len(X_train)
+                    / self.transformer_settings["train_batch_size"]
+                    * self.transformer_settings["epochs"]
+                )
                 num_steps = int(train_steps * 0.1)
-                scheduler = get_linear_schedule_with_warmup(optimizer, num_steps, train_steps)
+                scheduler = get_linear_schedule_with_warmup(
+                    optimizer, num_steps, train_steps
+                )
 
                 trainlosses = []
                 vallosses = []
@@ -448,7 +561,9 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
 
                 for epoch in tqdm(range(self.transformer_settings["epochs"])):
                     print("---------------" + str(epoch) + "start-------------")
-                    trainloss, trainscore = self.training(train_dataloader, model, optimizer, scheduler)
+                    trainloss, trainscore = self.training(
+                        train_dataloader, model, optimizer, scheduler
+                    )
                     trainlosses.append(trainloss)
                     trainscores.append(trainscore)
 
@@ -463,18 +578,18 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
                         bestscore = valscore
                         print("Save first model")
                         state = {
-                            'state_dict': model.state_dict(),
-                            'optimizer_dict': optimizer.state_dict(),
-                            "bestscore": bestscore
+                            "state_dict": model.state_dict(),
+                            "optimizer_dict": optimizer.state_dict(),
+                            "bestscore": bestscore,
                         }
                         torch.save(state, "model" + str(fold) + ".pth")
                     elif bestscore < valscore:
                         bestscore = valscore
                         print("found better point")
                         state = {
-                            'state_dict': model.state_dict(),
-                            'optimizer_dict': optimizer.state_dict(),
-                            "bestscore": bestscore
+                            "state_dict": model.state_dict(),
+                            "optimizer_dict": optimizer.state_dict(),
+                            "bestscore": bestscore,
                         }
                         torch.save(state, "model" + str(fold) + ".pth")
                     else:
@@ -492,20 +607,20 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
         return matthews
 
     def transformer_predict(self):
-        logging.info('Start NLP transformer prediction.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Start NLP transformer prediction.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         self.reset_test_train_index()
         model = self.create_bert_classification_model(self.transformer_chosen)
         pthes = self.load_model_states(path=self.transformer_model_save_states_path)
         print(pthes)
         pred_dataloader = self.pred_dataloader()
         allpreds, mode_cols = self.predicting(pred_dataloader, model, pthes)
-        #print(allpreds)
-        #findf = pd.DataFrame(allpreds)
-        #findf = findf.T
+        # print(allpreds)
+        # findf = pd.DataFrame(allpreds)
+        # findf = findf.T
         if self.prediction_mode:
             self.dataframe["majority_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
-            self.predicted_classes['nlp_transformer'] = self.dataframe["majority_class"]
+            self.predicted_classes["nlp_transformer"] = self.dataframe["majority_class"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
@@ -515,14 +630,14 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
                 states = []
                 for state in mode_cols:
                     state_score = self.matthews_eval(Y_test, X_test[state])
-                    #print(f"{state} score: {state_score}")
+                    # print(f"{state} score: {state_score}")
                     scorings.append(state_score)
                     states.append(state)
                 scorings_arr = np.array(scorings)
                 scorings_mean = np.mean(scorings_arr)
                 scorings_std = np.std(scorings_arr)
-                keep_state = scorings_arr > scorings_mean-scorings_std
-                #print(f"keep {keep_state}")
+                keep_state = scorings_arr > scorings_mean - scorings_std
+                # print(f"keep {keep_state}")
                 for index, state in enumerate(states):
                     os_string = state[-6:]
                     if keep_state.tolist()[index]:
@@ -532,9 +647,9 @@ class NlpModel(postprocessing.FullPipeline, cpu_processing_nlp.NlpPreprocessing,
                         X_test.drop(state, axis=1)
                         os.remove(f"{os_string}.pth")
 
-                #print(f"states left:  {states}")
+                # print(f"states left:  {states}")
             else:
                 pass
 
             X_test["majority_class"] = X_test[mode_cols].mode(axis=1)[0]
-            self.predicted_classes['nlp_transformer'] = X_test["majority_class"]
+            self.predicted_classes["nlp_transformer"] = X_test["majority_class"]

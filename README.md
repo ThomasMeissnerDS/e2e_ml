@@ -56,7 +56,7 @@ del holdout_df[target]
 
 # instantiate the needed blueprints class
 from classification import classification_blueprints # regression bps are available with from regression import regression_blueprints
-test_class = classification_blueprints.ClassificationBluePrint(datasource=train_df, 
+test_class = classification_blueprints.ClassificationBluePrint(datasource=train_df,
                         target_variable=target,
                         train_split_type='cross',
                         rapids_acceleration=True, # if installed into a conda environment with NVIDIA Rapids, this can be used to accelerate preprocessing with GPU
@@ -65,7 +65,7 @@ test_class = classification_blueprints.ClassificationBluePrint(datasource=train_
                         #categorical_columns=cat_columns # you can define categorical columns, otherwise e2e does this automatically
                         #date_columns=date_columns # you can also define date columns (expected is YYYY-MM-DD format)
                                                                )
-                                                                 
+
 """
 *
 'Auto' is recommended for preferred_training_mode parameter, but with 'CPU' and 'GPU' it can also be controlled manually.
@@ -74,7 +74,7 @@ This will massively improve training times and speed up SHAP feature importance 
 For Xgboost this should work out of the box, if installed into a RAPIDS environment.
 """
 # run actual blueprint
-test_class.ml_bp01_multiclass_full_processing_xgb_prob() 
+test_class.ml_bp01_multiclass_full_processing_xgb_prob()
 
 """
 When choosing blueprints several options are available:
@@ -121,7 +121,7 @@ test_class.special_blueprint_algorithms = {"ridge": True,
                                              "sklearn_ensemble": True,
                                              "catboost": False
                                              }
-                                             
+
 Also preprocessing steps can be selected:
 test_class.blueprint_step_selection_non_nlp = {
             "automatic_type_detection_casting": True,
@@ -164,10 +164,10 @@ test_class.blueprint_step_selection_non_nlp = {
             "autoencoder_based_oversampling": False, # perfect for imbalanced binary and multiclass data
             "final_pca_dimensionality_reduction": False
         }
-        
+
 The bruteforce_random_feature_selection step is experimental. It showed promising results. The number of trials can be controlled.
 This step is useful, if the model overfitted (which should happen rarely), because too many features with too little
-feature importance have been considered. 
+feature importance have been considered.
 like test_class.hyperparameter_tuning_rounds["bruteforce_random"] = 400 .
 
 Generally the class instance is a control center and gives room for plenty of customization.
@@ -216,15 +216,15 @@ test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
                                                        "autoencoder_based_oversampling": 2*60*60,
                                                        "final_kernel_pca_dimensionality_reduction": 4*60*60,
                                                        "final_pca_dimensionality_reduction": 2*60*60}
-                                                       
+
 When these parameters have to updated, please overwrite the keys individually to not break the blueprints eventually.
-I.e.: test_class.hyperparameter_tuning_max_runtime_secs["xgboost"] = 12*60*60 would work fine. 
+I.e.: test_class.hyperparameter_tuning_max_runtime_secs["xgboost"] = 12*60*60 would work fine.
 
 Working with big data can bring all hardware to it's needs. e2eml has been tested with:
 - Ryzen 5950x (16 cores CPU)
 - Geforce RTX 3090 (24GB VRAM)
-- 64GB RAM                                                      
-e2eml has been able to process 100k rows with 200 columns approximately using these specs stable for non-blended 
+- 64GB RAM
+e2eml has been able to process 100k rows with 200 columns approximately using these specs stable for non-blended
 blueprints. Blended blueprints consume more resources as e2eml keep the trained models in memory as of now.
 
 For data bigger than 100k rows it is possible to limit the amount of data for various preprocessing steps:
@@ -232,7 +232,7 @@ For data bigger than 100k rows it is possible to limit the amount of data for va
 - test_class.hyperparameter_tuning_sample_size = 100000 # for model hyperparameter optimization
 - test_class.brute_force_selection_sample_size = 15000 # for an experimental feature selection
 
-For binary classification a sample size of 100k datapoints is sufficient in most cases. Hyperparameter tuning sample size can be much less, 
+For binary classification a sample size of 100k datapoints is sufficient in most cases. Hyperparameter tuning sample size can be much less,
 depending on class imbalance.
 
 For multiclass we recommend to start with small samples as algorithms like Xgboost and LGBM will easily grow in memory consumption
@@ -390,4 +390,3 @@ Consultant: Gabriel Stephen Alexander – [Github](https://github.com/bitsofstev
 
 
 [e2e-ml Github repository](https://github.com/ThomasMeissnerDS/e2e_ml)
-

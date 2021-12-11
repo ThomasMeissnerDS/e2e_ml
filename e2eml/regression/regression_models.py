@@ -1,39 +1,49 @@
-from e2eml.full_processing import postprocessing
-from pandas.core.common import SettingWithCopyWarning
-import numpy as np
-import pandas as pd
-import optuna
-import xgboost as xgb
-import lightgbm as lgb
-import torch
-from catboost import CatBoostRegressor, cv, Pool
-from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
-from sklearn.ensemble import StackingRegressor
-from sklearn.linear_model import RidgeCV, Ridge, ElasticNet, RANSACRegressor
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.model_selection import KFold
-from lightgbm import LGBMRegressor
-from ngboost import NGBRegressor
-from pytorch_tabnet.tab_model import TabNetRegressor
-from pytorch_tabnet.pretraining import TabNetPretrainer
-from sklearn.tree import DecisionTreeRegressor
-from ngboost.distns import Exponential, Normal, LogNormal
-from sklearn.linear_model import SGDRegressor, BayesianRidge, ARDRegression
-from sklearn.svm import LinearSVR, SVR
-from sklearn.metrics import mean_absolute_error
-from sklearn.model_selection import cross_val_score
-from sklearn.linear_model import LinearRegression
-from sklearn.inspection import permutation_importance
-import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-import matplotlib.pyplot as plt
+import gc
 import logging
 import warnings
-import gc
+
+import lightgbm as lgb
+import matplotlib.pyplot as plt
+import numpy as np
+import optuna
+import pandas as pd
+import torch
+import torch.optim as optim
+import xgboost as xgb
+from catboost import CatBoostRegressor, Pool, cv
+from lightgbm import LGBMRegressor
+from ngboost import NGBRegressor
+from ngboost.distns import Exponential, LogNormal, Normal
+from pandas.core.common import SettingWithCopyWarning
+from pytorch_tabnet.pretraining import TabNetPretrainer
+from pytorch_tabnet.tab_model import TabNetRegressor
+from sklearn.ensemble import (
+    GradientBoostingRegressor,
+    RandomForestRegressor,
+    StackingRegressor,
+)
+from sklearn.inspection import permutation_importance
+from sklearn.linear_model import (
+    ARDRegression,
+    BayesianRidge,
+    ElasticNet,
+    LinearRegression,
+    RANSACRegressor,
+    Ridge,
+    RidgeCV,
+    SGDRegressor,
+)
+from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import KFold, cross_val_score
+from sklearn.svm import SVR, LinearSVR
+from sklearn.tree import DecisionTreeRegressor
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
+
+from e2eml.full_processing import postprocessing
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class RegressionModels(postprocessing.FullPipeline):
@@ -70,8 +80,8 @@ class RegressionModels(postprocessing.FullPipeline):
         Trains a simple Linear regression model.
         :return: Trained model.
         """
-        self.get_current_timestamp(task='Train logistic regression model')
-        algorithm = 'linear_regression'
+        self.get_current_timestamp(task="Train logistic regression model")
+        algorithm = "linear_regression"
         if self.prediction_mode:
             pass
         else:
@@ -83,7 +93,9 @@ class RegressionModels(postprocessing.FullPipeline):
             _ = gc.collect()
             return self.trained_models
 
-    def linear_regression_predict(self, feat_importance=True, importance_alg='permutation'):
+    def linear_regression_predict(
+        self, feat_importance=True, importance_alg="permutation"
+    ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -91,28 +103,38 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with Logistic regression')
-        algorithm = 'linear_regression'
+        self.get_current_timestamp(task="Predict with Logistic regression")
+        algorithm = "linear_regression"
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
 
-            if feat_importance and importance_alg == 'SHAP':
-                self.runtime_warnings(warn_about='shap_cpu')
+            if feat_importance and importance_alg == "SHAP":
+                self.runtime_warnings(warn_about="shap_cpu")
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns)
+                    self.shap_explanations(
+                        model=model,
+                        test_df=X_test.sample(10000, random_state=42),
+                        cols=X_test.columns,
+                    )
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
-            elif feat_importance and importance_alg == 'permutation':
+                    self.shap_explanations(
+                        model=model, test_df=X_test, cols=X_test.columns
+                    )
+            elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
-                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                )
+                permutation_importances = pd.Series(
+                    result.importances_mean, index=X_test.columns
+                )
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
                 ax.set_title("Feature importances using permutation on full model")
@@ -131,8 +153,8 @@ class RegressionModels(postprocessing.FullPipeline):
         Trains a SVM regression model.
         :return: Trained model.
         """
-        self.get_current_timestamp(task='Train SVM regression model')
-        algorithm = 'svm_regression'
+        self.get_current_timestamp(task="Train SVM regression model")
+        algorithm = "svm_regression"
         if self.prediction_mode:
             pass
         else:
@@ -141,25 +163,37 @@ class RegressionModels(postprocessing.FullPipeline):
 
             def objective(trial):
                 param = {
-                    'C': trial.suggest_loguniform('C', 0.5, 1e3),
-                    'max_iter': trial.suggest_int('max_iter', 1, 10000),
-                    'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
-                    'gamma': trial.suggest_categorical("gamma", ['scale', 'auto'])
+                    "C": trial.suggest_loguniform("C", 0.5, 1e3),
+                    "max_iter": trial.suggest_int("max_iter", 1, 10000),
+                    "tol": trial.suggest_loguniform("tol", 1e-5, 1e-1),
+                    "gamma": trial.suggest_categorical("gamma", ["scale", "auto"]),
                 }
-                model = SVR(C=param["C"],
-                            max_iter=param["max_iter"],
-                            tol=param["tol"],
-                            gamma=param["gamma"])#.fit(x_train, y_train)
+                model = SVR(
+                    C=param["C"],
+                    max_iter=param["max_iter"],
+                    tol=param["tol"],
+                    gamma=param["gamma"],
+                )  # .fit(x_train, y_train)
                 try:
-                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error')
+                    scores = cross_val_score(
+                        model, x_train, y_train, cv=10, scoring="neg_mean_squared_error"
+                    )
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
                 return mae
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -174,17 +208,21 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
 
             best_parameters = study.best_trial.params
-            model = SVR(C=best_parameters["C"],
-                        max_iter=best_parameters["max_iter"],
-                        tol=best_parameters["tol"],
-                        gamma=best_parameters["gamma"]).fit(X_train, Y_train)
+            model = SVR(
+                C=best_parameters["C"],
+                max_iter=best_parameters["max_iter"],
+                tol=best_parameters["tol"],
+                gamma=best_parameters["gamma"],
+            ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
             _ = gc.collect()
             return self.trained_models
 
-    def svm_regression_predict(self, feat_importance=True, importance_alg='permutation'):
+    def svm_regression_predict(
+        self, feat_importance=True, importance_alg="permutation"
+    ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -192,28 +230,38 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with SVM regression')
-        algorithm = 'svm_regression'
+        self.get_current_timestamp(task="Predict with SVM regression")
+        algorithm = "svm_regression"
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
 
-            if feat_importance and importance_alg == 'SHAP':
-                self.runtime_warnings(warn_about='shap_cpu')
+            if feat_importance and importance_alg == "SHAP":
+                self.runtime_warnings(warn_about="shap_cpu")
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns)
+                    self.shap_explanations(
+                        model=model,
+                        test_df=X_test.sample(10000, random_state=42),
+                        cols=X_test.columns,
+                    )
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
-            elif feat_importance and importance_alg == 'permutation':
+                    self.shap_explanations(
+                        model=model, test_df=X_test, cols=X_test.columns
+                    )
+            elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
-                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                )
+                permutation_importances = pd.Series(
+                    result.importances_mean, index=X_test.columns
+                )
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
                 ax.set_title("Feature importances using permutation on full model")
@@ -232,8 +280,8 @@ class RegressionModels(postprocessing.FullPipeline):
         Trains a Ridge regression model.
         :return: Trained model.
         """
-        self.get_current_timestamp(task='Train ridge regression model')
-        algorithm = 'ridge'
+        self.get_current_timestamp(task="Train ridge regression model")
+        algorithm = "ridge"
         if self.prediction_mode:
             pass
         else:
@@ -241,29 +289,44 @@ class RegressionModels(postprocessing.FullPipeline):
             x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
-                solver = trial.suggest_categorical("solver", ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"])
+                solver = trial.suggest_categorical(
+                    "solver",
+                    ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"],
+                )
                 param = {
-                    'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
-                    'max_iter': trial.suggest_int('max_iter', 10, 10000),
-                    'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
-                    'normalize': trial.suggest_categorical("normalize", [True, False])
+                    "alpha": trial.suggest_loguniform("alpha", 1e-3, 1e3),
+                    "max_iter": trial.suggest_int("max_iter", 10, 10000),
+                    "tol": trial.suggest_loguniform("tol", 1e-5, 1e-1),
+                    "normalize": trial.suggest_categorical("normalize", [True, False]),
                 }
-                model = Ridge(alpha=param["alpha"],
-                              max_iter=param["max_iter"],
-                              tol=param["tol"],
-                              normalize=param["normalize"],
-                              solver=solver,
-                              random_state=42)
+                model = Ridge(
+                    alpha=param["alpha"],
+                    max_iter=param["max_iter"],
+                    tol=param["tol"],
+                    normalize=param["normalize"],
+                    solver=solver,
+                    random_state=42,
+                )
                 try:
-                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error')
+                    scores = cross_val_score(
+                        model, x_train, y_train, cv=10, scoring="neg_mean_squared_error"
+                    )
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
                 return mae
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -278,19 +341,23 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
 
             best_parameters = study.best_trial.params
-            model = Ridge(alpha=best_parameters["alpha"],
-                          max_iter=best_parameters["max_iter"],
-                          normalize=best_parameters["normalize"],
-                          tol=best_parameters["tol"],
-                          solver=best_parameters["solver"],
-                          random_state=42).fit(X_train, Y_train)
+            model = Ridge(
+                alpha=best_parameters["alpha"],
+                max_iter=best_parameters["max_iter"],
+                normalize=best_parameters["normalize"],
+                tol=best_parameters["tol"],
+                solver=best_parameters["solver"],
+                random_state=42,
+            ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
             _ = gc.collect()
             return self.trained_models
 
-    def ridge_regression_predict(self, feat_importance=True, importance_alg='permutation'):
+    def ridge_regression_predict(
+        self, feat_importance=True, importance_alg="permutation"
+    ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -298,28 +365,38 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with ridge regression')
-        algorithm = 'ridge'
+        self.get_current_timestamp(task="Predict with ridge regression")
+        algorithm = "ridge"
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
 
-            if feat_importance and importance_alg == 'SHAP':
-                self.runtime_warnings(warn_about='shap_cpu')
+            if feat_importance and importance_alg == "SHAP":
+                self.runtime_warnings(warn_about="shap_cpu")
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns)
+                    self.shap_explanations(
+                        model=model,
+                        test_df=X_test.sample(10000, random_state=42),
+                        cols=X_test.columns,
+                    )
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
-            elif feat_importance and importance_alg == 'permutation':
+                    self.shap_explanations(
+                        model=model, test_df=X_test, cols=X_test.columns
+                    )
+            elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
-                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                )
+                permutation_importances = pd.Series(
+                    result.importances_mean, index=X_test.columns
+                )
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
                 ax.set_title("Feature importances using permutation on full model")
@@ -338,8 +415,8 @@ class RegressionModels(postprocessing.FullPipeline):
         Trains a Ridge regression model.
         :return: Trained model.
         """
-        self.get_current_timestamp(task='Train Ransac regression model')
-        algorithm = 'ransac'
+        self.get_current_timestamp(task="Train Ransac regression model")
+        algorithm = "ransac"
         if self.prediction_mode:
             pass
         else:
@@ -347,40 +424,58 @@ class RegressionModels(postprocessing.FullPipeline):
             x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
-                base_estimator = trial.suggest_categorical("base_estimator", ["None", "linear_regression", "ridge",
-                                                                             "sgd", "lgbm", "ardregression"])
+                base_estimator = trial.suggest_categorical(
+                    "base_estimator",
+                    [
+                        "None",
+                        "linear_regression",
+                        "ridge",
+                        "sgd",
+                        "lgbm",
+                        "ardregression",
+                    ],
+                )
 
-                if base_estimator == 'None':
+                if base_estimator == "None":
                     estimator = None
-                elif base_estimator == 'linear_regression':
+                elif base_estimator == "linear_regression":
                     estimator = LinearRegression()
-                elif base_estimator == 'ridge':
+                elif base_estimator == "ridge":
                     estimator = Ridge()
-                elif base_estimator == 'elasticnet':
+                elif base_estimator == "elasticnet":
                     estimator = ElasticNet()
-                elif base_estimator == 'sgd':
+                elif base_estimator == "sgd":
                     estimator = SGDRegressor()
-                elif base_estimator == 'lgbm':
+                elif base_estimator == "lgbm":
                     estimator = LGBMRegressor()
-                elif base_estimator == 'adaboost':
+                elif base_estimator == "adaboost":
                     estimator = ARDRegression()
                 else:
                     estimator = None
 
                 model = RANSACRegressor(
-                    base_estimator=estimator,
-                    max_trials=100,
-                    random_state=42)
+                    base_estimator=estimator, max_trials=100, random_state=42
+                )
                 try:
-                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error')
+                    scores = cross_val_score(
+                        model, x_train, y_train, cv=10, scoring="neg_mean_squared_error"
+                    )
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
                 return mae
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -395,34 +490,35 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
 
             best_parameters = study.best_trial.params
-            if best_parameters["base_estimator"] == 'None':
+            if best_parameters["base_estimator"] == "None":
                 estimator = None
-            elif best_parameters["base_estimator"] == 'linear_regression':
+            elif best_parameters["base_estimator"] == "linear_regression":
                 estimator = LinearRegression()
-            elif best_parameters["base_estimator"] == 'ridge':
+            elif best_parameters["base_estimator"] == "ridge":
                 estimator = Ridge()
-            elif best_parameters["base_estimator"] == 'elasticnet':
+            elif best_parameters["base_estimator"] == "elasticnet":
                 estimator = ElasticNet()
-            elif best_parameters["base_estimator"] == 'sgd':
+            elif best_parameters["base_estimator"] == "sgd":
                 estimator = SGDRegressor()
-            elif best_parameters["base_estimator"] == 'lgbm':
+            elif best_parameters["base_estimator"] == "lgbm":
                 estimator = LGBMRegressor()
-            elif best_parameters["base_estimator"] == 'random_forest':
+            elif best_parameters["base_estimator"] == "random_forest":
                 estimator = RandomForestRegressor()
             else:
                 estimator = None
 
             model = RANSACRegressor(
-                base_estimator=estimator,
-                max_trials=100,
-                random_state=42).fit(X_train, Y_train)
+                base_estimator=estimator, max_trials=100, random_state=42
+            ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
             _ = gc.collect()
             return self.trained_models
 
-    def ransac_regression_predict(self, feat_importance=True, importance_alg='permutation'):
+    def ransac_regression_predict(
+        self, feat_importance=True, importance_alg="permutation"
+    ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -430,28 +526,38 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with Ransac regression')
-        algorithm = 'ransac'
+        self.get_current_timestamp(task="Predict with Ransac regression")
+        algorithm = "ransac"
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
 
-            if feat_importance and importance_alg == 'SHAP':
-                self.runtime_warnings(warn_about='shap_cpu')
+            if feat_importance and importance_alg == "SHAP":
+                self.runtime_warnings(warn_about="shap_cpu")
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns)
+                    self.shap_explanations(
+                        model=model,
+                        test_df=X_test.sample(10000, random_state=42),
+                        cols=X_test.columns,
+                    )
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
-            elif feat_importance and importance_alg == 'permutation':
+                    self.shap_explanations(
+                        model=model, test_df=X_test, cols=X_test.columns
+                    )
+            elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
-                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                )
+                permutation_importances = pd.Series(
+                    result.importances_mean, index=X_test.columns
+                )
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
                 ax.set_title("Feature importances using permutation on full model")
@@ -470,8 +576,8 @@ class RegressionModels(postprocessing.FullPipeline):
         Trains a SGD regression model.
         :return: Trained model.
         """
-        self.get_current_timestamp(task='Train SGD regression model')
-        algorithm = 'sgd'
+        self.get_current_timestamp(task="Train SGD regression model")
+        algorithm = "sgd"
         if self.prediction_mode:
             pass
         else:
@@ -481,32 +587,44 @@ class RegressionModels(postprocessing.FullPipeline):
             def objective(trial):
                 loss = trial.suggest_categorical("loss", ["huber", "squared_loss"])
                 param = {
-                    'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
-                    'l1_ratio': trial.suggest_loguniform('l1_ratio', 1e-3, 0.9999),
-                    'max_iter': trial.suggest_int('max_iter', 10, 30000),
-                    'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
-                    'normalize': trial.suggest_categorical("normalize", [True, False]),
-                    'power_t': trial.suggest_loguniform('power_t', 0.1, 0.7)
+                    "alpha": trial.suggest_loguniform("alpha", 1e-3, 1e3),
+                    "l1_ratio": trial.suggest_loguniform("l1_ratio", 1e-3, 0.9999),
+                    "max_iter": trial.suggest_int("max_iter", 10, 30000),
+                    "tol": trial.suggest_loguniform("tol", 1e-5, 1e-1),
+                    "normalize": trial.suggest_categorical("normalize", [True, False]),
+                    "power_t": trial.suggest_loguniform("power_t", 0.1, 0.7),
                 }
-                model = SGDRegressor(alpha=param["alpha"],
-                                     max_iter=param["max_iter"],
-                                     tol=param["tol"],
-                                     l1_ratio=param["l1_ratio"],
-                                     power_t=param["power_t"],
-                                     penalty='elasticnet',
-                                     loss=loss,
-                                     early_stopping=True,
-                                     random_state=42)#.fit(X_train, Y_train)
+                model = SGDRegressor(
+                    alpha=param["alpha"],
+                    max_iter=param["max_iter"],
+                    tol=param["tol"],
+                    l1_ratio=param["l1_ratio"],
+                    power_t=param["power_t"],
+                    penalty="elasticnet",
+                    loss=loss,
+                    early_stopping=True,
+                    random_state=42,
+                )  # .fit(X_train, Y_train)
                 try:
-                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error')
+                    scores = cross_val_score(
+                        model, x_train, y_train, cv=10, scoring="neg_mean_squared_error"
+                    )
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
                 return mae
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -521,22 +639,26 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
 
             best_parameters = study.best_trial.params
-            model = SGDRegressor(alpha=best_parameters["alpha"],
-                                 max_iter=best_parameters["max_iter"],
-                                 tol=best_parameters["tol"],
-                                 l1_ratio=best_parameters["l1_ratio"],
-                                 power_t=best_parameters["power_t"],
-                                 penalty='elasticnet',
-                                 loss=best_parameters["loss"],
-                                 early_stopping=True,
-                                 random_state=42).fit(X_train, Y_train)
+            model = SGDRegressor(
+                alpha=best_parameters["alpha"],
+                max_iter=best_parameters["max_iter"],
+                tol=best_parameters["tol"],
+                l1_ratio=best_parameters["l1_ratio"],
+                power_t=best_parameters["power_t"],
+                penalty="elasticnet",
+                loss=best_parameters["loss"],
+                early_stopping=True,
+                random_state=42,
+            ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
             _ = gc.collect()
             return self.trained_models
 
-    def sgd_regression_predict(self, feat_importance=True, importance_alg='permutation'):
+    def sgd_regression_predict(
+        self, feat_importance=True, importance_alg="permutation"
+    ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -544,28 +666,38 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with SGD regression')
-        algorithm = 'sgd'
+        self.get_current_timestamp(task="Predict with SGD regression")
+        algorithm = "sgd"
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
 
-            if feat_importance and importance_alg == 'SHAP':
-                self.runtime_warnings(warn_about='shap_cpu')
+            if feat_importance and importance_alg == "SHAP":
+                self.runtime_warnings(warn_about="shap_cpu")
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns)
+                    self.shap_explanations(
+                        model=model,
+                        test_df=X_test.sample(10000, random_state=42),
+                        cols=X_test.columns,
+                    )
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
-            elif feat_importance and importance_alg == 'permutation':
+                    self.shap_explanations(
+                        model=model, test_df=X_test, cols=X_test.columns
+                    )
+            elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
-                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                )
+                permutation_importances = pd.Series(
+                    result.importances_mean, index=X_test.columns
+                )
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
                 ax.set_title("Feature importances using permutation on full model")
@@ -584,8 +716,8 @@ class RegressionModels(postprocessing.FullPipeline):
         Trains an Elasticnet regression model.
         :return: Trained model.
         """
-        self.get_current_timestamp(task='Train elasticnet regression model')
-        algorithm = 'elasticnet'
+        self.get_current_timestamp(task="Train elasticnet regression model")
+        algorithm = "elasticnet"
         if self.prediction_mode:
             pass
         else:
@@ -594,30 +726,44 @@ class RegressionModels(postprocessing.FullPipeline):
 
             def objective(trial):
                 param = {
-                    'alpha': trial.suggest_loguniform('alpha', 1e-3, 1e3),
-                    'l1_ratio': trial.suggest_loguniform('l1_ratio', 1e-6, 0.999),
-                    'max_iter': trial.suggest_loguniform('max_iter', 10, 10000),
-                    'tol': trial.suggest_loguniform('tol', 1e-5, 1e-1),
-                    'normalize': trial.suggest_categorical("normalize", [True, False]),
-                    'warm_start': trial.suggest_categorical("warm_start", [True, False])
+                    "alpha": trial.suggest_loguniform("alpha", 1e-3, 1e3),
+                    "l1_ratio": trial.suggest_loguniform("l1_ratio", 1e-6, 0.999),
+                    "max_iter": trial.suggest_loguniform("max_iter", 10, 10000),
+                    "tol": trial.suggest_loguniform("tol", 1e-5, 1e-1),
+                    "normalize": trial.suggest_categorical("normalize", [True, False]),
+                    "warm_start": trial.suggest_categorical(
+                        "warm_start", [True, False]
+                    ),
                 }
-                model = ElasticNet(alpha=param["alpha"],
-                                   l1_ratio=param["l1_ratio"],
-                                   max_iter=param["max_iter"],
-                                   tol=param["tol"],
-                                   normalize=param["normalize"],
-                                   warm_start=param["warm_start"],
-                                   random_state=42).fit(X_train, Y_train)
+                model = ElasticNet(
+                    alpha=param["alpha"],
+                    l1_ratio=param["l1_ratio"],
+                    max_iter=param["max_iter"],
+                    tol=param["tol"],
+                    normalize=param["normalize"],
+                    warm_start=param["warm_start"],
+                    random_state=42,
+                ).fit(X_train, Y_train)
                 try:
-                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error')
+                    scores = cross_val_score(
+                        model, x_train, y_train, cv=10, scoring="neg_mean_squared_error"
+                    )
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
                 return mae
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -632,20 +778,24 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
 
             best_parameters = study.best_trial.params
-            model = ElasticNet(alpha=best_parameters["alpha"],
-                               max_iter=best_parameters["max_iter"],
-                               normalize=best_parameters["normalize"],
-                               warm_start=best_parameters["warm_start"],
-                               tol=best_parameters["tol"],
-                               l1_ratio=best_parameters["l1_ratio"],
-                               random_state=42).fit(X_train, Y_train)
+            model = ElasticNet(
+                alpha=best_parameters["alpha"],
+                max_iter=best_parameters["max_iter"],
+                normalize=best_parameters["normalize"],
+                warm_start=best_parameters["warm_start"],
+                tol=best_parameters["tol"],
+                l1_ratio=best_parameters["l1_ratio"],
+                random_state=42,
+            ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
             _ = gc.collect()
             return self.trained_models
 
-    def elasticnet_regression_predict(self, feat_importance=True, importance_alg='permutation'):
+    def elasticnet_regression_predict(
+        self, feat_importance=True, importance_alg="permutation"
+    ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -653,28 +803,38 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with elasticnet regression')
-        algorithm = 'elasticnet'
+        self.get_current_timestamp(task="Predict with elasticnet regression")
+        algorithm = "elasticnet"
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
 
-            if feat_importance and importance_alg == 'SHAP':
-                self.runtime_warnings(warn_about='shap_cpu')
+            if feat_importance and importance_alg == "SHAP":
+                self.runtime_warnings(warn_about="shap_cpu")
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns)
+                    self.shap_explanations(
+                        model=model,
+                        test_df=X_test.sample(10000, random_state=42),
+                        cols=X_test.columns,
+                    )
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
-            elif feat_importance and importance_alg == 'permutation':
+                    self.shap_explanations(
+                        model=model, test_df=X_test, cols=X_test.columns
+                    )
+            elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
-                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                )
+                permutation_importances = pd.Series(
+                    result.importances_mean, index=X_test.columns
+                )
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
                 ax.set_title("Feature importances using permutation on full model")
@@ -693,9 +853,9 @@ class RegressionModels(postprocessing.FullPipeline):
         Trains a Ridge regression model.
         :return: Trained model.
         """
-        self.get_current_timestamp(task='Train catboost regression model')
-        self.check_gpu_support(algorithm='catboost')
-        algorithm = 'catboost'
+        self.get_current_timestamp(task="Train catboost regression model")
+        self.check_gpu_support(algorithm="catboost")
+        algorithm = "catboost"
         if self.prediction_mode:
             pass
         else:
@@ -705,30 +865,44 @@ class RegressionModels(postprocessing.FullPipeline):
 
             def objective(trial):
                 param = {
-                    'iterations': trial.suggest_int('iterations', 10, 50000),
-                    'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 0.3),
-                    'l2_leaf_reg': trial.suggest_loguniform('l2_leaf_reg', 1e-3, 1e6),
-                    "max_depth": trial.suggest_int('max_depth', 2, 10)
+                    "iterations": trial.suggest_int("iterations", 10, 50000),
+                    "learning_rate": trial.suggest_loguniform(
+                        "learning_rate", 1e-3, 0.3
+                    ),
+                    "l2_leaf_reg": trial.suggest_loguniform("l2_leaf_reg", 1e-3, 1e6),
+                    "max_depth": trial.suggest_int("max_depth", 2, 10),
                 }
-                model = CatBoostRegressor(iterations=param["iterations"],
-                                          learning_rate=param["learning_rate"],
-                                          l2_leaf_reg=param["l2_leaf_reg"],
-                                          max_depth=param["max_depth"],
-                                          early_stopping_rounds=10,
-                                          verbose=500,
-                                          random_state=42)#.fit(X_train, Y_train,
-                                                          #     eval_set=eval_dataset,
-                                                          #     early_stopping_rounds=10)
+                model = CatBoostRegressor(
+                    iterations=param["iterations"],
+                    learning_rate=param["learning_rate"],
+                    l2_leaf_reg=param["l2_leaf_reg"],
+                    max_depth=param["max_depth"],
+                    early_stopping_rounds=10,
+                    verbose=500,
+                    random_state=42,
+                )  # .fit(X_train, Y_train,
+                #     eval_set=eval_dataset,
+                #     early_stopping_rounds=10)
                 try:
-                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error')
+                    scores = cross_val_score(
+                        model, x_train, y_train, cv=10, scoring="neg_mean_squared_error"
+                    )
                     mae = np.mean(scores)
                 except Exception:
                     mae = 0
                 return mae
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -743,22 +917,24 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
 
             best_parameters = study.best_trial.params
-            model = CatBoostRegressor(iterations=best_parameters["iterations"],
-                                      learning_rate=best_parameters["learning_rate"],
-                                      l2_leaf_reg=best_parameters["l2_leaf_reg"],
-                                      max_depth=best_parameters["max_depth"],
-                                      early_stopping_rounds=10,
-                                      verbose=500,
-                                      random_state=42).fit(X_train, Y_train,
-                                                           eval_set=eval_dataset,
-                                                           early_stopping_rounds=10)
+            model = CatBoostRegressor(
+                iterations=best_parameters["iterations"],
+                learning_rate=best_parameters["learning_rate"],
+                l2_leaf_reg=best_parameters["l2_leaf_reg"],
+                max_depth=best_parameters["max_depth"],
+                early_stopping_rounds=10,
+                verbose=500,
+                random_state=42,
+            ).fit(X_train, Y_train, eval_set=eval_dataset, early_stopping_rounds=10)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
             _ = gc.collect()
             return self.trained_models
 
-    def catboost_regression_predict(self, feat_importance=True, importance_alg='permutation'):
+    def catboost_regression_predict(
+        self, feat_importance=True, importance_alg="permutation"
+    ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -766,28 +942,38 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with catboost regression')
-        algorithm = 'catboost'
+        self.get_current_timestamp(task="Predict with catboost regression")
+        algorithm = "catboost"
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
 
-            if feat_importance and importance_alg == 'SHAP':
-                self.runtime_warnings(warn_about='shap_cpu')
+            if feat_importance and importance_alg == "SHAP":
+                self.runtime_warnings(warn_about="shap_cpu")
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns)
+                    self.shap_explanations(
+                        model=model,
+                        test_df=X_test.sample(10000, random_state=42),
+                        cols=X_test.columns,
+                    )
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
-            elif feat_importance and importance_alg == 'permutation':
+                    self.shap_explanations(
+                        model=model, test_df=X_test, cols=X_test.columns
+                    )
+            elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
-                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                )
+                permutation_importances = pd.Series(
+                    result.importances_mean, index=X_test.columns
+                )
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
                 ax.set_title("Feature importances using permutation on full model")
@@ -806,8 +992,8 @@ class RegressionModels(postprocessing.FullPipeline):
         Trains a simple Linear regression classifier.
         :return: Trained model.
         """
-        self.get_current_timestamp(task='Train Tabnet regression model')
-        algorithm = 'tabnet'
+        self.get_current_timestamp(task="Train Tabnet regression model")
+        algorithm = "tabnet"
         if self.prediction_mode:
             pass
         else:
@@ -821,16 +1007,20 @@ class RegressionModels(postprocessing.FullPipeline):
             max_epochs = self.tabnet_settings["max_epochs"]
 
             def objective(trial):
-                depths = trial.suggest_int('depths', 16, 64)
-                factor = trial.suggest_uniform('factor', 0.1, 0.9)
-                pretrain_difficulty = trial.suggest_uniform('pretrain_difficulty', 0.7, 0.9)
-                mode = trial.suggest_categorical('mode', ["max", "min"])
-                gamma = trial.suggest_loguniform('gamma', 1e-5, 2.0)
-                lambda_sparse = trial.suggest_loguniform('lambda_sparse', 1e-6, 1e-3)
-                mask_type = trial.suggest_categorical('mask_type', ["sparsemax", "entmax"])
-                n_shared = trial.suggest_int('n_shared', 1, 5)
-                n_independent = trial.suggest_int('n_independent', 1, 5)
-                #loss_func = trial.suggest_categorical('loss_func', ['rmsle', 'mae', 'rmse', 'mse'])
+                depths = trial.suggest_int("depths", 16, 64)
+                factor = trial.suggest_uniform("factor", 0.1, 0.9)
+                pretrain_difficulty = trial.suggest_uniform(
+                    "pretrain_difficulty", 0.7, 0.9
+                )
+                mode = trial.suggest_categorical("mode", ["max", "min"])
+                gamma = trial.suggest_loguniform("gamma", 1e-5, 2.0)
+                lambda_sparse = trial.suggest_loguniform("lambda_sparse", 1e-6, 1e-3)
+                mask_type = trial.suggest_categorical(
+                    "mask_type", ["sparsemax", "entmax"]
+                )
+                n_shared = trial.suggest_int("n_shared", 1, 5)
+                n_independent = trial.suggest_int("n_independent", 1, 5)
+                # loss_func = trial.suggest_categorical('loss_func', ['rmsle', 'mae', 'rmse', 'mse'])
                 # ['auc', 'accuracy', 'balanced_accuracy', 'logloss', 'mae', 'mse', 'rmsle', 'unsup_loss', 'rmse']"
 
                 param = dict(
@@ -840,21 +1030,28 @@ class RegressionModels(postprocessing.FullPipeline):
                     n_a=depths,
                     n_shared=n_shared,
                     n_independent=n_independent,
-                    n_steps=trial.suggest_int('n_steps', 1, 5),
+                    n_steps=trial.suggest_int("n_steps", 1, 5),
                     optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
                     mask_type=mask_type,
                     scheduler_params=dict(
-                        mode=mode, patience=50, min_lr=1e-5, factor=factor),
+                        mode=mode, patience=50, min_lr=1e-5, factor=factor
+                    ),
                     scheduler_fn=ReduceLROnPlateau,
                     seed=42,
-                    verbose=1
+                    verbose=1,
                 )
                 mean_abs_errors = []
                 skf = KFold(n_splits=10, random_state=42, shuffle=True)
 
                 for train_index, test_index in skf.split(X_train_sample):
-                    x_train, x_test = X_train_sample.iloc[train_index], X_train_sample.iloc[test_index]
-                    y_train, y_test = Y_train_sample.iloc[train_index], Y_train_sample.iloc[test_index]
+                    x_train, x_test = (
+                        X_train_sample.iloc[train_index],
+                        X_train_sample.iloc[test_index],
+                    )
+                    y_train, y_test = (
+                        Y_train_sample.iloc[train_index],
+                        Y_train_sample.iloc[test_index],
+                    )
                     # numpy conversion
                     y_train = y_train.values.reshape(-1, 1)
                     y_test = y_test.values.reshape(-1, 1)
@@ -867,28 +1064,31 @@ class RegressionModels(postprocessing.FullPipeline):
                     X_test_num = X_test.to_numpy()
 
                     pretrainer = TabNetPretrainer(**param)
-                    pretrainer.fit(x_train,
-                                   eval_set=[(x_test)],
-                                   max_epochs=max_epochs,
-                                   patience=50,
-                                   batch_size=batch_size,
-                                   virtual_batch_size=virtual_batch_size,
-                                   num_workers=num_workers,
-                                   drop_last=True,
-                                   pretraining_ratio=pretrain_difficulty)
+                    pretrainer.fit(
+                        x_train,
+                        eval_set=[(x_test)],
+                        max_epochs=max_epochs,
+                        patience=50,
+                        batch_size=batch_size,
+                        virtual_batch_size=virtual_batch_size,
+                        num_workers=num_workers,
+                        drop_last=True,
+                        pretraining_ratio=pretrain_difficulty,
+                    )
 
                     model = TabNetRegressor(**param)
                     model.fit(
-                        x_train, y_train,
+                        x_train,
+                        y_train,
                         eval_set=[(x_test, y_test)],
-                        eval_metric=['mae'],
+                        eval_metric=["mae"],
                         patience=50,
                         batch_size=batch_size,
                         virtual_batch_size=virtual_batch_size,
                         num_workers=num_workers,
                         max_epochs=max_epochs,
                         drop_last=True,
-                        from_unsupervised=pretrainer
+                        from_unsupervised=pretrainer,
                     )
                     preds = model.predict(X_test_num)
 
@@ -897,11 +1097,19 @@ class RegressionModels(postprocessing.FullPipeline):
                 cv_mae = np.mean(mean_abs_errors)
                 return cv_mae
 
-            study = optuna.create_study(direction='minimize', study_name=f"{algorithm} tuning")
+            study = optuna.create_study(
+                direction="minimize", study_name=f"{algorithm} tuning"
+            )
 
-            logging.info(f'Start Tabnet validation.')
+            logging.info(f"Start Tabnet validation.")
 
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["tabnet"], timeout=self.hyperparameter_tuning_max_runtime_secs["tabnet"], gc_after_trial=True, show_progress_bar=True)
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds["tabnet"],
+                timeout=self.hyperparameter_tuning_max_runtime_secs["tabnet"],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -923,45 +1131,52 @@ class RegressionModels(postprocessing.FullPipeline):
 
             tabnet_best_param = study.best_trial.params
             param = dict(
-                gamma=tabnet_best_param['gamma'],
-                lambda_sparse=tabnet_best_param['lambda_sparse'],
-                n_d=tabnet_best_param['depths'],
-                n_a=tabnet_best_param['depths'],
+                gamma=tabnet_best_param["gamma"],
+                lambda_sparse=tabnet_best_param["lambda_sparse"],
+                n_d=tabnet_best_param["depths"],
+                n_a=tabnet_best_param["depths"],
                 n_shared=tabnet_best_param["n_shared"],
                 n_independent=tabnet_best_param["n_independent"],
-                n_steps=tabnet_best_param['n_steps'],
+                n_steps=tabnet_best_param["n_steps"],
                 optimizer_params=dict(lr=2e-2, weight_decay=1e-5),
                 mask_type=tabnet_best_param["mask_type"],
                 scheduler_params=dict(
-                    mode=tabnet_best_param["mode"], patience=5, min_lr=1e-5, factor=tabnet_best_param["factor"]),
+                    mode=tabnet_best_param["mode"],
+                    patience=5,
+                    min_lr=1e-5,
+                    factor=tabnet_best_param["factor"],
+                ),
                 scheduler_fn=ReduceLROnPlateau,
                 seed=42,
-                verbose=1
+                verbose=1,
             )
             pretrainer = TabNetPretrainer(**param)
-            pretrainer.fit(X_train,
-                           eval_set=[(X_test)],
-                           max_epochs=max_epochs,
-                           patience=50,
-                           batch_size=batch_size,
-                           virtual_batch_size=virtual_batch_size,
-                           num_workers=num_workers,
-                           drop_last=True,
-                           pretraining_ratio=tabnet_best_param["pretrain_difficulty"])
+            pretrainer.fit(
+                X_train,
+                eval_set=[(X_test)],
+                max_epochs=max_epochs,
+                patience=50,
+                batch_size=batch_size,
+                virtual_batch_size=virtual_batch_size,
+                num_workers=num_workers,
+                drop_last=True,
+                pretraining_ratio=tabnet_best_param["pretrain_difficulty"],
+            )
 
             model = TabNetRegressor(**param)
 
             model.fit(
-                X_train, Y_train,
+                X_train,
+                Y_train,
                 eval_set=[(X_test, Y_test)],
-                eval_metric=['mae'],
+                eval_metric=["mae"],
                 patience=50,
                 batch_size=batch_size,
                 virtual_batch_size=virtual_batch_size,
                 num_workers=num_workers,
                 max_epochs=max_epochs,
                 drop_last=True,
-                from_unsupervised=pretrainer
+                from_unsupervised=pretrainer,
             )
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -977,8 +1192,8 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with Tabnet regression')
-        algorithm = 'tabnet'
+        self.get_current_timestamp(task="Predict with Tabnet regression")
+        algorithm = "tabnet"
         if self.prediction_mode:
             self.reset_test_train_index()
             model = self.trained_models[f"{algorithm}"]
@@ -986,7 +1201,9 @@ class RegressionModels(postprocessing.FullPipeline):
             print(len(self.dataframe.columns))
             print(self.dataframe.info())
             predicted_probs = model.predict(self.dataframe.to_numpy())
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             Y_train = Y_train.values.reshape(-1, 1)
@@ -1007,8 +1224,8 @@ class RegressionModels(postprocessing.FullPipeline):
         :return: Trained model.
         """
         # https://vowpalwabbit.org/docs/vowpal_wabbit/python/latest/reference/vowpalwabbit.sklearn.html
-        self.get_current_timestamp(task='Train Vowpal Wabbit model')
-        algorithm = 'vowpal_wabbit'
+        self.get_current_timestamp(task="Train Vowpal Wabbit model")
+        algorithm = "vowpal_wabbit"
         if self.prediction_mode:
             pass
         else:
@@ -1021,7 +1238,7 @@ class RegressionModels(postprocessing.FullPipeline):
             _ = gc.collect()
             return self.trained_models
 
-    def vowpal_wabbit_predict(self, feat_importance=True, importance_alg='permutation'):
+    def vowpal_wabbit_predict(self, feat_importance=True, importance_alg="permutation"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -1029,28 +1246,38 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with Vowpal Wabbit')
-        algorithm = 'vowpal_wabbit'
+        self.get_current_timestamp(task="Predict with Vowpal Wabbit")
+        algorithm = "vowpal_wabbit"
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(self.dataframe)
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
 
-            if feat_importance and importance_alg == 'SHAP':
-                self.runtime_warnings(warn_about='shap_cpu')
+            if feat_importance and importance_alg == "SHAP":
+                self.runtime_warnings(warn_about="shap_cpu")
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns)
+                    self.shap_explanations(
+                        model=model,
+                        test_df=X_test.sample(10000, random_state=42),
+                        cols=X_test.columns,
+                    )
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
-            elif feat_importance and importance_alg == 'permutation':
+                    self.shap_explanations(
+                        model=model, test_df=X_test, cols=X_test.columns
+                    )
+            elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
-                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                )
+                permutation_importances = pd.Series(
+                    result.importances_mean, index=X_test.columns
+                )
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
                 ax.set_title("Feature importances using permutation on full model")
@@ -1064,7 +1291,7 @@ class RegressionModels(postprocessing.FullPipeline):
         del model
         _ = gc.collect()
 
-    def xg_boost_train(self, param=None, autotune=True, tune_mode='accurate'):
+    def xg_boost_train(self, param=None, autotune=True, tune_mode="accurate"):
         """
         Trains an XGboost model by the given parameters.
         :param param: Takes a dictionary with custom parameter settings. Might be deprecated in future versions.
@@ -1073,14 +1300,14 @@ class RegressionModels(postprocessing.FullPipeline):
         :param tune_mode: 'Simple' for simple 80-20 split validation. 'Accurate': Each hyperparameter set will be validated
         with 10-fold cross validation. Longer runtimes, but higher performance. (Default: 'Accurate')
         """
-        self.get_current_timestamp(task='Train Xgboost')
-        self.check_gpu_support(algorithm='xgboost')
-        if self.preferred_training_mode == 'auto':
+        self.get_current_timestamp(task="Train Xgboost")
+        self.check_gpu_support(algorithm="xgboost")
+        if self.preferred_training_mode == "auto":
             train_on = self.preprocess_decisions[f"gpu_support"]["xgboost"]
-        elif self.preferred_training_mode == 'gpu':
-            train_on = 'gpu_hist'
+        elif self.preferred_training_mode == "gpu":
+            train_on = "gpu_hist"
         else:
-            train_on = 'exact'
+            train_on = "exact"
         if self.prediction_mode:
             pass
         else:
@@ -1094,48 +1321,86 @@ class RegressionModels(postprocessing.FullPipeline):
 
                 def objective(trial):
                     param = {
-                        'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
-                        'eval_metric': 'gamma-nloglik',
-                        'verbose': 0,
-                        'tree_method': train_on,  # use GPU for training
-                        'max_depth': trial.suggest_int('max_depth', 2, 10),
+                        "objective": "reg:squarederror",  # OR  'binary:logistic' #the loss function being used
+                        "eval_metric": "gamma-nloglik",
+                        "verbose": 0,
+                        "tree_method": train_on,  # use GPU for training
+                        "max_depth": trial.suggest_int("max_depth", 2, 10),
                         # maximum depth of the decision trees being trained
-                        'alpha': trial.suggest_loguniform('alpha', 1, 1e6),
-                        'lambda': trial.suggest_loguniform('lambda', 1, 1e6),
-                        'num_leaves': trial.suggest_int('num_leaves', 2, 256),
-                        'subsample': trial.suggest_uniform('subsample', 0.4, 1.0),
-                        'colsample_bytree': trial.suggest_uniform('colsample_bytree', 0.5, 1.0),
-                        'colsample_bylevel': trial.suggest_uniform('colsample_bylevel', 0.5, 1.0),
-                        'colsample_bynode': trial.suggest_uniform('colsample_bynode', 0.5, 1.0),
-                        'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
-                        'eta': trial.suggest_loguniform('eta', 1e-3, 0.3),
-                        'steps': trial.suggest_int('steps', 2, 70000),
-                        'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 5)
+                        "alpha": trial.suggest_loguniform("alpha", 1, 1e6),
+                        "lambda": trial.suggest_loguniform("lambda", 1, 1e6),
+                        "num_leaves": trial.suggest_int("num_leaves", 2, 256),
+                        "subsample": trial.suggest_uniform("subsample", 0.4, 1.0),
+                        "colsample_bytree": trial.suggest_uniform(
+                            "colsample_bytree", 0.5, 1.0
+                        ),
+                        "colsample_bylevel": trial.suggest_uniform(
+                            "colsample_bylevel", 0.5, 1.0
+                        ),
+                        "colsample_bynode": trial.suggest_uniform(
+                            "colsample_bynode", 0.5, 1.0
+                        ),
+                        "min_child_samples": trial.suggest_int(
+                            "min_child_samples", 5, 100
+                        ),
+                        "eta": trial.suggest_loguniform("eta", 1e-3, 0.3),
+                        "steps": trial.suggest_int("steps", 2, 70000),
+                        "num_parallel_tree": trial.suggest_int(
+                            "num_parallel_tree", 1, 5
+                        ),
                     }
-                    pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-gamma-nloglik")
-                    if tune_mode == 'simple':
-                        eval_set = [(d_train, 'train'), (D_test, 'test')]
-                        model = xgb.train(param, d_train, num_boost_round=param['steps'], early_stopping_rounds=10,
-                                          evals=eval_set, callbacks=[pruning_callback])
+                    pruning_callback = optuna.integration.XGBoostPruningCallback(
+                        trial, "test-gamma-nloglik"
+                    )
+                    if tune_mode == "simple":
+                        eval_set = [(d_train, "train"), (D_test, "test")]
+                        model = xgb.train(
+                            param,
+                            d_train,
+                            num_boost_round=param["steps"],
+                            early_stopping_rounds=10,
+                            evals=eval_set,
+                            callbacks=[pruning_callback],
+                        )
                         preds = model.predict(D_test)
                         mae = mean_absolute_error(Y_test, preds)
                         return mae
                     else:
-                        result = xgb.cv(params=param, dtrain=d_train, num_boost_round=param['steps'],
-                                        early_stopping_rounds=10,
-                                        as_pandas=True, seed=42, callbacks=[pruning_callback], nfold=10)
-                        return result['test-gamma-nloglik-mean'].mean()
+                        result = xgb.cv(
+                            params=param,
+                            dtrain=d_train,
+                            num_boost_round=param["steps"],
+                            early_stopping_rounds=10,
+                            as_pandas=True,
+                            seed=42,
+                            callbacks=[pruning_callback],
+                            nfold=10,
+                        )
+                        return result["test-gamma-nloglik-mean"].mean()
 
-                algorithm = 'xgboost'
+                algorithm = "xgboost"
                 sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
 
-                if tune_mode == 'simple':
-                    study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
+                if tune_mode == "simple":
+                    study = optuna.create_study(
+                        direction="minimize",
+                        sampler=sampler,
+                        study_name=f"{algorithm} tuning",
+                    )
                 else:
-                    study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
+                    study = optuna.create_study(
+                        direction="minimize",
+                        sampler=sampler,
+                        study_name=f"{algorithm} tuning",
+                    )
 
-
-                study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["xgboost"], timeout=self.hyperparameter_tuning_max_runtime_secs["xgboost"], gc_after_trial=True, show_progress_bar=True)
+                study.optimize(
+                    objective,
+                    n_trials=self.hyperparameter_tuning_rounds["xgboost"],
+                    timeout=self.hyperparameter_tuning_max_runtime_secs["xgboost"],
+                    gc_after_trial=True,
+                    show_progress_bar=True,
+                )
 
                 self.optuna_studies[f"{algorithm}"] = {}
                 # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
@@ -1152,22 +1417,24 @@ class RegressionModels(postprocessing.FullPipeline):
 
                 lgbm_best_param = study.best_trial.params
                 param = {
-                    'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
-                    'eval_metric': 'gamma-nloglik',
-                    'verbose': 0,
-                    'tree_method': train_on,  # use GPU for training
-                    'max_depth': lgbm_best_param["max_depth"],  # maximum depth of the decision trees being trained
-                    'alpha': lgbm_best_param["alpha"],
-                    'lambda': lgbm_best_param["lambda"],
-                    'num_leaves': lgbm_best_param["num_leaves"],
-                    'subsample': lgbm_best_param["subsample"],
-                    'colsample_bytree': lgbm_best_param["colsample_bytree"],
-                    'colsample_bylevel': lgbm_best_param["colsample_bylevel"],
-                    'colsample_bynode': lgbm_best_param["colsample_bynode"],
-                    'min_child_samples': lgbm_best_param["min_child_samples"],
-                    'eta': lgbm_best_param["eta"],
-                    'steps': lgbm_best_param["steps"],
-                    'num_parallel_tree': lgbm_best_param["num_parallel_tree"]
+                    "objective": "reg:squarederror",  # OR  'binary:logistic' #the loss function being used
+                    "eval_metric": "gamma-nloglik",
+                    "verbose": 0,
+                    "tree_method": train_on,  # use GPU for training
+                    "max_depth": lgbm_best_param[
+                        "max_depth"
+                    ],  # maximum depth of the decision trees being trained
+                    "alpha": lgbm_best_param["alpha"],
+                    "lambda": lgbm_best_param["lambda"],
+                    "num_leaves": lgbm_best_param["num_leaves"],
+                    "subsample": lgbm_best_param["subsample"],
+                    "colsample_bytree": lgbm_best_param["colsample_bytree"],
+                    "colsample_bylevel": lgbm_best_param["colsample_bylevel"],
+                    "colsample_bynode": lgbm_best_param["colsample_bynode"],
+                    "min_child_samples": lgbm_best_param["min_child_samples"],
+                    "eta": lgbm_best_param["eta"],
+                    "steps": lgbm_best_param["steps"],
+                    "num_parallel_tree": lgbm_best_param["num_parallel_tree"],
                 }
                 try:
                     X_train = X_train.drop(self.target_variable, axis=1)
@@ -1175,9 +1442,14 @@ class RegressionModels(postprocessing.FullPipeline):
                     pass
                 D_train = xgb.DMatrix(X_train, label=Y_train)
                 D_test = xgb.DMatrix(X_test, label=Y_test)
-                eval_set = [(D_train, 'train'), (D_test, 'test')]
-                model = xgb.train(param, D_train, num_boost_round=param['steps'], early_stopping_rounds=10,
-                                  evals=eval_set)
+                eval_set = [(D_train, "train"), (D_test, "test")]
+                model = xgb.train(
+                    param,
+                    D_train,
+                    num_boost_round=param["steps"],
+                    early_stopping_rounds=10,
+                    evals=eval_set,
+                )
                 self.trained_models[f"{algorithm}"] = {}
                 self.trained_models[f"{algorithm}"] = model
                 del model
@@ -1188,55 +1460,64 @@ class RegressionModels(postprocessing.FullPipeline):
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 D_train = xgb.DMatrix(X_train, label=Y_train)
                 D_test = xgb.DMatrix(X_test, label=Y_test)
-                algorithm = 'xgboost'
+                algorithm = "xgboost"
                 if not param:
                     param = {
-                        'eta': 0.001,  # learning rate,
+                        "eta": 0.001,  # learning rate,
                         # 'gamma': 5, #Minimum loss reduction required to make a further partition on a leaf node of the tree. The larger gamma is, the more conservative the algorithm will be.
-                        'verbosity': 0,  # 0 (silent), 1 (warning), 2 (info), 3 (debug)
-                        'alpha': 10,
+                        "verbosity": 0,  # 0 (silent), 1 (warning), 2 (info), 3 (debug)
+                        "alpha": 10,
                         # L1 regularization term on weights. Increasing this value will make model more conservative. (default = 0)
-                        'lambda': 15,
+                        "lambda": 15,
                         # L2 regularization term on weights. Increasing this value will make model more conservative. (default = 1)
-                        'subsample': 0.8,
-                        'objective': 'reg:squarederror',  # OR  'binary:logistic' #the loss function being used
-                        'eval_metric': 'gamma-nloglik',
+                        "subsample": 0.8,
+                        "objective": "reg:squarederror",  # OR  'binary:logistic' #the loss function being used
+                        "eval_metric": "gamma-nloglik",
                         # 'colsample_bytree': 0.3,
-                        'max_depth': 2,  # maximum depth of the decision trees being trained
-                        'tree_method': 'gpu_hist',  # use GPU for training
-                        'steps': 50000
+                        "max_depth": 2,  # maximum depth of the decision trees being trained
+                        "tree_method": "gpu_hist",  # use GPU for training
+                        "steps": 50000,
                     }  # the number of classes in the dataset
                 else:
                     param = param
 
-                eval_set = [(D_train, 'train'), (D_test, 'test')]
-                model = xgb.train(param, D_train, num_boost_round=50000, early_stopping_rounds=10,
-                                  evals=eval_set)
+                eval_set = [(D_train, "train"), (D_test, "test")]
+                model = xgb.train(
+                    param,
+                    D_train,
+                    num_boost_round=50000,
+                    early_stopping_rounds=10,
+                    evals=eval_set,
+                )
                 self.trained_models[f"{algorithm}"] = {}
                 self.trained_models[f"{algorithm}"] = model
                 del model
                 _ = gc.collect()
                 return self.trained_models
 
-    def xgboost_predict(self, feat_importance=True, importance_alg='auto'):
+    def xgboost_predict(self, feat_importance=True, importance_alg="auto"):
         """
         Predicts on test & also new data given the prediction_mode is activated in the class.
         :return: Updates class attributes by its predictions.
         """
-        self.get_current_timestamp(task='Predict with Xgboost')
-        algorithm = 'xgboost'
+        self.get_current_timestamp(task="Predict with Xgboost")
+        algorithm = "xgboost"
         if self.prediction_mode:
             D_test = xgb.DMatrix(self.dataframe)
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(D_test)
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted_probs
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             D_test = xgb.DMatrix(X_test, label=Y_test)
             try:
-                D_test_sample = xgb.DMatrix(X_test.sample(10000, random_state=42), label=Y_test)
+                D_test_sample = xgb.DMatrix(
+                    X_test.sample(10000, random_state=42), label=Y_test
+                )
             except:
                 D_test_sample = xgb.DMatrix(X_test, label=Y_test)
             model = self.trained_models[f"{algorithm}"]
@@ -1244,16 +1525,20 @@ class RegressionModels(postprocessing.FullPipeline):
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted_probs
 
-            if feat_importance and importance_alg == 'auto':
-                if self.preprocess_decisions[f"gpu_support"]["xgboost"] == 'gpu_hist':
-                    self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
+            if feat_importance and importance_alg == "auto":
+                if self.preprocess_decisions[f"gpu_support"]["xgboost"] == "gpu_hist":
+                    self.shap_explanations(
+                        model=model, test_df=D_test_sample, cols=X_test.columns
+                    )
                 else:
                     xgb.plot_importance(model)
                     plt.figure(figsize=(16, 12))
                     plt.show()
-            elif feat_importance and importance_alg == 'SHAP':
-                self.shap_explanations(model=model, test_df=D_test_sample, cols=X_test.columns)
-            elif feat_importance and importance_alg == 'inbuilt':
+            elif feat_importance and importance_alg == "SHAP":
+                self.shap_explanations(
+                    model=model, test_df=D_test_sample, cols=X_test.columns
+                )
+            elif feat_importance and importance_alg == "inbuilt":
                 xgb.plot_importance(model)
                 plt.figure(figsize=(16, 12))
                 plt.show()
@@ -1262,16 +1547,16 @@ class RegressionModels(postprocessing.FullPipeline):
             del model
             _ = gc.collect()
 
-    def lgbm_train(self, tune_mode='accurate', gpu_use_dp=True):
-        self.get_current_timestamp(task='Train LGBM')
-        self.check_gpu_support(algorithm='lgbm')
-        if self.preferred_training_mode == 'auto':
+    def lgbm_train(self, tune_mode="accurate", gpu_use_dp=True):
+        self.get_current_timestamp(task="Train LGBM")
+        self.check_gpu_support(algorithm="lgbm")
+        if self.preferred_training_mode == "auto":
             train_on = self.preprocess_decisions[f"gpu_support"]["lgbm"]
-        elif self.preferred_training_mode == 'gpu':
-            train_on = 'gpu'
+        elif self.preferred_training_mode == "gpu":
+            train_on = "gpu"
             gpu_use_dp = True
         else:
-            train_on = 'cpu'
+            train_on = "cpu"
             gpu_use_dp = False
 
         if self.prediction_mode:
@@ -1284,43 +1569,70 @@ class RegressionModels(postprocessing.FullPipeline):
             def objective(trial):
                 param = {
                     # TODO: Move to additional folder with pyfile "constants" (use OS absolute path)
-                    'objective': 'regression',
-                    'metric': 'mean_squared_error',
-                    'num_boost_round': trial.suggest_int('num_boost_round', 100, 70000),
-                    'lambda_l1': trial.suggest_loguniform('lambda_l1', 1, 1e6),
-                    'lambda_l2': trial.suggest_loguniform('lambda_l2', 1, 1e6),
-                    'linear_lambda': trial.suggest_loguniform('linear_lambda', 1, 1e6),
+                    "objective": "regression",
+                    "metric": "mean_squared_error",
+                    "num_boost_round": trial.suggest_int("num_boost_round", 100, 70000),
+                    "lambda_l1": trial.suggest_loguniform("lambda_l1", 1, 1e6),
+                    "lambda_l2": trial.suggest_loguniform("lambda_l2", 1, 1e6),
+                    "linear_lambda": trial.suggest_loguniform("linear_lambda", 1, 1e6),
                     #'max_depth': trial.suggest_int('max_depth', 2, 8),
-                    'num_leaves': trial.suggest_int('num_leaves', 2, 256),
-                    'feature_fraction': trial.suggest_uniform('feature_fraction', 0.4, 1.0),
-                    'feature_fraction_bynode': trial.suggest_uniform('feature_fraction_bynode', 0.4, 1.0),
-                    'bagging_fraction': trial.suggest_uniform('bagging_fraction', 0.1, 1),
+                    "num_leaves": trial.suggest_int("num_leaves", 2, 256),
+                    "feature_fraction": trial.suggest_uniform(
+                        "feature_fraction", 0.4, 1.0
+                    ),
+                    "feature_fraction_bynode": trial.suggest_uniform(
+                        "feature_fraction_bynode", 0.4, 1.0
+                    ),
+                    "bagging_fraction": trial.suggest_uniform(
+                        "bagging_fraction", 0.1, 1
+                    ),
                     #'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
-                    'min_gain_to_split': trial.suggest_uniform('min_gain_to_split', 0, 1),
-                    'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 0.1),
-                    'verbose': -1,
-                    'device': train_on,
-                    'gpu_use_dp': gpu_use_dp
+                    "min_gain_to_split": trial.suggest_uniform(
+                        "min_gain_to_split", 0, 1
+                    ),
+                    "learning_rate": trial.suggest_loguniform(
+                        "learning_rate", 1e-3, 0.1
+                    ),
+                    "verbose": -1,
+                    "device": train_on,
+                    "gpu_use_dp": gpu_use_dp,
                 }
-                if tune_mode == 'simple':
+                if tune_mode == "simple":
                     gbm = lgb.train(param, dtrain, verbose_eval=False)
                     preds = gbm.predict(X_test)
                     mae = mean_absolute_error(Y_test, preds)
                     return mae
                 else:
-                    pruning_callback = optuna.integration.LightGBMPruningCallback(trial, "l2")
-                    result = lgb.cv(param, train_set=dtrain, nfold=10, num_boost_round=param['num_boost_round'],
-                                    stratified=False, callbacks=[pruning_callback],
-                                    early_stopping_rounds=10, seed=42,
-                                    verbose_eval=False)
-                    avg_result = result['l2-mean'][-1]
+                    pruning_callback = optuna.integration.LightGBMPruningCallback(
+                        trial, "l2"
+                    )
+                    result = lgb.cv(
+                        param,
+                        train_set=dtrain,
+                        nfold=10,
+                        num_boost_round=param["num_boost_round"],
+                        stratified=False,
+                        callbacks=[pruning_callback],
+                        early_stopping_rounds=10,
+                        seed=42,
+                        verbose_eval=False,
+                    )
+                    avg_result = result["l2-mean"][-1]
                     return avg_result
 
-            algorithm = 'lgbm'
+            algorithm = "lgbm"
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm} tuning")
+            study = optuna.create_study(
+                direction="minimize", sampler=sampler, study_name=f"{algorithm} tuning"
+            )
 
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["lgbm"], timeout=self.hyperparameter_tuning_max_runtime_secs["lgbm"], gc_after_trial=True, show_progress_bar=True)
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds["lgbm"],
+                timeout=self.hyperparameter_tuning_max_runtime_secs["lgbm"],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -1336,23 +1648,23 @@ class RegressionModels(postprocessing.FullPipeline):
 
             lgbm_best_param = study.best_trial.params
             param = {
-                'objective': 'regression',
-                'metric': 'mean_squared_error', #'gamma'
-                'num_boost_round': lgbm_best_param["num_boost_round"],
-                'lambda_l1': lgbm_best_param["lambda_l1"],
-                'lambda_l2': lgbm_best_param["lambda_l2"],
-                'linear_lambda': lgbm_best_param["linear_lambda"],
+                "objective": "regression",
+                "metric": "mean_squared_error",  #'gamma'
+                "num_boost_round": lgbm_best_param["num_boost_round"],
+                "lambda_l1": lgbm_best_param["lambda_l1"],
+                "lambda_l2": lgbm_best_param["lambda_l2"],
+                "linear_lambda": lgbm_best_param["linear_lambda"],
                 #'max_depth': lgbm_best_param["max_depth"],
-                'num_leaves': lgbm_best_param["num_leaves"],
-                'feature_fraction': lgbm_best_param["feature_fraction"],
-                'feature_fraction_bynode': lgbm_best_param["feature_fraction_bynode"],
-                'bagging_fraction': lgbm_best_param["bagging_fraction"],
+                "num_leaves": lgbm_best_param["num_leaves"],
+                "feature_fraction": lgbm_best_param["feature_fraction"],
+                "feature_fraction_bynode": lgbm_best_param["feature_fraction_bynode"],
+                "bagging_fraction": lgbm_best_param["bagging_fraction"],
                 #'min_child_samples': lgbm_best_param["min_child_samples"],
-                'min_gain_to_split': lgbm_best_param["min_gain_to_split"],
-                'learning_rate': lgbm_best_param["learning_rate"],
-                'verbose': -1,
-                'device': train_on,
-                'gpu_use_dp': gpu_use_dp
+                "min_gain_to_split": lgbm_best_param["min_gain_to_split"],
+                "learning_rate": lgbm_best_param["learning_rate"],
+                "verbose": -1,
+                "device": train_on,
+                "gpu_use_dp": gpu_use_dp,
             }
             try:
                 X_train = X_train.drop(self.target_variable, axis=1)
@@ -1360,43 +1672,52 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
             Dtrain = lgb.Dataset(X_train, label=Y_train)
             Dtest = lgb.Dataset(X_test, label=Y_test)
-            model = lgb.train(param, Dtrain, valid_sets=[Dtrain, Dtest], valid_names=['train', 'valid'],
-                              early_stopping_rounds=10)
+            model = lgb.train(
+                param,
+                Dtrain,
+                valid_sets=[Dtrain, Dtest],
+                valid_names=["train", "valid"],
+                early_stopping_rounds=10,
+            )
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
             _ = gc.collect()
             return self.trained_models
 
-    def lgbm_predict(self, feat_importance=True, importance_alg='auto'):
+    def lgbm_predict(self, feat_importance=True, importance_alg="auto"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated based on SHAP values.
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with LBGM')
-        algorithm = 'lgbm'
+        self.get_current_timestamp(task="Predict with LBGM")
+        algorithm = "lgbm"
         model = self.trained_models[f"{algorithm}"]
         if self.prediction_mode:
             X_test = self.dataframe
             predicted_probs = model.predict(X_test)
-            predicted_probs = self.target_skewness_handling(preds_to_reconvert=predicted_probs, mode='revert')
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted_probs
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             predicted_probs = model.predict(X_test)
 
-            if feat_importance and importance_alg == 'auto':
-                if self.preprocess_decisions[f"gpu_support"]["lgbm"] == 'gpu':
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            if feat_importance and importance_alg == "auto":
+                if self.preprocess_decisions[f"gpu_support"]["lgbm"] == "gpu":
+                    self.shap_explanations(
+                        model=model, test_df=X_test, cols=X_test.columns
+                    )
                 else:
                     lgb.plot_importance(model)
                     plt.figure(figsize=(16, 12))
                     plt.show()
-            elif feat_importance and importance_alg == 'SHAP':
+            elif feat_importance and importance_alg == "SHAP":
                 self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
-            elif feat_importance and importance_alg == 'inbuilt':
+            elif feat_importance and importance_alg == "inbuilt":
                 lgb.plot_importance(model)
                 plt.figure(figsize=(16, 12))
                 plt.show()
@@ -1413,8 +1734,8 @@ class RegressionModels(postprocessing.FullPipeline):
         Trains an sklearn stacking regressor ensemble. Will automatically test different stacked regressor combinations.
         Expect very long runtimes due to CPU usage.
         """
-        self.get_current_timestamp(task='Train sklearn ensemble')
-        algorithm = 'sklearn_ensemble'
+        self.get_current_timestamp(task="Train sklearn ensemble")
+        algorithm = "sklearn_ensemble"
         if self.prediction_mode:
             pass
         else:
@@ -1422,46 +1743,61 @@ class RegressionModels(postprocessing.FullPipeline):
             x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
-                ensemble_variation = trial.suggest_categorical("ensemble_variant", ["2_boosters",
-                                                                                    "no_boost_forest",
-                                                                                    "reversed_boosters",
-                                                                                    "full_ensemble"])
+                ensemble_variation = trial.suggest_categorical(
+                    "ensemble_variant",
+                    [
+                        "2_boosters",
+                        "no_boost_forest",
+                        "reversed_boosters",
+                        "full_ensemble",
+                    ],
+                )
                 # Step 2. Setup values for the hyperparameters:
-                if ensemble_variation == '2_boosters':
+                if ensemble_variation == "2_boosters":
                     level0 = list()
-                    level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
+                    level0.append(("lgbm", LGBMRegressor(n_estimators=5000)))
                     level1 = GradientBoostingRegressor(n_estimators=5000)
-                    model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
-                elif ensemble_variation == 'no_boost_forest':
+                    model = StackingRegressor(
+                        estimators=level0, final_estimator=level1, cv=5, n_jobs=-2
+                    )
+                elif ensemble_variation == "no_boost_forest":
                     level0 = list()
-                    level0.append(('sgd', SGDRegressor()))
-                    level0.append(('svr', LinearSVR()))
-                    level0.append(('ard', ARDRegression()))
-                    level0.append(('ridge', Ridge()))
+                    level0.append(("sgd", SGDRegressor()))
+                    level0.append(("svr", LinearSVR()))
+                    level0.append(("ard", ARDRegression()))
+                    level0.append(("ridge", Ridge()))
                     level1 = GradientBoostingRegressor()
-                    model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
-                elif ensemble_variation == 'reversed_boosters':
+                    model = StackingRegressor(
+                        estimators=level0, final_estimator=level1, cv=5, n_jobs=-2
+                    )
+                elif ensemble_variation == "reversed_boosters":
                     level0 = list()
-                    level0.append(('lr', LinearRegression(n_jobs=-2)))
-                    level0.append(('ridge', Ridge()))
+                    level0.append(("lr", LinearRegression(n_jobs=-2)))
+                    level0.append(("ridge", Ridge()))
                     level1 = LinearRegression(n_jobs=-2)
-                    model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
-                elif ensemble_variation == 'full_ensemble':
+                    model = StackingRegressor(
+                        estimators=level0, final_estimator=level1, cv=5, n_jobs=-2
+                    )
+                elif ensemble_variation == "full_ensemble":
                     level0 = list()
-                    level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
-                    level0.append(('lr', LinearRegression(n_jobs=-2)))
-                    level0.append(('ela', ElasticNet()))
-                    level0.append(('gdc', GradientBoostingRegressor(n_estimators=5000)))
-                    level0.append(('sgd', SGDRegressor()))
-                    level0.append(('svr', LinearSVR()))
-                    level0.append(('ard', ARDRegression()))
-                    level0.append(('ridge', Ridge()))
-                    level0.append(('qda', BayesianRidge()))
-                    level0.append(('rdf', RandomForestRegressor(max_depth=5, n_jobs=-2)))
+                    level0.append(("lgbm", LGBMRegressor(n_estimators=5000)))
+                    level0.append(("lr", LinearRegression(n_jobs=-2)))
+                    level0.append(("ela", ElasticNet()))
+                    level0.append(("gdc", GradientBoostingRegressor(n_estimators=5000)))
+                    level0.append(("sgd", SGDRegressor()))
+                    level0.append(("svr", LinearSVR()))
+                    level0.append(("ard", ARDRegression()))
+                    level0.append(("ridge", Ridge()))
+                    level0.append(("qda", BayesianRidge()))
+                    level0.append(
+                        ("rdf", RandomForestRegressor(max_depth=5, n_jobs=-2))
+                    )
                     # define meta learner model
                     level1 = GradientBoostingRegressor(n_estimators=5000)
                     # define the stacking ensemble
-                    model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
+                    model = StackingRegressor(
+                        estimators=level0, final_estimator=level1, cv=5, n_jobs=-2
+                    )
 
                 # Step 3: Scoring method:
                 model.fit(x_train, y_train)
@@ -1469,44 +1805,60 @@ class RegressionModels(postprocessing.FullPipeline):
                 mae = mean_absolute_error(Y_test, preds)
                 return mae
 
-            study = optuna.create_study(direction="minimize", study_name=f"{algorithm} tuning")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["sklearn_ensemble"], timeout=self.hyperparameter_tuning_max_runtime_secs["sklearn_ensemble"], gc_after_trial=True, show_progress_bar=True)
+            study = optuna.create_study(
+                direction="minimize", study_name=f"{algorithm} tuning"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds["sklearn_ensemble"],
+                timeout=self.hyperparameter_tuning_max_runtime_secs["sklearn_ensemble"],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             best_variant = study.best_trial.params["ensemble_variant"]
-            if best_variant == '2_boosters':
+            if best_variant == "2_boosters":
                 level0 = list()
-                level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
+                level0.append(("lgbm", LGBMRegressor(n_estimators=5000)))
                 level1 = GradientBoostingRegressor(n_estimators=5000)
-                model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
-            elif best_variant == 'no_boost_forest':
+                model = StackingRegressor(
+                    estimators=level0, final_estimator=level1, cv=5, n_jobs=-2
+                )
+            elif best_variant == "no_boost_forest":
                 level0 = list()
-                level0.append(('sgd', SGDRegressor()))
-                level0.append(('svr', LinearSVR()))
-                level0.append(('ard', ARDRegression()))
-                level0.append(('ridge', Ridge()))
+                level0.append(("sgd", SGDRegressor()))
+                level0.append(("svr", LinearSVR()))
+                level0.append(("ard", ARDRegression()))
+                level0.append(("ridge", Ridge()))
                 level1 = GradientBoostingRegressor()
-                model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
-            elif best_variant == 'reversed_boosters':
+                model = StackingRegressor(
+                    estimators=level0, final_estimator=level1, cv=5, n_jobs=-2
+                )
+            elif best_variant == "reversed_boosters":
                 level0 = list()
-                level0.append(('lr', LinearRegression()))
-                level0.append(('ridge', Ridge()))
+                level0.append(("lr", LinearRegression()))
+                level0.append(("ridge", Ridge()))
                 level1 = LinearRegression()
-                model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
-            elif best_variant == 'full_ensemble':
+                model = StackingRegressor(
+                    estimators=level0, final_estimator=level1, cv=5, n_jobs=-2
+                )
+            elif best_variant == "full_ensemble":
                 level0 = list()
-                level0.append(('lgbm', LGBMRegressor(n_estimators=5000)))
-                level0.append(('lr', LinearRegression()))
-                level0.append(('ela', ElasticNet()))
-                level0.append(('gdc', GradientBoostingRegressor(n_estimators=5000)))
-                level0.append(('sgd', SGDRegressor()))
-                level0.append(('svr', LinearSVR()))
-                level0.append(('ard', ARDRegression()))
-                level0.append(('ridge', Ridge()))
-                level0.append(('qda', BayesianRidge()))
-                level0.append(('rdf', RandomForestRegressor(max_depth=5)))
+                level0.append(("lgbm", LGBMRegressor(n_estimators=5000)))
+                level0.append(("lr", LinearRegression()))
+                level0.append(("ela", ElasticNet()))
+                level0.append(("gdc", GradientBoostingRegressor(n_estimators=5000)))
+                level0.append(("sgd", SGDRegressor()))
+                level0.append(("svr", LinearSVR()))
+                level0.append(("ard", ARDRegression()))
+                level0.append(("ridge", Ridge()))
+                level0.append(("qda", BayesianRidge()))
+                level0.append(("rdf", RandomForestRegressor(max_depth=5)))
                 # define meta learner model
                 level1 = GradientBoostingRegressor(n_estimators=5000)
                 # define the stacking ensemble
-                model = StackingRegressor(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
+                model = StackingRegressor(
+                    estimators=level0, final_estimator=level1, cv=5, n_jobs=-2
+                )
             model.fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -1514,7 +1866,9 @@ class RegressionModels(postprocessing.FullPipeline):
             _ = gc.collect()
             return self.trained_models
 
-    def sklearn_ensemble_predict(self, feat_importance=True, importance_alg='permutation'):
+    def sklearn_ensemble_predict(
+        self, feat_importance=True, importance_alg="permutation"
+    ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -1522,30 +1876,40 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with sklearn ensemble')
-        algorithm = 'sklearn_ensemble'
+        self.get_current_timestamp(task="Predict with sklearn ensemble")
+        algorithm = "sklearn_ensemble"
         model = self.trained_models[f"{algorithm}"]
         if self.prediction_mode:
             X_test = self.dataframe
             predicted = model.predict(X_test)
-            predicted = self.target_skewness_handling(preds_to_reconvert=predicted, mode='revert')
+            predicted = self.target_skewness_handling(
+                preds_to_reconvert=predicted, mode="revert"
+            )
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             predicted = model.predict(X_test)
 
-            if feat_importance and importance_alg == 'SHAP':
-                self.runtime_warnings(warn_about='shap_cpu')
+            if feat_importance and importance_alg == "SHAP":
+                self.runtime_warnings(warn_about="shap_cpu")
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns)
+                    self.shap_explanations(
+                        model=model,
+                        test_df=X_test.sample(10000, random_state=42),
+                        cols=X_test.columns,
+                    )
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
-            elif feat_importance and importance_alg == 'permutation':
+                    self.shap_explanations(
+                        model=model, test_df=X_test, cols=X_test.columns
+                    )
+            elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
-                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                )
+                permutation_importances = pd.Series(
+                    result.importances_mean, index=X_test.columns
+                )
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
                 ax.set_title("Feature importances using permutation on full model")
@@ -1560,13 +1924,13 @@ class RegressionModels(postprocessing.FullPipeline):
         _ = gc.collect()
         return self.predicted_probs
 
-    def ngboost_train(self, tune_mode='accurate'):
+    def ngboost_train(self, tune_mode="accurate"):
         """
         Trains an Ngboost regressor.
         :return: Updates class attributes by its predictions.
         """
-        self.get_current_timestamp(task='Train Ngboost')
-        algorithm = 'ngboost'
+        self.get_current_timestamp(task="Train Ngboost")
+        algorithm = "ngboost"
         if self.prediction_mode:
             pass
         else:
@@ -1574,11 +1938,16 @@ class RegressionModels(postprocessing.FullPipeline):
             x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
             def objective(trial):
-                base_learner_choice = trial.suggest_categorical("base_learner", ["DecTree_depth2",
-                                                                                 "DecTree_depth5",
-                                                                                 "DecTree_depthNone",
-                                                                                 "GradientBoost_depth2",
-                                                                                 "GradientBoost_depth5"])
+                base_learner_choice = trial.suggest_categorical(
+                    "base_learner",
+                    [
+                        "DecTree_depth2",
+                        "DecTree_depth5",
+                        "DecTree_depthNone",
+                        "GradientBoost_depth2",
+                        "GradientBoost_depth5",
+                    ],
+                )
 
                 if base_learner_choice == "DecTree_depth2":
                     base_learner_choice = DecisionTreeRegressor(max_depth=2)
@@ -1587,17 +1956,23 @@ class RegressionModels(postprocessing.FullPipeline):
                 elif base_learner_choice == "DecTree_depthNone":
                     base_learner_choice = DecisionTreeRegressor(max_depth=None)
                 elif base_learner_choice == "GradientBoost_depth2":
-                    base_learner_choice = GradientBoostingRegressor(max_depth=2,
-                                                                    n_estimators=1000,
-                                                                    n_iter_no_change=10,
-                                                                    random_state=42)
+                    base_learner_choice = GradientBoostingRegressor(
+                        max_depth=2,
+                        n_estimators=1000,
+                        n_iter_no_change=10,
+                        random_state=42,
+                    )
                 elif base_learner_choice == "GradientBoost_depth5":
-                    base_learner_choice = GradientBoostingRegressor(max_depth=5,
-                                                                    n_estimators=10000,
-                                                                    n_iter_no_change=10,
-                                                                    random_state=42)
+                    base_learner_choice = GradientBoostingRegressor(
+                        max_depth=5,
+                        n_estimators=10000,
+                        n_iter_no_change=10,
+                        random_state=42,
+                    )
 
-                dist_choice = trial.suggest_categorical('Dist', ["Normal", "LogNormal", "Exponential"])
+                dist_choice = trial.suggest_categorical(
+                    "Dist", ["Normal", "LogNormal", "Exponential"]
+                )
                 if dist_choice == "Normal":
                     dist_choice = Normal
                 elif dist_choice == "LogNormal":
@@ -1606,40 +1981,65 @@ class RegressionModels(postprocessing.FullPipeline):
                     dist_choice = Exponential
 
                 param = {
-                    'n_estimators': trial.suggest_int('n_estimators', 2, 50000),
-                    'minibatch_frac': trial.suggest_uniform('minibatch_frac', 0.4, 1.0),
-                    'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 0.1)
+                    "n_estimators": trial.suggest_int("n_estimators", 2, 50000),
+                    "minibatch_frac": trial.suggest_uniform("minibatch_frac", 0.4, 1.0),
+                    "learning_rate": trial.suggest_loguniform(
+                        "learning_rate", 1e-3, 0.1
+                    ),
                 }
-                if tune_mode == 'simple':
-                    model = NGBRegressor(n_estimators=param["n_estimators"],
-                                         minibatch_frac=param["minibatch_frac"],
-                                         Dist=dist_choice,
-                                         Base=base_learner_choice,
-                                         learning_rate=param["learning_rate"]).fit(x_train, y_train, X_val=X_test,
-                                                                                   Y_val=Y_test,
-                                                                                   early_stopping_rounds=10)
+                if tune_mode == "simple":
+                    model = NGBRegressor(
+                        n_estimators=param["n_estimators"],
+                        minibatch_frac=param["minibatch_frac"],
+                        Dist=dist_choice,
+                        Base=base_learner_choice,
+                        learning_rate=param["learning_rate"],
+                    ).fit(
+                        x_train,
+                        y_train,
+                        X_val=X_test,
+                        Y_val=Y_test,
+                        early_stopping_rounds=10,
+                    )
                     preds = model.predict(X_test)
                     mae = mean_absolute_error(Y_test, preds)
                     return mae
                 else:
-                    model = NGBRegressor(n_estimators=param["n_estimators"],
-                                         minibatch_frac=param["minibatch_frac"],
-                                         Dist=dist_choice,
-                                         Base=base_learner_choice,
-                                         learning_rate=param["learning_rate"],
-                                         random_state=42)
-                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring='neg_mean_squared_error',
-                                             fit_params={'X_val': X_test, 'Y_val': Y_test, 'early_stopping_rounds': 10})
+                    model = NGBRegressor(
+                        n_estimators=param["n_estimators"],
+                        minibatch_frac=param["minibatch_frac"],
+                        Dist=dist_choice,
+                        Base=base_learner_choice,
+                        learning_rate=param["learning_rate"],
+                        random_state=42,
+                    )
+                    scores = cross_val_score(
+                        model,
+                        x_train,
+                        y_train,
+                        cv=10,
+                        scoring="neg_mean_squared_error",
+                        fit_params={
+                            "X_val": X_test,
+                            "Y_val": Y_test,
+                            "early_stopping_rounds": 10,
+                        },
+                    )
                     mae = np.mean(scores)
                     return mae
 
-            algorithm = 'ngboost'
+            algorithm = "ngboost"
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm} tuning")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds["ngboost"],
-                           timeout=self.hyperparameter_tuning_max_runtime_secs["ngboost"],
-                           gc_after_trial=True,
-                           show_progress_bar=True)
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm} tuning"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds["ngboost"],
+                timeout=self.hyperparameter_tuning_max_runtime_secs["ngboost"],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -1662,15 +2062,16 @@ class RegressionModels(postprocessing.FullPipeline):
             elif lgbm_best_param["base_learner"] == "DecTree_depthNone":
                 base_learner_choice = DecisionTreeRegressor(max_depth=None)
             elif lgbm_best_param["base_learner"] == "GradientBoost_depth2":
-                base_learner_choice = GradientBoostingRegressor(max_depth=2,
-                                                                n_estimators=1000,
-                                                                n_iter_no_change=10,
-                                                                random_state=42)
+                base_learner_choice = GradientBoostingRegressor(
+                    max_depth=2, n_estimators=1000, n_iter_no_change=10, random_state=42
+                )
             elif lgbm_best_param["base_learner"] == "GradientBoost_depth5":
-                base_learner_choice = GradientBoostingRegressor(max_depth=5,
-                                                                n_estimators=10000,
-                                                                n_iter_no_change=10,
-                                                                random_state=42)
+                base_learner_choice = GradientBoostingRegressor(
+                    max_depth=5,
+                    n_estimators=10000,
+                    n_iter_no_change=10,
+                    random_state=42,
+                )
 
             if lgbm_best_param["Dist"] == "Normal":
                 dist_choice = Normal
@@ -1680,29 +2081,32 @@ class RegressionModels(postprocessing.FullPipeline):
                 dist_choice = Exponential
 
             param = {
-                'Dist': lgbm_best_param["Dist"],
-                'n_estimators': lgbm_best_param["n_estimators"],
-                'minibatch_frac': lgbm_best_param["minibatch_frac"],
-                'learning_rate': lgbm_best_param["learning_rate"],
-                'random_state': 42
+                "Dist": lgbm_best_param["Dist"],
+                "n_estimators": lgbm_best_param["n_estimators"],
+                "minibatch_frac": lgbm_best_param["minibatch_frac"],
+                "learning_rate": lgbm_best_param["learning_rate"],
+                "random_state": 42,
             }
             try:
                 X_train = X_train.drop(self.target_variable, axis=1)
             except Exception:
                 pass
-            model = NGBRegressor(n_estimators=param["n_estimators"],
-                                 minibatch_frac=param["minibatch_frac"],
-                                 Dist=dist_choice,
-                                 Base=base_learner_choice,
-                                 learning_rate=param["learning_rate"]).fit(X_train, Y_train, X_val=X_test, Y_val=Y_test,
-                                                                           early_stopping_rounds=10)
+            model = NGBRegressor(
+                n_estimators=param["n_estimators"],
+                minibatch_frac=param["minibatch_frac"],
+                Dist=dist_choice,
+                Base=base_learner_choice,
+                learning_rate=param["learning_rate"],
+            ).fit(
+                X_train, Y_train, X_val=X_test, Y_val=Y_test, early_stopping_rounds=10
+            )
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
             _ = gc.collect()
             return self.trained_models
 
-    def ngboost_predict(self, feat_importance=True, importance_alg='permutation'):
+    def ngboost_predict(self, feat_importance=True, importance_alg="permutation"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -1710,30 +2114,44 @@ class RegressionModels(postprocessing.FullPipeline):
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with Ngboost')
-        algorithm = 'ngboost'
+        self.get_current_timestamp(task="Predict with Ngboost")
+        algorithm = "ngboost"
         model = self.trained_models[f"{algorithm}"]
         if self.prediction_mode:
             X_test = self.dataframe
             predicted = model.predict(X_test)
-            predicted = self.target_skewness_handling(preds_to_reconvert=predicted, mode='revert')
+            predicted = self.target_skewness_handling(
+                preds_to_reconvert=predicted, mode="revert"
+            )
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             predicted = model.predict(X_test)
 
-            if feat_importance and importance_alg == 'SHAP':
-                self.runtime_warnings(warn_about='shap_cpu')
+            if feat_importance and importance_alg == "SHAP":
+                self.runtime_warnings(warn_about="shap_cpu")
                 try:
-                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
-                                           cols=X_test.columns, explainer="kernel")
+                    self.shap_explanations(
+                        model=model,
+                        test_df=X_test.sample(10000, random_state=42),
+                        cols=X_test.columns,
+                        explainer="kernel",
+                    )
                 except Exception:
-                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns, explainer="kernel")
-            elif feat_importance and importance_alg == 'permutation':
+                    self.shap_explanations(
+                        model=model,
+                        test_df=X_test,
+                        cols=X_test.columns,
+                        explainer="kernel",
+                    )
+            elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
-                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                )
+                permutation_importances = pd.Series(
+                    result.importances_mean, index=X_test.columns
+                )
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
                 ax.set_title("Feature importances using permutation on full model")
