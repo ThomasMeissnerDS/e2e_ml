@@ -7,9 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optuna
 import pandas as pd
-import torch.optim as optim
 import xgboost as xgb
-from catboost import CatBoostClassifier, Pool, cv
+from catboost import CatBoostClassifier, Pool
 from lightgbm import LGBMClassifier
 from ngboost import NGBClassifier
 from ngboost.distns import k_categorical
@@ -18,7 +17,6 @@ from pytorch_tabnet.metrics import Metric
 from pytorch_tabnet.pretraining import TabNetPretrainer
 from pytorch_tabnet.tab_model import TabNetClassifier
 from scipy import optimize, special
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.ensemble import (
     AdaBoostClassifier,
@@ -36,7 +34,6 @@ from sklearn.linear_model import (
 )
 from sklearn.metrics import make_scorer, matthews_corrcoef
 from sklearn.model_selection import cross_val_score
-from sklearn.multiclass import OneVsRestClassifier
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
@@ -176,7 +173,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
         if "probability_threshold" in self.preprocess_decisions:
             pass
         else:
-            self.preprocess_decisions[f"probability_threshold"] = {}
+            self.preprocess_decisions["probability_threshold"] = {}
 
         loop_spots = np.linspace(0, 1, 100, endpoint=False)
         max_matthew = 0
@@ -195,8 +192,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             if matthews > max_matthew:
                 max_matthew = matthews
                 best_threshold = iteration
-        self.preprocess_decisions[f"probability_threshold"][algorithm] = best_threshold
-        return self.preprocess_decisions[f"probability_threshold"][algorithm]
+        self.preprocess_decisions["probability_threshold"][algorithm] = best_threshold
+        return self.preprocess_decisions["probability_threshold"][algorithm]
 
     def logistic_regression_train(self):
         """
@@ -240,7 +237,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -260,7 +257,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -344,7 +341,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -364,7 +361,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -519,7 +516,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -536,7 +533,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -685,7 +682,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -702,7 +699,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -831,7 +828,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -848,7 +845,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -1009,7 +1006,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -1026,7 +1023,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -1190,7 +1187,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -1207,7 +1204,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -1304,7 +1301,6 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             batch_size = self.tabnet_settings["batch_size"]
             virtual_batch_size = self.tabnet_settings["virtual_batch_size"]
             num_workers = self.tabnet_settings["num_workers"]
-            max_epochs = self.tabnet_settings["max_epochs"]
 
             def objective(trial):
                 depths = trial.suggest_int("depths", 16, 64)
@@ -1368,9 +1364,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     x_train = x_train.to_numpy()
                     x_test = x_test.to_numpy()
 
-                    Y_train_num = y_train_sample.values.reshape(-1)
                     Y_test_num = Y_test.values.reshape(-1)
-                    X_train_num = x_train_sample.to_numpy()
                     X_test_num = X_test.to_numpy()
 
                     pretrainer = TabNetPretrainer(**param)
@@ -1409,7 +1403,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                         self.threshold_refiner(predicted_probs, Y_test_num, algorithm)
                         predicted_classes = (
                             predicted_probs
-                            > self.preprocess_decisions[f"probability_threshold"][
+                            > self.preprocess_decisions["probability_threshold"][
                                 algorithm
                             ]
                         )
@@ -1431,7 +1425,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             study = optuna.create_study(
                 direction="maximize", study_name=f"{algorithm} tuning"
             )
-            logging.info(f"Start Tabnet validation.")
+            logging.info("Start Tabnet validation.")
 
             study.optimize(
                 objective,
@@ -1547,7 +1541,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -1568,7 +1562,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -1616,7 +1610,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -1636,7 +1630,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -1683,7 +1677,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             del model
             _ = gc.collect()
 
-    def xg_boost_train(
+    def xg_boost_train(  # noqa: C901
         self, param=None, steps=None, autotune=True, tune_mode="accurate"
     ):
         """
@@ -1697,16 +1691,16 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
         self.get_current_timestamp(task="Train Xgboost")
         self.check_gpu_support(algorithm="xgboost")
         if self.preferred_training_mode == "auto":
-            train_on = self.preprocess_decisions[f"gpu_support"]["xgboost"]
+            train_on = self.preprocess_decisions["gpu_support"]["xgboost"]
         elif self.preferred_training_mode == "gpu":
             train_on = "gpu_hist"
             logging.info(
-                f"Start Xgboost model training on {self.preferred_training_mode}."
+                "Start Xgboost model training on {self.preferred_training_mode}."
             )
         else:
             train_on = "exact"
             logging.info(
-                f"Start Xgboost model training on {self.preferred_training_mode}."
+                "Start Xgboost model training on {self.preferred_training_mode}."
             )
         if self.prediction_mode:
             pass
@@ -1809,14 +1803,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                             sampler=sampler,
                             study_name=f"{algorithm} tuning",
                         )
-                        logging.info(f"Start Xgboost simple validation.")
+                        logging.info("Start Xgboost simple validation.")
                     else:
                         study = optuna.create_study(
                             direction="minimize",
                             sampler=sampler,
                             study_name=f"{algorithm} tuning",
                         )
-                        logging.info(f"Start Xgboost advanced validation.")
+                        logging.info("Start Xgboost advanced validation.")
                     study.optimize(
                         objective,
                         n_trials=self.hyperparameter_tuning_rounds["xgboost"],
@@ -1873,7 +1867,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     D_test = xgb.DMatrix(X_test, label=Y_test)
                     eval_set = [(D_train, "train"), (D_test, "test")]
                     logging.info(
-                        f"Start Xgboost final model training with optimized hyperparamers."
+                        "Start Xgboost final model training with optimized hyperparamers."
                     )
 
                     model = xgb.train(
@@ -1893,9 +1887,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                         param = {
                             "objective": "multi:softprob",  # OR  'binary:logistic' #the loss function being used
                             "eval_metric": "mlogloss",
-                            #'booster': 'dart',
-                            #'skip_drop': trial.suggest_uniform('skip_drop', 0.1, 1.0),
-                            #'rate_drop': trial.suggest_uniform('rate_drop', 0.1, 1.0),
+                            # 'booster': 'dart',
+                            # 'skip_drop': trial.suggest_uniform('skip_drop', 0.1, 1.0),
+                            # 'rate_drop': trial.suggest_uniform('rate_drop', 0.1, 1.0),
                             "verbose": 0,
                             "tree_method": train_on,  # use GPU for training
                             "num_class": Y_train.nunique(),
@@ -1968,14 +1962,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     algorithm = "xgboost"
                     sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
                     if tune_mode == "simple":
-                        logging.info(f"Start Xgboost simple validation.")
+                        logging.info("Start Xgboost simple validation.")
                         study = optuna.create_study(
                             direction="maximize",
                             sampler=sampler,
                             study_name=f"{algorithm} tuning",
                         )
                     else:
-                        logging.info(f"Start Xgboost advanced validation.")
+                        logging.info("Start Xgboost advanced validation.")
                         study = optuna.create_study(
                             direction="minimize",
                             sampler=sampler,
@@ -2005,9 +1999,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     param = {
                         "objective": "multi:softprob",  # OR  'binary:logistic' #the loss function being used
                         "eval_metric": "mlogloss",
-                        #'booster': 'dart',
-                        #'skip_drop': lgbm_best_param["skip_drop"],
-                        #'rate_drop': lgbm_best_param["rate_drop"],
+                        # 'booster': 'dart',
+                        # 'skip_drop': lgbm_best_param["skip_drop"],
+                        # 'rate_drop': lgbm_best_param["rate_drop"],
                         "verbose": 0,
                         "tree_method": train_on,  # use GPU for training
                         "num_class": Y_train.nunique(),
@@ -2040,7 +2034,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     D_test = xgb.DMatrix(X_test, label=Y_test)
                     eval_set = [(D_train, "train"), (D_test, "test")]
                     logging.info(
-                        f"Start Xgboost final model training with optimized hyperparamers."
+                        "Start Xgboost final model training with optimized hyperparamers."
                     )
                     model = xgb.train(
                         param,
@@ -2101,7 +2095,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     pass
                 eval_set = [(D_train, "train"), (D_test, "test")]
                 logging.info(
-                    f"Start Xgboost simple model training with predefined hyperparamers."
+                    "Start Xgboost simple model training with predefined hyperparamers."
                 )
                 model = xgb.train(
                     param,
@@ -2132,7 +2126,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -2150,7 +2144,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 D_test_sample = xgb.DMatrix(
                     X_test.sample(10000, random_state=42), label=Y_test
                 )
-            except:
+            except Exception:
                 D_test_sample = xgb.DMatrix(X_test, label=Y_test)
             model = self.trained_models[f"{algorithm}"]
             if self.class_problem == "binary" or self.class_problem == "multiclass":
@@ -2160,7 +2154,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     self.threshold_refiner(predicted_probs, Y_test, algorithm)
                     predicted_classes = (
                         predicted_probs
-                        > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                        > self.preprocess_decisions["probability_threshold"][algorithm]
                     )
                 else:
                     predicted_probs = partial_probs
@@ -2170,7 +2164,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
 
                 if feat_importance and importance_alg == "auto":
                     if (
-                        self.preprocess_decisions[f"gpu_support"]["xgboost"]
+                        self.preprocess_decisions["gpu_support"]["xgboost"]
                         == "gpu_hist"
                     ):
                         if self.class_problem == "binary":
@@ -2211,7 +2205,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.xg_boost_regression = model.predict(D_test)
                 return self.xg_boost_regression
 
-    def lgbm_train(self, tune_mode="accurate", gpu_use_dp=True):
+    def lgbm_train(self, tune_mode="accurate", gpu_use_dp=True):  # noqa: C901
         """
         Trains an LGBM model by the given parameters.
         :param tune_mode: 'Simple' for simple 80-20 split validation. 'Accurate': Each hyperparameter set will be validated
@@ -2222,7 +2216,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
         self.get_current_timestamp(task="Train LGBM")
         self.check_gpu_support(algorithm="lgbm")
         if self.preferred_training_mode == "auto":
-            train_on = self.preprocess_decisions[f"gpu_support"]["lgbm"]
+            train_on = self.preprocess_decisions["gpu_support"]["lgbm"]
         elif self.preferred_training_mode == "gpu":
             train_on = "gpu"
             gpu_use_dp = True
@@ -2243,7 +2237,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             dtrain = lgb.Dataset(x_train, label=y_train)
 
             if self.class_problem == "binary":
-                weights_for_lgb = self.calc_scale_pos_weight()
+                # weights_for_lgb = self.calc_scale_pos_weight()
 
                 def objective(trial):
                     param = {
@@ -2263,8 +2257,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                         "feature_fraction_bynode": trial.suggest_uniform(
                             "feature_fraction_bynode", 0.4, 1.0
                         ),
-                        #'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
-                        #'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
+                        # 'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
+                        # 'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
                         "learning_rate": trial.suggest_loguniform(
                             "learning_rate", 1e-5, 0.1
                         ),
@@ -2336,7 +2330,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     "objective": "binary",
                     "metric": "binary_logloss",
                     # 'scale_pos_weight': lgbm_best_param["scale_pos_weight"],
-                    #'max_depth': lgbm_best_param["max_depth"],
+                    # 'max_depth': lgbm_best_param["max_depth"],
                     "num_boost_round": lgbm_best_param["num_boost_round"],
                     "lambda_l1": lgbm_best_param["lambda_l1"],
                     "lambda_l2": lgbm_best_param["lambda_l2"],
@@ -2345,8 +2339,8 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     "feature_fraction_bynode": lgbm_best_param[
                         "feature_fraction_bynode"
                     ],
-                    #'bagging_freq': lgbm_best_param["bagging_freq"],
-                    #'min_child_samples': lgbm_best_param["min_child_samples"],
+                    # 'bagging_freq': lgbm_best_param["bagging_freq"],
+                    # 'min_child_samples': lgbm_best_param["min_child_samples"],
                     "learning_rate": lgbm_best_param["learning_rate"],
                     "verbose": -1,
                     "device": train_on,
@@ -2387,16 +2381,16 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                         "num_class": nb_classes,
                         "lambda_l1": trial.suggest_loguniform("lambda_l1", 1, 1e6),
                         "lambda_l2": trial.suggest_loguniform("lambda_l2", 1, 1e6),
-                        #'max_depth': trial.suggest_int('max_depth', 2, 8), #-1
+                        # 'max_depth': trial.suggest_int('max_depth', 2, 8), #-1
                         "num_leaves": trial.suggest_int("num_leaves", 2, 50),
                         "feature_fraction": trial.suggest_uniform(
                             "feature_fraction", 0.2, 1.0
                         ),
-                        #'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
+                        # 'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
                         "feature_fraction_bynode": trial.suggest_uniform(
                             "feature_fraction_bynode", 0.4, 1.0
                         ),
-                        #'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
+                        # 'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
                         "min_gain_to_split": trial.suggest_uniform(
                             "min_gain_to_split", 0, 15
                         ),
@@ -2474,7 +2468,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 param = {
                     "objective": "multiclass",
                     "metric": "multi_logloss",
-                    #'class_weight': classes_weights,
+                    # 'class_weight': classes_weights,
                     "boosting": "dart",
                     "drop_rate": lgbm_best_param["drop_rate"],
                     "skip_drop": lgbm_best_param["skip_drop"],
@@ -2482,14 +2476,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     "num_class": nb_classes,
                     "lambda_l1": lgbm_best_param["lambda_l1"],
                     "lambda_l2": lgbm_best_param["lambda_l2"],
-                    #'max_depth': lgbm_best_param["max_depth"],
+                    # 'max_depth': lgbm_best_param["max_depth"],
                     "num_leaves": lgbm_best_param["num_leaves"],
                     "feature_fraction": lgbm_best_param["feature_fraction"],
                     "feature_fraction_bynode": lgbm_best_param[
                         "feature_fraction_bynode"
                     ],
-                    #'bagging_freq': lgbm_best_param["bagging_freq"],
-                    #'min_child_samples': lgbm_best_param["min_child_samples"],
+                    # 'bagging_freq': lgbm_best_param["bagging_freq"],
+                    # 'min_child_samples': lgbm_best_param["min_child_samples"],
                     "min_gain_to_split": lgbm_best_param["min_gain_to_split"],
                     "learning_rate": lgbm_best_param["learning_rate"],
                     "verbose": -1,
@@ -2531,7 +2525,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 partial_probs = predicted_probs
                 predicted_classes = (
                     partial_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_classes = np.asarray(
@@ -2548,7 +2542,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_classes = np.asarray(
@@ -2556,7 +2550,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 )
 
             if feat_importance and importance_alg == "auto":
-                if self.preprocess_decisions[f"gpu_support"]["lgbm"] == "gpu":
+                if self.preprocess_decisions["gpu_support"]["lgbm"] == "gpu":
                     if self.class_problem == "binary":
                         self.shap_explanations(
                             model=model, test_df=X_test, cols=X_test.columns
@@ -2570,7 +2564,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     plt.figure(figsize=(16, 12))
                     plt.show()
             elif feat_importance and importance_alg == "SHAP":
-                if self.preprocess_decisions[f"gpu_support"]["lgbm"] == "gpu":
+                if self.preprocess_decisions["gpu_support"]["lgbm"] == "gpu":
                     if self.class_problem == "binary":
                         self.shap_explanations(
                             model=model, test_df=X_test, cols=X_test.columns
@@ -2742,7 +2736,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                     partial_probs = np.asarray([line[1] for line in predicted_probs])
                     predicted_classes = (
                         partial_probs
-                        > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                        > self.preprocess_decisions["probability_threshold"][algorithm]
                     )
                 else:
                     predicted_classes = np.asarray(
@@ -2901,7 +2895,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -2920,7 +2914,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_probs = partial_probs
@@ -2972,7 +2966,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
         _ = gc.collect()
         return self.predicted_probs
 
-    def ngboost_train(self, tune_mode="accurate"):
+    def ngboost_train(self, tune_mode="accurate"):  # noqa: C901
         """
         Trains an Ngboost regressor.
         :return: Updates class attributes by its predictions.
@@ -3184,7 +3178,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
                 predicted_classes = predicted_classes.astype(int)
             else:
@@ -3200,7 +3194,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
                 predicted_classes = (
                     predicted_probs
-                    > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
                 )
             else:
                 predicted_classes = np.asarray(

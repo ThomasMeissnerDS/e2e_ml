@@ -44,7 +44,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
     :return: Updates class attributes by its predictions.
     """
 
-    def train_pred_selected_model(self, algorithm=None):
+    def train_pred_selected_model(self, algorithm=None):  # noqa: C901
         logging.info(f"Start ML training {algorithm}")
         if algorithm == "xgboost":
             # train Xgboost
@@ -598,7 +598,9 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info("Finished blueprint.")
 
-    def ml_special_multiclass_full_processing_multimodel_max_voting(self, df=None):
+    def ml_special_multiclass_full_processing_multimodel_max_voting(  # noqa: C901
+        self, df=None
+    ):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -710,7 +712,6 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
                     ],
                 )
 
-        algorithm = "max_voting"
         mode_cols = [
             alg for alg, value in self.special_blueprint_algorithms.items() if value
         ]
@@ -721,49 +722,49 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
 
         if self.prediction_mode:
             if self.special_blueprint_algorithms["lgbm"]:
-                self.dataframe["lgbm"] = self.predicted_classes[f"lgbm"]
+                self.dataframe["lgbm"] = self.predicted_classes["lgbm"]
             if self.special_blueprint_algorithms["xgboost"]:
-                self.dataframe["xgboost"] = self.predicted_classes[f"xgboost"]
+                self.dataframe["xgboost"] = self.predicted_classes["xgboost"]
             if self.special_blueprint_algorithms["vowpal_wabbit"]:
                 self.dataframe["vowpal_wabbit"] = self.predicted_classes[
-                    f"vowpal_wabbit"
+                    "vowpal_wabbit"
                 ]
             if self.special_blueprint_algorithms["tabnet"]:
-                self.dataframe["tabnet"] = self.predicted_classes[f"tabnet"]
+                self.dataframe["tabnet"] = self.predicted_classes["tabnet"]
             if self.special_blueprint_algorithms["ridge"]:
-                self.dataframe["ridge"] = self.predicted_classes[f"ridge"]
+                self.dataframe["ridge"] = self.predicted_classes["ridge"]
             if self.special_blueprint_algorithms["sklearn_ensemble"]:
                 self.dataframe["sklearn_ensemble"] = self.predicted_classes[
-                    f"sklearn_ensemble"
+                    "sklearn_ensemble"
                 ]
             if self.special_blueprint_algorithms["ngboost"]:
-                self.dataframe["ngboost"] = self.predicted_classes[f"ngboost"]
+                self.dataframe["ngboost"] = self.predicted_classes["ngboost"]
             if self.special_blueprint_algorithms["catboost"]:
-                self.dataframe["catboost"] = self.predicted_classes[f"catboost"]
+                self.dataframe["catboost"] = self.predicted_classes["catboost"]
             self.dataframe["max_voting_class"] = self.dataframe[mode_cols].mode(axis=1)[
                 0
             ]
-            self.predicted_classes[f"max_voting"] = self.dataframe["max_voting_class"]
+            self.predicted_classes["max_voting"] = self.dataframe["max_voting_class"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             if self.special_blueprint_algorithms["lgbm"]:
-                X_test["lgbm"] = self.predicted_classes[f"lgbm"]
+                X_test["lgbm"] = self.predicted_classes["lgbm"]
             if self.special_blueprint_algorithms["xgboost"]:
-                X_test["xgboost"] = self.predicted_classes[f"xgboost"]
+                X_test["xgboost"] = self.predicted_classes["xgboost"]
             if self.special_blueprint_algorithms["vowpal_wabbit"]:
-                X_test["vowpal_wabbit"] = self.predicted_classes[f"vowpal_wabbit"]
+                X_test["vowpal_wabbit"] = self.predicted_classes["vowpal_wabbit"]
             if self.special_blueprint_algorithms["tabnet"]:
-                X_test["tabnet"] = self.predicted_classes[f"tabnet"]
+                X_test["tabnet"] = self.predicted_classes["tabnet"]
             if self.special_blueprint_algorithms["ridge"]:
-                X_test["ridge"] = self.predicted_classes[f"ridge"]
+                X_test["ridge"] = self.predicted_classes["ridge"]
             if self.special_blueprint_algorithms["sklearn_ensemble"]:
-                X_test["sklearn_ensemble"] = self.predicted_classes[f"sklearn_ensemble"]
+                X_test["sklearn_ensemble"] = self.predicted_classes["sklearn_ensemble"]
             if self.special_blueprint_algorithms["ngboost"]:
-                X_test["ngboost"] = self.predicted_classes[f"ngboost"]
+                X_test["ngboost"] = self.predicted_classes["ngboost"]
             if self.special_blueprint_algorithms["catboost"]:
-                X_test["catboost"] = self.predicted_classes[f"catboost"]
+                X_test["catboost"] = self.predicted_classes["catboost"]
             X_test["max_voting_class"] = X_test[mode_cols].mode(axis=1)[0]
-            self.predicted_classes[f"max_voting"] = X_test["max_voting_class"]
+            self.predicted_classes["max_voting"] = X_test["max_voting_class"]
         self.classification_eval("max_voting")
         self.prediction_mode = True
         logging.info("Finished blueprint.")

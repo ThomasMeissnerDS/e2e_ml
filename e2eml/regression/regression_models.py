@@ -8,9 +8,8 @@ import numpy as np
 import optuna
 import pandas as pd
 import torch
-import torch.optim as optim
 import xgboost as xgb
-from catboost import CatBoostRegressor, Pool, cv
+from catboost import CatBoostRegressor, Pool
 from lightgbm import LGBMRegressor
 from ngboost import NGBRegressor
 from ngboost.distns import Exponential, LogNormal, Normal
@@ -30,7 +29,6 @@ from sklearn.linear_model import (
     LinearRegression,
     RANSACRegressor,
     Ridge,
-    RidgeCV,
     SGDRegressor,
 )
 from sklearn.metrics import mean_absolute_error
@@ -38,7 +36,7 @@ from sklearn.model_selection import KFold, cross_val_score
 from sklearn.svm import SVR, LinearSVR
 from sklearn.tree import DecisionTreeRegressor
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
+from vowpalwabbit.sklearn_vw import VWRegressor
 
 from e2eml.full_processing import postprocessing
 
@@ -410,7 +408,7 @@ class RegressionModels(postprocessing.FullPipeline):
         del model
         _ = gc.collect()
 
-    def ransac_regression_train(self):
+    def ransac_regression_train(self):  # noqa: C901
         """
         Trains a Ridge regression model.
         :return: Trained model.
@@ -1058,9 +1056,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     x_train = x_train.to_numpy()
                     x_test = x_test.to_numpy()
 
-                    Y_train_num = Y_train_sample.values.reshape(-1, 1)
+                    Y_train_num = Y_train_sample.values.reshape(-1, 1)  # noqa: F841
                     Y_test_num = Y_test.values.reshape(-1, 1)
-                    X_train_num = X_train_sample.to_numpy()
+                    X_train_num = X_train_sample.to_numpy()  # noqa: F841
                     X_test_num = X_test.to_numpy()
 
                     pretrainer = TabNetPretrainer(**param)
@@ -1101,7 +1099,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 direction="minimize", study_name=f"{algorithm} tuning"
             )
 
-            logging.info(f"Start Tabnet validation.")
+            logging.info("Start Tabnet validation.")
 
             study.optimize(
                 objective,
@@ -1303,7 +1301,7 @@ class RegressionModels(postprocessing.FullPipeline):
         self.get_current_timestamp(task="Train Xgboost")
         self.check_gpu_support(algorithm="xgboost")
         if self.preferred_training_mode == "auto":
-            train_on = self.preprocess_decisions[f"gpu_support"]["xgboost"]
+            train_on = self.preprocess_decisions["gpu_support"]["xgboost"]
         elif self.preferred_training_mode == "gpu":
             train_on = "gpu_hist"
         else:
@@ -1518,7 +1516,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 D_test_sample = xgb.DMatrix(
                     X_test.sample(10000, random_state=42), label=Y_test
                 )
-            except:
+            except Exception:
                 D_test_sample = xgb.DMatrix(X_test, label=Y_test)
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(D_test)
@@ -1526,7 +1524,7 @@ class RegressionModels(postprocessing.FullPipeline):
             self.predicted_values[f"{algorithm}"] = predicted_probs
 
             if feat_importance and importance_alg == "auto":
-                if self.preprocess_decisions[f"gpu_support"]["xgboost"] == "gpu_hist":
+                if self.preprocess_decisions["gpu_support"]["xgboost"] == "gpu_hist":
                     self.shap_explanations(
                         model=model, test_df=D_test_sample, cols=X_test.columns
                     )
@@ -1551,7 +1549,7 @@ class RegressionModels(postprocessing.FullPipeline):
         self.get_current_timestamp(task="Train LGBM")
         self.check_gpu_support(algorithm="lgbm")
         if self.preferred_training_mode == "auto":
-            train_on = self.preprocess_decisions[f"gpu_support"]["lgbm"]
+            train_on = self.preprocess_decisions["gpu_support"]["lgbm"]
         elif self.preferred_training_mode == "gpu":
             train_on = "gpu"
             gpu_use_dp = True
@@ -1575,7 +1573,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     "lambda_l1": trial.suggest_loguniform("lambda_l1", 1, 1e6),
                     "lambda_l2": trial.suggest_loguniform("lambda_l2", 1, 1e6),
                     "linear_lambda": trial.suggest_loguniform("linear_lambda", 1, 1e6),
-                    #'max_depth': trial.suggest_int('max_depth', 2, 8),
+                    # 'max_depth': trial.suggest_int('max_depth', 2, 8),
                     "num_leaves": trial.suggest_int("num_leaves", 2, 256),
                     "feature_fraction": trial.suggest_uniform(
                         "feature_fraction", 0.4, 1.0
@@ -1586,7 +1584,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     "bagging_fraction": trial.suggest_uniform(
                         "bagging_fraction", 0.1, 1
                     ),
-                    #'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
+                    # 'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
                     "min_gain_to_split": trial.suggest_uniform(
                         "min_gain_to_split", 0, 1
                     ),
@@ -1649,17 +1647,17 @@ class RegressionModels(postprocessing.FullPipeline):
             lgbm_best_param = study.best_trial.params
             param = {
                 "objective": "regression",
-                "metric": "mean_squared_error",  #'gamma'
+                "metric": "mean_squared_error",  # 'gamma'
                 "num_boost_round": lgbm_best_param["num_boost_round"],
                 "lambda_l1": lgbm_best_param["lambda_l1"],
                 "lambda_l2": lgbm_best_param["lambda_l2"],
                 "linear_lambda": lgbm_best_param["linear_lambda"],
-                #'max_depth': lgbm_best_param["max_depth"],
+                # 'max_depth': lgbm_best_param["max_depth"],
                 "num_leaves": lgbm_best_param["num_leaves"],
                 "feature_fraction": lgbm_best_param["feature_fraction"],
                 "feature_fraction_bynode": lgbm_best_param["feature_fraction_bynode"],
                 "bagging_fraction": lgbm_best_param["bagging_fraction"],
-                #'min_child_samples': lgbm_best_param["min_child_samples"],
+                # 'min_child_samples': lgbm_best_param["min_child_samples"],
                 "min_gain_to_split": lgbm_best_param["min_gain_to_split"],
                 "learning_rate": lgbm_best_param["learning_rate"],
                 "verbose": -1,
@@ -1707,7 +1705,7 @@ class RegressionModels(postprocessing.FullPipeline):
             predicted_probs = model.predict(X_test)
 
             if feat_importance and importance_alg == "auto":
-                if self.preprocess_decisions[f"gpu_support"]["lgbm"] == "gpu":
+                if self.preprocess_decisions["gpu_support"]["lgbm"] == "gpu":
                     self.shap_explanations(
                         model=model, test_df=X_test, cols=X_test.columns
                     )
@@ -1924,7 +1922,7 @@ class RegressionModels(postprocessing.FullPipeline):
         _ = gc.collect()
         return self.predicted_probs
 
-    def ngboost_train(self, tune_mode="accurate"):
+    def ngboost_train(self, tune_mode="accurate"):  # noqa: C901
         """
         Trains an Ngboost regressor.
         :return: Updates class attributes by its predictions.

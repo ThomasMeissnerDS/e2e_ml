@@ -1,35 +1,25 @@
 import copy
-
-import pandas as pd
-
-pd.set_option("display.max_colwidth", None)
 import gc
 import logging
 import time
-import warnings
 from datetime import datetime
 
-import dill as pickle
 import numpy as np
-import optuna
+import pandas as pd
 import plotly.express as px
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
-    confusion_matrix,
-    f1_score,
     matthews_corrcoef,
     mean_absolute_error,
     mean_squared_error,
-    median_absolute_error,
     r2_score,
     recall_score,
-    roc_auc_score,
 )
 
-from e2eml.classification.classification_blueprints import ClassificationBluePrint
 from e2eml.full_processing import postprocessing
-from e2eml.regression.regression_blueprints import RegressionBluePrint
+
+pd.set_option("display.max_colwidth", None)
 
 
 class TimeTravel:
@@ -267,7 +257,7 @@ class TimeTravel:
         else:
             self.call_regression_algorithm_mapping(class_instance=class_instance)
 
-        for key, value in class_instance.blueprint_step_selection_non_nlp.items():
+        for key in class_instance.blueprint_step_selection_non_nlp.keys():
             if class_instance.blueprint_step_selection_non_nlp[key] and (
                 not class_instance.checkpoint_reached[key]
                 or class_instance.prediction_mode
@@ -377,14 +367,14 @@ class TimeTravel:
         logging.info("Finished blueprint.")
 
 
-def timewalk_auto_exploration(
+def timewalk_auto_exploration(  # noqa: C901
     class_instance,
     holdout_df,
     holdout_target,
     algs_to_test=None,
     speed_up_model_tuning=True,
     name_of_exist_experiment=None,
-    experiment_name=f"timewalk.pkl",
+    experiment_name="timewalk.pkl",
     experiment_comment=f'Experiment run at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
 ):
     """
@@ -543,7 +533,7 @@ def timewalk_auto_exploration(
     scoring_results = []
     scoring_2_results = []
     scoring_3_results = []
-    scoring_4_results = []
+    # scoring_4_results = []
     algorithms_used = []
     preprocessing_steps_used = []
     elapsed_times = []
@@ -562,12 +552,12 @@ def timewalk_auto_exploration(
         metric = "Matthews"
         metric_2 = "Accuracy"
         metric_3 = "Recall"
-        ascending = False
+        # ascending = False
     else:
         metric = "Mean absolute error"
         metric_2 = "R2 score"
         metric_3 = "RMSE"
-        ascending = True
+        # ascending = True
 
     # creating checkpoints and training the model
     automl_travel = TimeTravel()
@@ -672,7 +662,7 @@ def timewalk_auto_exploration(
                 class_instance = automl_travel.load_checkpoint(
                     checkpoint_to_load="sort_columns_alphabetically"
                 )  # gets latest checkpoint
-                print(f"Successfully loaded checkpoint last checkpoint.")
+                print("Successfully loaded checkpoint last checkpoint.")
                 automl_travel.create_time_travel_checkpoints(
                     class_instance, reload_instance=True
                 )
@@ -812,7 +802,7 @@ def timewalk_auto_exploration(
                 except KeyError:
                     pass
         except Exception:
-            if class_instance.class_problem in ["binary", "multiclass"]:
+            if class_instance.class_problem in ["binary", "multiclass"]:  # noqa: F821
                 scoring = 0
                 scoring_2 = 0
                 scoring_3 = 0
@@ -828,9 +818,9 @@ def timewalk_auto_exploration(
             scoring_3_results.append(scoring_3)
             algorithms_used.append(alg)
             unique_indices.append(unique_indices_counter)
-            preprocessing_steps_used.append(
-                class_instance.blueprint_step_selection_non_nlp
-            )
+            preprocessing_steps_used.append(  # noqa: F821
+                class_instance.blueprint_step_selection_non_nlp  # noqa: F821
+            )  # noqa: F821
             results_dict = {
                 "Trial number": unique_indices,
                 "Algorithm": algorithms_used,
@@ -861,8 +851,8 @@ def timewalk_auto_exploration(
             print(f"End iteration for algorithm {alg} at {end}.")
             print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
             try:
-                del class_instance.trained_models[alg]
-                del class_instance
+                del class_instance.trained_models[alg]  # noqa: F821
+                del class_instance  # noqa: F821
                 _ = gc.collect()
             except KeyError:
                 pass

@@ -5,7 +5,6 @@ import re
 import ssl
 import string
 
-import lightgbm as lgb
 import nltk
 import numpy as np
 import pandas as pd
@@ -14,20 +13,12 @@ import spacy
 import transformers
 from imblearn.over_sampling import SMOTE
 from nltk import pos_tag
-from nltk.corpus import stopwords, wordnet
+from nltk.corpus import wordnet
 from nltk.tokenize import word_tokenize
-from sklearn import naive_bayes
-from sklearn.decomposition import PCA, TruncatedSVD
+from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import ElasticNet, Ridge
 from textblob import TextBlob
-from transformers import (
-    AutoConfig,
-    AutoModel,
-    AutoTokenizer,
-    get_linear_schedule_with_warmup,
-)
-from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
+from transformers import AutoConfig, AutoModel, AutoTokenizer
 
 from e2eml.full_processing import cpu_preprocessing
 
@@ -75,13 +66,13 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             lst_text = [word for word in lst_text if word not in lst_stopwords]
 
         # Stemming (remove -ing, -ly, ...)
-        if flg_stemm == True:
+        if flg_stemm is True:
             logging.info("Start text stemming.")
             ps = nltk.stem.porter.PorterStemmer()
             lst_text = [ps.stem(word) for word in lst_text]
 
         # Lemmatisation (convert the word into root word)
-        if flg_lemm == True:
+        if flg_lemm is True:
             logging.info("Start text lemmatisation.")
             lem = nltk.stem.wordnet.WordNetLemmatizer()
             lst_text = [lem.lemmatize(word) for word in lst_text]
@@ -166,11 +157,10 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         substitute = re.sub(r"(\w)\1+", rep, text)
         return str(substitute)
 
-    def regex_clean_text_data(self):
+    def regex_clean_text_data(self):  # noqa: C901
         logging.info("Start text cleaning.")
         self.get_current_timestamp(task="Start text cleaning.")
         logging.info("Start text cleaning.")
-        algorithm = "regex_text"
         if self.prediction_mode:
             text_columns = []
             text_columns.append(self.nlp_transformer_columns)
@@ -343,8 +333,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             nlp = spacy.load("en_core_web_sm")
             # https://spacy.io/universe/project/spacy-transformers
             # https://spacy.io/models
-            #!python -m spacy download en_core_web_trf
-            #!pip install spacy-transformers
+            # !python -m spacy download en_core_web_trf
+            # !pip install spacy-transformers
             # nlp = spacy.load('en_core_web_trf')
         # nlp = spacy.load('en_core_web_lg')
         with nlp.disable_pipes():
@@ -469,7 +459,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 if pca_pos_tags:
                     self.get_current_timestamp(task="PCA POS tags")
                     logging.info("Start to PCA POS tags.")
-                    pca = self.preprocess_decisions[f"spacy_pos"][f"pos_pca_{text_col}"]
+                    pca = self.preprocess_decisions["spacy_pos"][f"pos_pca_{text_col}"]
                     comps = pca.transform(pos_df)
                     pos_pca_cols = [f"POS PC-1 {text_col}", f"POS PC-2 {text_col}"]
                     pos_df = pd.DataFrame(comps, columns=pos_pca_cols)
@@ -515,7 +505,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                             logging.info("Start to PCA POS tags.")
                             pca = PCA(n_components=2)
                             comps = pca.fit_transform(pos_df)
-                            self.preprocess_decisions[f"spacy_pos"][
+                            self.preprocess_decisions["spacy_pos"][
                                 f"pos_pca_{text_col}"
                             ] = pca
                             pos_pca_cols = [
@@ -548,7 +538,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             if pca_pos_tags:
                 # get unique pos tag columns
                 unique_pos_cols = list(set(pos_columns))
-                self.preprocess_decisions[f"spacy_pos"][
+                self.preprocess_decisions["spacy_pos"][
                     "pos_tagger_cols"
                 ] = unique_pos_cols
 
@@ -571,7 +561,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
     def pos_tagging_pca(self, pca_pos_tags=True):
         self.get_current_timestamp(task="Start Spacy, POS tagging")
         logging.info("Start spacy POS tagging loop.")
-        algorithm = "spacy_pos"
+        # algorithm = "spacy_pos"
         if self.prediction_mode:
             text_columns = self.nlp_columns
             self.dataframe = self.pos_tagging_pca_nlp_cols(
@@ -584,7 +574,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             if pca_pos_tags:
-                self.preprocess_decisions[f"spacy_pos"] = {}
+                self.preprocess_decisions["spacy_pos"] = {}
             else:
                 pass
             if not self.nlp_columns:
@@ -611,14 +601,14 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             for text_col in text_cols:
                 df[text_col].fillna("None", inplace=True)
                 try:
-                    tfids = self.preprocess_decisions[f"tfidf_vectorizer"][
+                    tfids = self.preprocess_decisions["tfidf_vectorizer"][
                         f"tfidf_{text_col}"
                     ]
                     if pca_pos_tags:
                         vector = list(tfids.transform(df[text_col]).toarray())
                         self.get_current_timestamp(task="PCA POS tags")
                         logging.info("Start to PCA POS tags.")
-                        pca = self.preprocess_decisions[f"tfidf_vectorizer"][
+                        pca = self.preprocess_decisions["tfidf_vectorizer"][
                             f"tfidf_pca_{text_col}"
                         ]
                         comps = pca.transform(vector)
@@ -668,7 +658,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                             norm="l2",
                             sublinear_tf=True,
                         )
-                        self.preprocess_decisions[f"tfidf_vectorizer"][
+                        self.preprocess_decisions["tfidf_vectorizer"][
                             f"tfidf_{text_col}"
                         ] = tfids
                         if pca_pos_tags:
@@ -677,7 +667,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                             logging.info("Start to PCA TfIDF matrix.")
                             pca = PCA(n_components=2)
                             comps = pca.fit_transform(vector)
-                            self.preprocess_decisions[f"tfidf_vectorizer"][
+                            self.preprocess_decisions["tfidf_vectorizer"][
                                 f"tfidf_pca_{text_col}"
                             ] = pca
                             tfidf_pca_cols = [
@@ -725,7 +715,6 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
     def tfidf_vectorizer_to_pca(self, pca_pos_tags=True, ngram_range=(1, 3)):
         self.get_current_timestamp(task="Start TFIDF to PCA loop")
         logging.info("Start TFIDF to PCA loop.")
-        algorithm = "spacy_pos"
         if self.prediction_mode:
             text_columns = self.nlp_columns
             self.dataframe = self.tfidf_pca(
@@ -739,7 +728,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             if pca_pos_tags:
-                self.preprocess_decisions[f"tfidf_vectorizer"] = {}
+                self.preprocess_decisions["tfidf_vectorizer"] = {}
             else:
                 pass
             if not self.nlp_columns:
@@ -799,8 +788,8 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         synonyms = set()
 
         for syn in wordnet.synsets(word):
-            for l in syn.lemmas():
-                synonym = l.name().replace("_", " ").replace("-", " ").lower()
+            for lemma in syn.lemmas():
+                synonym = lemma.name().replace("_", " ").replace("-", " ").lower()
                 synonym = "".join(
                     [char for char in synonym if char in " qwertyuiopasdfghjklzxcvbnm"]
                 )
@@ -917,11 +906,11 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         if "nlp_transformers" in self.preprocess_decisions:
             pass
         else:
-            self.preprocess_decisions[f"nlp_transformers"] = {}
+            self.preprocess_decisions["nlp_transformers"] = {}
 
-        self.preprocess_decisions[f"nlp_transformers"][
+        self.preprocess_decisions["nlp_transformers"][
             f"transformer_model_{transformer_chosen}"
         ] = bert
-        self.preprocess_decisions[f"nlp_transformers"][
+        self.preprocess_decisions["nlp_transformers"][
             f"transformer_tokenizer_{transformer_chosen}"
         ] = tokenizer

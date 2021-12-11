@@ -1,38 +1,14 @@
 import gc
 import logging
 import os
-import random
 
 import numpy as np
-import pandas as pd
 import psutil
 import torch
-import torch.nn as nn
-import transformers
-from sklearn.metrics import matthews_corrcoef, mean_squared_error
-from sklearn.utils.class_weight import compute_class_weight
-from torch.utils.data import (
-    DataLoader,
-    Dataset,
-    RandomSampler,
-    SequentialSampler,
-    TensorDataset,
-)
+from sklearn.metrics import matthews_corrcoef
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-from transformers import (
-    AdamW,
-    AutoModel,
-    AutoTokenizer,
-    BertModel,
-    BertTokenizer,
-    ElectraForSequenceClassification,
-    ElectraTokenizer,
-    RobertaModel,
-    RobertaTokenizer,
-    XLNetForSequenceClassification,
-    get_cosine_schedule_with_warmup,
-    get_linear_schedule_with_warmup,
-)
+from transformers import AdamW, get_linear_schedule_with_warmup
 
 from e2eml.full_processing import cpu_processing_nlp, postprocessing
 
@@ -127,14 +103,14 @@ class NlpModel(
         logging.info("Create NLP train dataset.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        tokenizer = self.preprocess_decisions[f"nlp_transformers"][
+        tokenizer = self.preprocess_decisions["nlp_transformers"][
             f"transformer_tokenizer_{self.transformer_chosen}"
         ]
         train_dataset = BERTDataSet(
             X_train[self.nlp_transformer_columns],
             Y_train,
             tokenizer,
-            self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"],
+            self.preprocess_decisions["nlp_transformers"]["max_sentence_len"],
         )
         return train_dataset
 
@@ -142,14 +118,14 @@ class NlpModel(
         logging.info("Create NLP test dataset.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        tokenizer = self.preprocess_decisions[f"nlp_transformers"][
+        tokenizer = self.preprocess_decisions["nlp_transformers"][
             f"transformer_tokenizer_{self.transformer_chosen}"
         ]
         test_dataset = BERTDataSet(
             X_test[self.nlp_transformer_columns],
             Y_test,
             tokenizer,
-            self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"],
+            self.preprocess_decisions["nlp_transformers"]["max_sentence_len"],
         )
         return test_dataset
 
@@ -160,25 +136,25 @@ class NlpModel(
             self.dataframe[self.target_variable] = 999  # creating dummy column
             dummy_target = self.dataframe[self.target_variable]
             self.dataframe.drop(self.target_variable, axis=1)
-            tokenizer = self.preprocess_decisions[f"nlp_transformers"][
+            tokenizer = self.preprocess_decisions["nlp_transformers"][
                 f"transformer_tokenizer_{self.transformer_chosen}"
             ]
             pred_dataset = BERTDataSet(
                 self.dataframe[self.nlp_transformer_columns],
                 dummy_target,
                 tokenizer,
-                self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"],
+                self.preprocess_decisions["nlp_transformers"]["max_sentence_len"],
             )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            tokenizer = self.preprocess_decisions[f"nlp_transformers"][
+            tokenizer = self.preprocess_decisions["nlp_transformers"][
                 f"transformer_tokenizer_{self.transformer_chosen}"
             ]
             pred_dataset = BERTDataSet(
                 X_test[self.nlp_transformer_columns],
                 Y_test,
                 tokenizer,
-                self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"],
+                self.preprocess_decisions["nlp_transformers"]["max_sentence_len"],
             )
         return pred_dataset
 
@@ -298,7 +274,7 @@ class NlpModel(
             scheduler = get_linear_schedule_with_warmup(
                 optimizer, num_steps, train_steps
             )
-            self.preprocess_decisions[f"nlp_transformers"][
+            self.preprocess_decisions["nlp_transformers"][
                 f"sheduler_{self.transformer_chosen}"
             ] = scheduler
             return model, optimizer, train_steps, num_steps, scheduler
@@ -396,7 +372,7 @@ class NlpModel(
             model.to(device)
             model.eval()
             preds = []
-            allvalloss = 0
+            # allvalloss = 0
             with torch.no_grad():
                 for a in pred_dataloader:
                     ids = a["ids"].to(device)

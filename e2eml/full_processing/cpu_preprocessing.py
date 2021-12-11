@@ -4,7 +4,6 @@ import os
 import random
 import time
 import warnings
-from copy import copy
 
 import dill as pickle
 import lightgbm
@@ -12,21 +11,23 @@ import lightgbm as lgb
 import numpy as np
 import optuna
 import pandas as pd
-import param
 import psutil
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import xgboost as xgb
 from boostaroota import BoostARoota
 from catboost import CatBoostClassifier
-from category_encoders import *
-from category_encoders.wrapper import NestedCVWrapper
+from category_encoders import (
+    GLMMEncoder,
+    LeaveOneOutEncoder,
+    OneHotEncoder,
+    OrdinalEncoder,
+    TargetEncoder,
+    WOEEncoder,
+)
 from imblearn.over_sampling import SMOTE
 from pandas.core.common import SettingWithCopyWarning
-from scipy import stats
 from scipy.stats import (
-    bernoulli,
     binom,
     dweibull,
     expon,
@@ -41,21 +42,18 @@ from scipy.stats import (
     rdist,
     semicircular,
     tukeylambda,
-    uniform,
 )
 from sklearn import model_selection
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.decomposition import PCA, KernelPCA
 from sklearn.ensemble import IsolationForest
-from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, SimpleImputer
 from sklearn.linear_model import BayesianRidge, Ridge
 from sklearn.metrics import make_scorer, matthews_corrcoef, mean_squared_error
 from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import OneClassSVM
-from sklearn.utils import class_weight
 from torch import nn, optim
 from torch.autograd import Variable
 from torch.utils.data import DataLoader, Dataset
@@ -97,7 +95,7 @@ class PreProcessing:
     However we highly recommend GPU usage to heavily decrease model training times.
     """
 
-    def __init__(
+    def __init__(  # noqa: C901
         self,
         datasource,
         target_variable,
@@ -316,7 +314,7 @@ class PreProcessing:
             "delete_low_variance_features": True,
         }
         self.checkpoint_reached = {}
-        for key, value in self.checkpoints.items():
+        for key in self.checkpoints.keys():
             self.checkpoint_reached[key] = False
 
         self.preprocessing_funcs = None
@@ -388,7 +386,7 @@ class PreProcessing:
         self.transformer_model_load_from_path = transformer_model_load_from_path
         self.transformer_model_save_states_path = transformer_model_save_states_path
         self.transformer_settings = {
-            f"train_batch_size": 32,
+            "train_batch_size": 32,
             "test_batch_size": 32,
             "pred_batch_size": 32,
             "num_workers": 4,
@@ -412,7 +410,7 @@ class PreProcessing:
             virtual_batch_size = int(rec_batch_size / 4)
 
         self.tabnet_settings = {
-            f"batch_size": rec_batch_size,
+            "batch_size": rec_batch_size,
             "virtual_batch_size": virtual_batch_size,
             "num_workers": 0,
             "max_epochs": 1000,
@@ -517,8 +515,8 @@ class PreProcessing:
 
     def __repr__(self):
         return (
-            f"Central data class holding all information like dataframes, "
-            f"columns of certain data types, saved models and predictions."
+            "Central data class holding all information like dataframes, "
+            "columns of certain data types, saved models and predictions."
             f"Current target variable:'{self.target_variable}'"
         )
 
@@ -609,22 +607,22 @@ class PreProcessing:
         data = np.random.rand(50, 2)
         label = np.random.randint(2, size=50)
         try:
-            if not self.preprocess_decisions[f"gpu_support"]:
-                self.preprocess_decisions[f"gpu_support"] = {}
+            if not self.preprocess_decisions["gpu_support"]:
+                self.preprocess_decisions["gpu_support"] = {}
         except KeyError:
-            self.preprocess_decisions[f"gpu_support"] = {}
+            self.preprocess_decisions["gpu_support"] = {}
         else:
             pass
         if algorithm == "lgbm":
             self.get_current_timestamp(task="Check LGBM for GPU acceleration.")
-            train_data = lightgbm.Dataset(data, label=label)
+            train_data = lightgbm.Dataset(data, label=label)  # noqa: F841
             params = {"num_iterations": 1, "device": "gpu"}
             try:
-                gbm = lightgbm.train(params, train_set=train_data)
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = "gpu"
+                # gbm = lightgbm.train(params, train_set=train_data)
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "gpu"
                 print("LGBM uses GPU.")
             except Exception:
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = "cpu"
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "cpu"
                 print("LGBM uses CPU.")
         elif algorithm == "xgboost":
             self.get_current_timestamp(task="Check Xgboost for GPU acceleration.")
@@ -632,19 +630,19 @@ class PreProcessing:
             params = {"tree_method": "gpu_hist", "steps": 2}
             try:
                 model = xgb.train(params, D_train)
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = "gpu_hist"
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "gpu_hist"
                 print("Xgboost uses GPU.")
             except Exception:
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = "exact"
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "exact"
                 print("Xgboost uses CPU.")
         elif algorithm == "catboost":
             try:
                 model = CatBoostClassifier(iterations=2, task_type="GPU", devices="0:1")
                 model.fit(data, label)
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = "GPU"
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "GPU"
                 print("Catboost uses GPU.")
             except Exception:
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = "CPU"
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "CPU"
                 print("Catboost uses CPU.")
         else:
             print("No algorithm has been checked for GPU acceleration.")
@@ -1111,9 +1109,9 @@ class PreProcessing:
             if "nlp_transformers" in self.preprocess_decisions:
                 pass
             else:
-                self.preprocess_decisions[f"nlp_transformers"] = {}
-            self.preprocess_decisions[f"nlp_transformers"][
-                f"max_sentence_len"
+                self.preprocess_decisions["nlp_transformers"] = {}
+            self.preprocess_decisions["nlp_transformers"][
+                "max_sentence_len"
             ] = sentence_length.max()
 
     def data_scaling(self, scaling="minmax"):
@@ -1174,7 +1172,7 @@ class PreProcessing:
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             for col in self.preprocess_decisions["skewed_columns"]:
                 log_array = np.log1p(self.dataframe[col])
-                log_array[np.isfinite(log_array) == False] = 0
+                log_array[np.isfinite(log_array) == False] = 0  # noqa: E712
                 if overwrite_orig_col:
                     self.dataframe[col] = log_array
                 else:
@@ -1192,14 +1190,14 @@ class PreProcessing:
             skewed = left_skewed + right_skewed
             for col in X_train[skewed].columns:
                 log_array = np.log1p(X_train[col])
-                log_array[np.isfinite(log_array) == False] = 0
+                log_array[np.isfinite(log_array) == False] = 0  # noqa: E712
                 if overwrite_orig_col:
                     X_train[col] = log_array
                 else:
                     X_train[f"{col}_unskewed"] = log_array
 
                 log_array = np.log1p(X_test[col])
-                log_array[np.isfinite(log_array) == False] = 0
+                log_array[np.isfinite(log_array) == False] = 0  # noqa: E712
                 if overwrite_orig_col:
                     X_test[col] = log_array
                 else:
@@ -1243,9 +1241,9 @@ class PreProcessing:
                     skewness = Y_train.skew(axis=0, skipna=True)
                     if skewness < -0.5 or skewness > 0.5:
                         Y_train = np.log1p(Y_train)
-                        Y_train[np.isfinite(Y_train) == False] = 0
+                        Y_train[np.isfinite(Y_train) == False] = 0  # noqa: E712
                         Y_test = np.log1p(Y_test)
-                        Y_test[np.isfinite(Y_test) == False] = 0
+                        Y_test[np.isfinite(Y_test) == False] = 0  # noqa: E712
                 else:
                     Y_train = np.expm1(Y_train)
                     Y_test = np.expm1(Y_test)
@@ -1280,7 +1278,7 @@ class PreProcessing:
                 kf = model_selection.StratifiedKFold(n_splits=num_splits)
                 # fill the new kfold column
                 # note that, instead of targets, we use bins!
-                for f, (t_, v_) in enumerate(kf.split(X=data, y=data.bins.values)):
+                for f, (_t, v_) in enumerate(kf.split(X=data, y=data.bins.values)):
                     data.loc[v_, "kfold"] = f
                 # drop the bins column
                 data = data.drop("bins", axis=1)
@@ -1440,7 +1438,9 @@ class PreProcessing:
             ) - (a_series.std() / (2 * noise_reduction))
 
         def binning_on_data(dataframe, cols_to_bin=None):
-            num_columns = cols_to_bin.select_dtypes(include=[vartype]).columns
+            num_columns = cols_to_bin.select_dtypes(  # noqa: F821
+                include=[vartype]  # noqa: F821
+            ).columns  # noqa: F821
             for col in num_columns:
                 dataframe[str(col) + "_binned"] = pd.cut(
                     dataframe[col].replace(np.inf, np.nan).dropna(),
@@ -1459,7 +1459,7 @@ class PreProcessing:
         logging.info("Start numerical binning.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            for vartype in self.num_dtypes:
+            for _vartype in self.num_dtypes:
                 filtered_columns = self.dataframe.loc[
                     :, ~self.dataframe.columns.isin(self.new_sin_cos_col_names)
                 ]
@@ -1475,7 +1475,7 @@ class PreProcessing:
             if len(self.num_dtypes) > 0:
                 self.blueprint_step_selection_non_nlp["data_binning"] = False
             else:
-                for vartype in self.num_dtypes:
+                for _vartype in self.num_dtypes:
                     filtered_columns = X_train.loc[
                         :, ~X_train.columns.isin(self.new_sin_cos_col_names)
                     ]
@@ -1679,7 +1679,7 @@ class PreProcessing:
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             study = optuna.create_study(
-                direction="maximize", sampler=sampler, study_name=f"autotuned kmeans"
+                direction="maximize", sampler=sampler, study_name="autotuned kmeans"
             )
             study.optimize(
                 objective, n_trials=50, gc_after_trial=True, show_progress_bar=True
@@ -1737,7 +1737,7 @@ class PreProcessing:
 
         if self.prediction_mode:
             variable = self.preprocess_decisions[
-                f"delete_low_variance_features_columns_left"
+                "delete_low_variance_features_columns_left"
             ]
             self.dataframe = self.dataframe[variable]
         else:
@@ -1757,13 +1757,13 @@ class PreProcessing:
             print(f"Features before low variance deletion: {len(variable)}")
 
             self.preprocess_decisions[
-                f"delete_low_variance_features_columns_left"
+                "delete_low_variance_features_columns_left"
             ] = variable
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
             logging.info("Finished deleting low variance features.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
 
-    def clustering_as_a_feature(
+    def clustering_as_a_feature(  # noqa: C901
         self, algorithm="dbscan", nb_clusters=2, eps=0.3, n_jobs=-1, min_samples=50
     ):
         """
@@ -1942,10 +1942,10 @@ class PreProcessing:
             all_cols = df.columns
             cluster_columns = [x for x in all_cols if "cluster" not in x]
             cluster_df = df[cluster_columns].copy()
-            pca = self.preprocess_decisions[f"cluster_pca"]
+            pca = self.preprocess_decisions["cluster_pca"]
             comps = pca.transform(cluster_df.values)
-            self.preprocess_decisions[f"cluster_pca"] = pca
-            cluster_pca_cols = [f"Cluster PC-1", f"Cluster PC-2"]
+            self.preprocess_decisions["cluster_pca"] = pca
+            cluster_pca_cols = ["Cluster PC-1", "Cluster PC-2"]
             pos_df = pd.DataFrame(comps, columns=cluster_pca_cols)
             tfidf_df_pca = pos_df[cluster_pca_cols]
             df = pd.merge(
@@ -1957,8 +1957,8 @@ class PreProcessing:
             cluster_df = df[cluster_columns].copy()
             pca = PCA(n_components=2)
             comps = pca.fit_transform(cluster_df.values)
-            self.preprocess_decisions[f"cluster_pca"] = pca
-            cluster_pca_cols = [f"Cluster PC-1", f"Cluster PC-2"]
+            self.preprocess_decisions["cluster_pca"] = pca
+            cluster_pca_cols = ["Cluster PC-1", "Cluster PC-2"]
             pos_df = pd.DataFrame(comps, columns=cluster_pca_cols)
             tfidf_df_pca = pos_df[cluster_pca_cols]
             df = pd.merge(
@@ -1972,18 +1972,18 @@ class PreProcessing:
         :return: Modifies class attributes.
         """
         self.get_current_timestamp("PCA the clustering results.")
-        logging.info(f"Started to PCA the clustering results.")
+        logging.info("Started to PCA the clustering results.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
             self.dataframe = self.pca_clustering(self.dataframe, mode="transform")
-            logging.info(f"Finished to PCA the clustering results.")
+            logging.info("Finished to PCA the clustering results.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train = self.pca_clustering(X_train, mode="fit")
             X_test = self.pca_clustering(X_test, mode="transform")
-            logging.info(f"Finished to PCA the clustering results.")
+            logging.info("Finished to PCA the clustering results.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
@@ -2033,7 +2033,7 @@ class PreProcessing:
             imp_mean.fit(dataframe)
         dataframe = imp_mean.transform(dataframe)
         dataframe_final = pd.DataFrame(dataframe, columns=dataframe_cols)
-        self.preprocess_decisions[f"fill_nulls_imputer"] = imp_mean
+        self.preprocess_decisions["fill_nulls_imputer"] = imp_mean
         del imp_mean
         _ = gc.collect()
         return dataframe_final
@@ -2088,7 +2088,7 @@ class PreProcessing:
 
         if self.prediction_mode:
             if not how:
-                how = self.preprocess_decisions[f"fill_nulls_how"]
+                how = self.preprocess_decisions["fill_nulls_how"]
             else:
                 pass
 
@@ -2101,7 +2101,7 @@ class PreProcessing:
             elif how == "iterative_imputation":
                 self.dataframe = self.iterative_imputation(
                     self.dataframe,
-                    imputer=self.preprocess_decisions[f"fill_nulls_imputer"],
+                    imputer=self.preprocess_decisions["fill_nulls_imputer"],
                 )
             logging.info("Finished filling NULLs.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
@@ -2116,14 +2116,14 @@ class PreProcessing:
                 X_test = self.static_filling(
                     X_test, fill_with=fill_with, fill_cat_col_with=fill_cat_col_with
                 )
-                self.preprocess_decisions[f"fill_nulls_how"] = how
+                self.preprocess_decisions["fill_nulls_how"] = how
             elif how == "iterative_imputation":
                 # TODO: Test, if it woks + revert LGBM + test model ensemble
                 X_train = self.iterative_imputation(X_train)
                 X_test = self.iterative_imputation(
-                    X_test, imputer=self.preprocess_decisions[f"fill_nulls_imputer"]
+                    X_test, imputer=self.preprocess_decisions["fill_nulls_imputer"]
                 )
-                self.preprocess_decisions[f"fill_nulls_how"] = how
+                self.preprocess_decisions["fill_nulls_how"] = how
             logging.info("Finished filling NULLs.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -2133,7 +2133,7 @@ class PreProcessing:
         logging.info("Started holistic NULL filling.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            for col in self.preprocess_decisions[f"holistically_filled_cols"]:
+            for col in self.preprocess_decisions["holistically_filled_cols"]:
                 if (
                     self.dataframe[col].dtype in self.num_dtypes
                 ):  # checking if col is numeric
@@ -2294,7 +2294,7 @@ class PreProcessing:
             else:
                 pass
 
-            self.preprocess_decisions[f"holistically_filled_cols"] = filled_cols
+            self.preprocess_decisions["holistically_filled_cols"] = filled_cols
             logging.info("Finished holistic NULL filling.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
@@ -2353,8 +2353,8 @@ class PreProcessing:
         :return: Returns modified dataframe.
         """
         if self.prediction_mode:
-            if self.preprocess_decisions[f"isolation_forest"]["how"] == "append":
-                outlier_detector = self.preprocess_decisions[f"isolation_forest"][
+            if self.preprocess_decisions["isolation_forest"]["how"] == "append":
+                outlier_detector = self.preprocess_decisions["isolation_forest"][
                     "model"
                 ]
                 outlier_predictions = outlier_detector.decision_function(self.dataframe)
@@ -2381,21 +2381,21 @@ class PreProcessing:
                 del outlier_predictions_test
                 del outlier_predictions_class_train
                 del outlier_predictions_class_test
-                self.preprocess_decisions[f"isolation_forest"] = {}
-                self.preprocess_decisions[f"isolation_forest"][
+                self.preprocess_decisions["isolation_forest"] = {}
+                self.preprocess_decisions["isolation_forest"][
                     "model"
                 ] = outlier_detector
-                self.preprocess_decisions[f"isolation_forest"]["how"] = how
+                self.preprocess_decisions["isolation_forest"]["how"] = how
             elif how == "delete":
                 outlier_detector.fit(X_train)
                 outlier_predictions_train = outlier_detector.decision_function(X_train)
                 X_train["isolation_probs"] = outlier_predictions_train
                 X_train = X_train[(X_train["isolation_probs"] < threshold)]
-                self.preprocess_decisions[f"isolation_forest"] = {}
-                self.preprocess_decisions[f"isolation_forest"][
+                self.preprocess_decisions["isolation_forest"] = {}
+                self.preprocess_decisions["isolation_forest"][
                     "model"
                 ] = outlier_detector
-                self.preprocess_decisions[f"isolation_forest"]["how"] = how
+                self.preprocess_decisions["isolation_forest"]["how"] = how
                 del outlier_predictions_train
             del outlier_detector
             _ = gc.collect()
@@ -2460,7 +2460,9 @@ class PreProcessing:
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.iqr_remover(threshold=1.5)
 
-    def datetime_converter(self, datetime_handling="all", force_conversion=False):
+    def datetime_converter(  # noqa: C901
+        self, datetime_handling="all", force_conversion=False
+    ):
         """
         Takes in a dataframe and processes date and datetime columns by categorical and/or cyclic transformation.
         Tries to identify datetime columns automatically, if no date columns have been provided during class
@@ -2689,11 +2691,11 @@ class PreProcessing:
         if self.prediction_mode:
             if len(self.cat_columns_encoded) > 0:
                 df_branch = self.dataframe[self.cat_columns_encoded].copy()
-                enc = self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"]
+                enc = self.preprocess_decisions["onehot_pca"]["onehot_encoder"]
                 df_branch = enc.transform(df_branch[self.cat_columns_encoded])
                 df_branch.fillna(0, inplace=True)
                 onehot_cols = df_branch.columns
-                # pca = self.preprocess_decisions[f"onehot_pca"]["pca_encoder"]
+                # pca = self.preprocess_decisions["onehot_pca"]["pca_encoder"]
                 pca = PCA(n_components=2)
                 pred_comps = pca.fit_transform(df_branch[onehot_cols])
                 df_branch = pd.DataFrame(pred_comps, columns=["PC-1", "PC-2"])
@@ -2710,7 +2712,7 @@ class PreProcessing:
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            self.preprocess_decisions[f"onehot_pca"] = {}
+            self.preprocess_decisions["onehot_pca"] = {}
             if self.cat_columns_encoded:
                 cat_columns = self.cat_columns_encoded
             else:
@@ -2739,9 +2741,9 @@ class PreProcessing:
                     X_train[f"{col}_pca"] = X_train_branch[col]
                     X_test[f"{col}_pca"] = X_test_branch[col]
                     pca_cols.append(f"{col}_pca")
-                self.preprocess_decisions[f"onehot_pca"]["pca_cols"] = pca_cols
-                self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"] = enc
-                self.preprocess_decisions[f"onehot_pca"]["pca_encoder"] = pca
+                self.preprocess_decisions["onehot_pca"]["pca_cols"] = pca_cols
+                self.preprocess_decisions["onehot_pca"]["onehot_encoder"] = enc
+                self.preprocess_decisions["onehot_pca"]["pca_encoder"] = pca
                 del X_train_branch
                 del X_test_branch
                 del pca
@@ -2784,7 +2786,7 @@ class PreProcessing:
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            self.preprocess_decisions[f"numeric_binarizer_pca"] = {}
+            self.preprocess_decisions["numeric_binarizer_pca"] = {}
 
             encoded_num_cols = []
             for vartype in self.num_dtypes:
@@ -2792,7 +2794,7 @@ class PreProcessing:
                     filtered_columns = X_train.select_dtypes(
                         include=[vartype]
                     ).columns.to_list()
-                    for pcas in filtered_columns:
+                    for _pcas in filtered_columns:
                         try:
                             filtered_columns.remove("Num_PC-1_num_pca")
                             filtered_columns.remove("Num_PC-2_num_pca")
@@ -2843,7 +2845,7 @@ class PreProcessing:
                             X_train[f"{col}_num_pca"] = X_train_branch[col]
                             X_test[f"{col}_num_pca"] = X_test_branch[col]
                             pca_cols.append(f"{col}_num_pca")
-                        self.preprocess_decisions[f"numeric_binarizer_pca"][
+                        self.preprocess_decisions["numeric_binarizer_pca"][
                             f"pca_cols_{vartype}"
                         ] = pca_cols
                         del X_train_branch
@@ -2865,37 +2867,33 @@ class PreProcessing:
     def target_encode_multiclass(self, X, y=None, mode="fit"):
         algorithm = "multiclass_target_encoding_onehotter"
         if mode == "transform":
-            enc = self.preprocess_decisions[f"category_encoders"][
+            enc = self.preprocess_decisions["category_encoders"][
                 f"{algorithm}_all_cols"
             ]
-            class_names = self.preprocess_decisions[f"category_encoders"][
-                f"seen_targets"
-            ]
+            class_names = self.preprocess_decisions["category_encoders"]["seen_targets"]
         else:
             enc = OneHotEncoder()
             enc.fit(y)
             y_onehot = enc.transform(y)
             class_names = y_onehot.columns
-            self.preprocess_decisions[f"category_encoders"][
-                f"seen_targets"
-            ] = class_names
+            self.preprocess_decisions["category_encoders"]["seen_targets"] = class_names
         X_obj = X.select_dtypes("object").copy()
         X = X.select_dtypes(exclude="object")
         for class_ in class_names:
             if mode == "transform":
-                target_enc = self.preprocess_decisions[f"category_encoders"][
+                target_enc = self.preprocess_decisions["category_encoders"][
                     f"multiclass_target_encoder_all_cols_{class_}"
                 ]
             else:
                 target_enc = TargetEncoder()
                 target_enc.fit(X_obj, y_onehot[class_])
-                self.preprocess_decisions[f"category_encoders"][
+                self.preprocess_decisions["category_encoders"][
                     f"multiclass_target_encoder_all_cols_{class_}"
                 ] = target_enc
             temp = target_enc.transform(X_obj)
             temp.columns = [str(x) + "_" + str(class_) for x in temp.columns]
             X = pd.concat([X, temp], axis=1)
-        self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
+        self.preprocess_decisions["category_encoders"][f"{algorithm}_all_cols"] = enc
         return X
 
     def category_encoding(self, algorithm="target"):
@@ -2914,7 +2912,7 @@ class PreProcessing:
                     self.dataframe[cat_columns], mode="transform"
                 )
             else:
-                enc = self.preprocess_decisions[f"category_encoders"][
+                enc = self.preprocess_decisions["category_encoders"][
                     f"{algorithm}_all_cols"
                 ]
                 self.dataframe[cat_columns] = enc.transform(self.dataframe[cat_columns])
@@ -2925,7 +2923,7 @@ class PreProcessing:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             cat_columns = X_train.select_dtypes(include=["object"]).columns.to_list()
             self.cat_columns_encoded = cat_columns
-            self.preprocess_decisions[f"category_encoders"] = {}
+            self.preprocess_decisions["category_encoders"] = {}
             if algorithm == "target":
                 if self.class_problem in ["binary", "regression"]:
                     enc = TargetEncoder(cols=cat_columns)
@@ -2933,7 +2931,7 @@ class PreProcessing:
                         X_train[cat_columns], Y_train
                     )
                     X_test[cat_columns] = enc.transform(X_test[cat_columns])
-                    self.preprocess_decisions[f"category_encoders"][
+                    self.preprocess_decisions["category_encoders"][
                         f"{algorithm}_all_cols"
                     ] = enc
                 else:
@@ -2947,14 +2945,14 @@ class PreProcessing:
                 enc = OneHotEncoder(handle_unknown="ignore")
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
-                self.preprocess_decisions[f"category_encoders"][
+                self.preprocess_decisions["category_encoders"][
                     f"{algorithm}_all_cols"
                 ] = enc
             elif algorithm == "woee":
                 enc = WOEEncoder(cols=cat_columns)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
-                self.preprocess_decisions[f"category_encoders"][
+                self.preprocess_decisions["category_encoders"][
                     f"{algorithm}_all_cols"
                 ] = enc
             elif algorithm == "GLMM":
@@ -2962,14 +2960,14 @@ class PreProcessing:
                 # enc = NestedCVWrapper(enc_enc, random_state=42)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
-                self.preprocess_decisions[f"category_encoders"][
+                self.preprocess_decisions["category_encoders"][
                     f"{algorithm}_all_cols"
                 ] = enc
             elif algorithm == "ordinal":
                 enc = OrdinalEncoder(cols=cat_columns)
                 X_train = enc.fit_transform(X_train, Y_train)
                 X_test = enc.transform(X_test)
-                self.preprocess_decisions[f"category_encoders"][
+                self.preprocess_decisions["category_encoders"][
                     f"{algorithm}_all_cols"
                 ] = enc
             elif algorithm == "leaveoneout":
@@ -2977,7 +2975,7 @@ class PreProcessing:
                 # enc = NestedCVWrapper(enc_enc, random_state=42)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
-                self.preprocess_decisions[f"category_encoders"][
+                self.preprocess_decisions["category_encoders"][
                     f"{algorithm}_all_cols"
                 ] = enc
             logging.info("Finished category encoding.")
@@ -3020,7 +3018,7 @@ class PreProcessing:
         logging.info("Started removing collinearity.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            threshold = self.preprocess_decisions[f"remove_collinearity_threshold"]
+            threshold = self.preprocess_decisions["remove_collinearity_threshold"]
             self.dataframe = self.dataframe.drop(self.excluded, axis=1)
             logging.info("Finished removing collinearity.")
         else:
@@ -3029,7 +3027,7 @@ class PreProcessing:
             X_train = correlation(X_train, 0.8)
             X_test = X_test.drop(del_corr, axis=1)
             self.excluded = del_corr
-            self.preprocess_decisions[f"remove_collinearity_threshold"] = threshold
+            self.preprocess_decisions["remove_collinearity_threshold"] = threshold
             logging.info("Finished removing collinearity.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return (
@@ -3140,7 +3138,7 @@ class PreProcessing:
                     random_state=self.preprocess_decisions["random_state_counter"],
                 )
             else:
-                model_1 = VWClassifier()
+                # model_1 = VWClassifier()
                 model_2 = lgb.LGBMClassifier(
                     random_state=self.preprocess_decisions["random_state_counter"]
                 )
@@ -3204,7 +3202,7 @@ class PreProcessing:
             )
         return meissner_cv
 
-    def synthetic_floating_data_generator(
+    def synthetic_floating_data_generator(  # noqa: C901
         self, column_name=None, metric=None, sample_size=None
     ):
         self.get_current_timestamp("Synthetic data augmentation")
@@ -3293,7 +3291,7 @@ class PreProcessing:
             # get core characteristics
             dist_max = int(X_train_sample[column_name].max() * 1.2)
             dist_min = int(X_train_sample[column_name].min() / 1.2)
-            dist_median = X_train_sample[column_name].median()
+            # dist_median = X_train_sample[column_name].median()
             dist_median_lowq = X_train_sample[column_name].quantile(0.25)
             dist_median_high = X_train_sample[column_name].quantile(0.75)
 
@@ -3934,7 +3932,9 @@ class PreProcessing:
             optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def automated_feature_selection(self, model=None, metric=None, numeric_only=False):
+    def automated_feature_selection(  # noqa: C901
+        self, model=None, metric=None, numeric_only=False
+    ):
         """
         Uses boostaroota algorithm to automatically chose best features. boostaroota choses XGboost under
         the hood.
@@ -4040,7 +4040,7 @@ class PreProcessing:
                 self.selected_feats,
             )
 
-    def bruteforce_random_feature_selection(self, metric=None):
+    def bruteforce_random_feature_selection(self, metric=None):  # noqa: C901
         """
         Takes a dataframe or a sample of it. Select randomly features and runs Vowpal Wabbit on it with 10-fold cross
         validation. Evaluates performance and optimizes incrementally feature selection by learning from previous attempts.
@@ -4239,8 +4239,6 @@ class PreProcessing:
                 GradientBoostingRegressor,
             )
             from sklearn.linear_model import (
-                LinearRegression,
-                LogisticRegression,
                 RidgeClassifier,
                 SGDClassifier,
                 SGDRegressor,
@@ -4286,7 +4284,7 @@ class PreProcessing:
                     != X_train["gradient_boosting_temp_preds"]
                 )
             )
-            X_train = X_train[(X_train["bad_row"] == False)]
+            X_train = X_train[(X_train["bad_row"] == False)]  # noqa: E712
             Y_train = X_train[self.target_variable]
             X_train = X_train.drop(self.target_variable, axis=1)
             X_train = X_train.drop("lgbm_temp_preds", axis=1)
@@ -4322,7 +4320,7 @@ class PreProcessing:
                 pass
             return X_train_sample, Y_train_sample
 
-    def autoencoder_based_oversampling(self):
+    def autoencoder_based_oversampling(self):  # noqa: C901
         if self.prediction_mode:
             pass
         else:
@@ -4454,9 +4452,9 @@ class PreProcessing:
                 # get array with delta of each element count compared to max count
                 max_count = results[1].max()
                 deltas = max_count - results[1]
-                class_deltas = np.vstack(
-                    (results[0], deltas)
-                )  # contains classes and how much they miss until max count
+                # class_deltas = np.vstack(
+                #     (results[0], deltas)
+                # )  # contains classes and how much they miss until max count
             else:
                 X_train[self.target_variable] = Y_train
                 # sort on A
@@ -4501,9 +4499,9 @@ class PreProcessing:
                 # get array with delta of each element count compared to max count
                 max_count = results[1].max()
                 deltas = max_count - results[1]
-                class_deltas = np.vstack(
-                    (results[0], deltas)
-                )  # contains classes and how much they miss until max count
+                # class_deltas = np.vstack(
+                #     (results[0], deltas)
+                # )  # contains classes and how much they miss until max count
                 X_train = X_train.drop("bin", axis=1)
 
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -4570,9 +4568,9 @@ class PreProcessing:
                         # get array with delta of each element count compared to max count
                         max_count = results[1].max()
                         deltas = max_count - results[1]
-                        class_deltas = np.vstack(
-                            (results[0], deltas)
-                        )  # contains classes and how much they miss until max count
+                        # class_deltas = np.vstack(
+                        #     (results[0], deltas)
+                        # )  # contains classes and how much they miss until max count
 
                         X_test[self.target_variable] = Y_test
 
@@ -4675,15 +4673,15 @@ class PreProcessing:
                         loss_mse = customLoss()
 
                         # train model
-                        log_interval = 1000
-                        val_losses = []
+                        # log_interval = 1000
+                        # val_losses = []
                         train_losses = []
                         test_losses = []
 
                         def train(epoch):
                             model.train()
                             train_loss = 0
-                            for batch_idx, data in enumerate(trainloader):
+                            for data in trainloader:
                                 data = data.to(device)
                                 optimizer.zero_grad()
                                 recon_batch, mu, logvar = model(data)
@@ -4705,7 +4703,7 @@ class PreProcessing:
                         def test(epoch):
                             with torch.no_grad():
                                 test_loss = 0
-                                for batch_idx, data in enumerate(testloader):
+                                for data in testloader:
                                     data = data.to(device)
                                     optimizer.zero_grad()
                                     recon_batch, mu, logvar = model(data)
@@ -4732,7 +4730,7 @@ class PreProcessing:
                             test(epoch)
 
                         with torch.no_grad():
-                            for batch_idx, data in enumerate(testloader):
+                            for data in testloader:
                                 data = data.to(device)
                                 optimizer.zero_grad()
                                 recon_batch, mu, logvar = model(data)
@@ -4819,15 +4817,15 @@ class PreProcessing:
                     loss_mse = customLoss()
 
                     # train model
-                    log_interval = 50
-                    val_losses = []
+                    # log_interval = 50
+                    # val_losses = []
                     train_losses = []
                     test_losses = []
 
                     def train(epoch):
                         model.train()
                         train_loss = 0
-                        for batch_idx, data in enumerate(trainloader):
+                        for data in trainloader:
                             data = data.to(device)
                             optimizer.zero_grad()
                             recon_batch, mu, logvar = model(data)
@@ -4846,7 +4844,7 @@ class PreProcessing:
                     def test(epoch):
                         with torch.no_grad():
                             test_loss = 0
-                            for batch_idx, data in enumerate(testloader):
+                            for data in testloader:
                                 data = data.to(device)
                                 optimizer.zero_grad()
                                 recon_batch, mu, logvar = model(data)
@@ -4866,7 +4864,7 @@ class PreProcessing:
                         test(epoch)
 
                     with torch.no_grad():
-                        for batch_idx, data in enumerate(testloader):
+                        for data in testloader:
                             data = data.to(device)
                             optimizer.zero_grad()
                             recon_batch, mu, logvar = model(data)
@@ -4917,15 +4915,15 @@ class PreProcessing:
 
                     self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def final_kernel_pca_dimensionality_reduction(self):
+    def final_kernel_pca_dimensionality_reduction(self):  # noqa: C901
         logging.info("Start final PCA dimensionality reduction.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
             best_parameters = self.preprocess_decisions[
-                f"final_kernel_pca_dimensionality_reduction_reduction_parameters"
+                "final_kernel_pca_dimensionality_reduction_reduction_parameters"
             ]
             pca = self.preprocess_decisions[
-                f"final_kernel_pca_dimensionality_reduction_model"
+                "final_kernel_pca_dimensionality_reduction_model"
             ]
             dataframe_comps = pca.transform(self.dataframe)
             new_cols = [f"PCA_{i}" for i in range(dataframe_comps.shape[1])]
@@ -5055,10 +5053,10 @@ class PreProcessing:
             X_train = pd.DataFrame(train_comps, columns=new_cols)
             X_test = pd.DataFrame(test_comps, columns=new_cols)
             self.preprocess_decisions[
-                f"final_kernel_pca_dimensionality_reduction_reduction_parameters"
+                "final_kernel_pca_dimensionality_reduction_reduction_parameters"
             ] = best_parameters
             self.preprocess_decisions[
-                f"final_kernel_pca_dimensionality_reduction_reduction_model"
+                "final_kernel_pca_dimensionality_reduction_reduction_model"
             ] = pca
 
             print(
@@ -5083,9 +5081,9 @@ class PreProcessing:
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
             best_parameters = self.preprocess_decisions[
-                f"final_pca_dimensionality_reduction_parameters"
+                "final_pca_dimensionality_reduction_parameters"
             ]
-            pca = self.preprocess_decisions[f"final_pca_dimensionality_reduction_model"]
+            pca = self.preprocess_decisions["final_pca_dimensionality_reduction_model"]
             dataframe_comps = pca.transform(self.dataframe)
             new_cols = [f"PCA_{i}" for i in range(best_parameters["n_components"])]
             self.dataframe = pd.DataFrame(dataframe_comps, columns=new_cols)
@@ -5209,9 +5207,9 @@ class PreProcessing:
             X_train = pd.DataFrame(train_comps, columns=new_cols)
             X_test = pd.DataFrame(test_comps, columns=new_cols)
             self.preprocess_decisions[
-                f"final_pca_dimensionality_reduction_parameters"
+                "final_pca_dimensionality_reduction_parameters"
             ] = best_parameters
-            self.preprocess_decisions[f"final_pca_dimensionality_reduction_model"] = pca
+            self.preprocess_decisions["final_pca_dimensionality_reduction_model"] = pca
 
             print(
                 f"Number of columns after dimensionality reduction is: {len(X_train.columns.to_list())}"

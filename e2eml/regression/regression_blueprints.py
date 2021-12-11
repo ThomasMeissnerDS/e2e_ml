@@ -44,7 +44,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
     :return: Updates class attributes by its predictions.
     """
 
-    def train_pred_selected_model(self, algorithm=None):
+    def train_pred_selected_model(self, algorithm=None):  # noqa: C901
         logging.info(f"Start ML training {algorithm}")
         if algorithm == "xgboost":
             # train Xgboost
@@ -213,7 +213,6 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
         self.sklearn_ensemble_predict(
             feat_importance=True, importance_alg="permutation"
         )
-        algorithm = "sklearn_ensemble"
         self.regression_eval("sklearn_ensemble")
         self.prediction_mode = True
         logging.info("Finished blueprint.")
@@ -425,7 +424,9 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
         self.prediction_mode = True
         logging.info("Finished blueprint.")
 
-    def ml_special_regression_full_processing_multimodel_avg_blender(self, df=None):
+    def ml_special_regression_full_processing_multimodel_avg_blender(  # noqa: C901
+        self, df=None
+    ):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -483,55 +484,53 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
 
         if self.prediction_mode:
             if self.special_blueprint_algorithms["ngboost"]:
-                self.dataframe["ngboost"] = self.predicted_values[f"ngboost"]
+                self.dataframe["ngboost"] = self.predicted_values["ngboost"]
             if self.special_blueprint_algorithms["lgbm"]:
-                self.dataframe["lgbm"] = self.predicted_values[f"lgbm"]
+                self.dataframe["lgbm"] = self.predicted_values["lgbm"]
             if self.special_blueprint_algorithms["xgboost"]:
-                self.dataframe["xgboost"] = self.predicted_values[f"xgboost"]
+                self.dataframe["xgboost"] = self.predicted_values["xgboost"]
             if self.special_blueprint_algorithms["vowpal_wabbit"]:
-                self.dataframe["vowpal_wabbit"] = self.predicted_values[
-                    f"vowpal_wabbit"
-                ]
+                self.dataframe["vowpal_wabbit"] = self.predicted_values["vowpal_wabbit"]
             if self.special_blueprint_algorithms["tabnet"]:
-                self.dataframe["tabnet"] = self.predicted_values[f"tabnet"]
+                self.dataframe["tabnet"] = self.predicted_values["tabnet"]
             if self.special_blueprint_algorithms["ridge"]:
-                self.dataframe["ridge"] = self.predicted_values[f"ridge"]
+                self.dataframe["ridge"] = self.predicted_values["ridge"]
             if self.special_blueprint_algorithms["elasticnet"]:
-                self.dataframe["elasticnet"] = self.predicted_values[f"elasticnet"]
+                self.dataframe["elasticnet"] = self.predicted_values["elasticnet"]
             if self.special_blueprint_algorithms["catboost"]:
-                self.dataframe["catboost"] = self.predicted_values[f"catboost"]
+                self.dataframe["catboost"] = self.predicted_values["catboost"]
             if self.special_blueprint_algorithms["sklearn_ensemble"]:
                 self.dataframe["sklearn_ensemble"] = self.predicted_values[
-                    f"sklearn_ensemble"
+                    "sklearn_ensemble"
                 ]
 
             self.dataframe["blended_preds"] = self.dataframe[mode_cols].sum(
                 axis=1
             ) / len(mode_cols)
-            self.predicted_values[f"blended_preds"] = self.dataframe["blended_preds"]
+            self.predicted_values["blended_preds"] = self.dataframe["blended_preds"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             if self.special_blueprint_algorithms["lgbm"]:
-                X_test["lgbm"] = self.predicted_values[f"lgbm"]
+                X_test["lgbm"] = self.predicted_values["lgbm"]
             if self.special_blueprint_algorithms["ngboost"]:
-                X_test["ngboost"] = self.predicted_values[f"ngboost"]
+                X_test["ngboost"] = self.predicted_values["ngboost"]
             if self.special_blueprint_algorithms["xgboost"]:
-                X_test["xgboost"] = self.predicted_values[f"xgboost"]
+                X_test["xgboost"] = self.predicted_values["xgboost"]
             if self.special_blueprint_algorithms["vowpal_wabbit"]:
-                X_test["vowpal_wabbit"] = self.predicted_values[f"vowpal_wabbit"]
+                X_test["vowpal_wabbit"] = self.predicted_values["vowpal_wabbit"]
             if self.special_blueprint_algorithms["tabnet"]:
-                X_test["tabnet"] = self.predicted_values[f"tabnet"]
+                X_test["tabnet"] = self.predicted_values["tabnet"]
             if self.special_blueprint_algorithms["ridge"]:
-                X_test["ridge"] = self.predicted_values[f"ridge"]
+                X_test["ridge"] = self.predicted_values["ridge"]
             if self.special_blueprint_algorithms["elasticnet"]:
-                X_test["elasticnet"] = self.predicted_values[f"elasticnet"]
+                X_test["elasticnet"] = self.predicted_values["elasticnet"]
             if self.special_blueprint_algorithms["catboost"]:
-                X_test["catboost"] = self.predicted_values[f"catboost"]
+                X_test["catboost"] = self.predicted_values["catboost"]
             if self.special_blueprint_algorithms["sklearn_ensemble"]:
-                X_test["sklearn_ensemble"] = self.predicted_values[f"sklearn_ensemble"]
+                X_test["sklearn_ensemble"] = self.predicted_values["sklearn_ensemble"]
 
             X_test["blended_preds"] = X_test[mode_cols].sum(axis=1) / len(mode_cols)
-            self.predicted_values[f"blended_preds"] = X_test["blended_preds"]
+            self.predicted_values["blended_preds"] = X_test["blended_preds"]
         self.regression_eval("blended_preds")
         self.prediction_mode = True
         logging.info("Finished blueprint.")

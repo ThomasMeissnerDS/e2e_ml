@@ -144,7 +144,8 @@ def test_ml_special_regression_multiclass_full_processing_multimodel_avg_blender
     val_y_hat = titanic_auto_ml.predicted_values["blended_preds"]
     mae = mean_absolute_error(val_df_target, val_y_hat)
     finished = True
-    assert finished == True
+    assert finished is True
+    assert mae >= 0
 
 
 def test_ml_bp10_train_test_regression_full_processing_linear_reg():
@@ -167,7 +168,8 @@ def test_ml_bp10_train_test_regression_full_processing_linear_reg():
     val_y_hat = titanic_auto_ml.predicted_values["linear_regression"]
     mae = mean_absolute_error(val_df_target, val_y_hat)
     finished = True
-    assert finished == True
+    assert finished is True
+    assert mae >= 0
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ def load_titanic_data():
     """
     data = pd.read_csv("titanic_train.csv")
     print("Create additional features and modify existing ones.")
-    deck = {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7, "U": 8}
+    deck = {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "": 6, "G": 7, "U": 8}
     data["Cabin"] = data["Cabin"].fillna("U0")
     data["Deck"] = data["Cabin"].map(
         lambda x: re.compile("([a-zA-Z]+)").search(x).group()
@@ -47,7 +47,7 @@ def load_titanic_data():
 
     titles = {"Mr": 1, "Miss": 2, "Mrs": 3, "Master": 4, "Rare": 5}
     # extract titles
-    data["Title"] = data.Name.str.extract(" ([A-Za-z]+)\.", expand=False)
+    data["Title"] = data.Name.str.extract(r" ([A-Za-z]+)\.", expand=False)
     # replace titles with a more common title or as Rare
     data["Title"] = data["Title"].replace(
         [
@@ -208,7 +208,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset="ti
 
     titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
     titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting(val_df)
-    val_y_hat = titanic_auto_ml.predicted_classes["max_voting"]
+    # val_y_hat = titanic_auto_ml.predicted_classes["max_voting"]
 
     algorithms = [
         alg
@@ -238,7 +238,7 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset="ti
         print(f"---------Start evaluating {i}----------")
         get_matthews(i)
     finished = True
-    assert finished == True
+    assert finished is True
 
 
 if __name__ == "__main__":

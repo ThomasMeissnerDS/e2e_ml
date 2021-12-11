@@ -75,7 +75,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
         else:
             pass
 
-    def std_preprocessing_pipeline(self, df=None):
+    def std_preprocessing_pipeline(self, df=None):  # noqa: C901
         """
         Our recommended blueprint for Tabnet testing.
         Runs a preprocessing blueprint only. This is useful for building custom pipelines.

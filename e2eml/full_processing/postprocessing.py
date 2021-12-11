@@ -1,6 +1,5 @@
 import gc
 import logging
-import warnings
 
 import dill as pickle
 import matplotlib.pyplot as plt
@@ -164,7 +163,9 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
             correct_found.append(estimated_pos_classes_found)
             audience_sizes.append(audience_size_needed)
 
-    def classification_eval(self, algorithm, pred_probs=None, pred_class=None):
+    def classification_eval(  # noqa: C901
+        self, algorithm, pred_probs=None, pred_class=None
+    ):
         """
         Takes in the algorithm name. This is needed to grab saved predictions and to store cvlassification scores
         of different evaluation functions within the class. Returns the evaluation dictionary.
