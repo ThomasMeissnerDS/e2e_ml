@@ -93,7 +93,8 @@ class TimeTravel():
                         "sklearn_ensemble": class_instance.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble,
                         "sgd": class_instance.ml_bp10_multiclass_full_processing_sgd,
                         "quadratic_discriminant_analysis": class_instance.ml_bp11_multiclass_full_processing_quadratic_discriminant_analysis,
-                        "svm": class_instance.ml_bp12_multiclass_full_processing_svm
+                        "svm": class_instance.ml_bp12_multiclass_full_processing_svm,
+                        "multinomial_nb": class_instance.ml_bp13_multiclass_full_processing_multinomial_nb
                         }
 
     def call_regression_algorithm_mapping(self, class_instance):
@@ -109,6 +110,7 @@ class TimeTravel():
                         "vowpal_wabbit": class_instance.ml_bp15_regression_full_processing_vowpal_wabbit_reg,
                         "sklearn_ensemble": class_instance.ml_bp13_regression_full_processing_sklearn_stacking_ensemble,
                         "sgd": class_instance.ml_bp20_regression_full_processing_sgd,
+                        "svm_regression": class_instance.ml_bp22_regression_full_processing_svm
                         #"ransac": class_instance.ml_bp21_regression_full_processing_ransac
                         }
 
@@ -235,7 +237,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         algorithms = algs_to_test
     else:
         algorithms = ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
-                      "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis", "svm"]
+                      "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis", "svm", "svm_regression"]
         if len(class_instance.dataframe.index) > 10000:
             algorithms.remove("ngboost")
         else:
@@ -258,6 +260,11 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         except Exception:
             pass
 
+        try:
+            algorithms.remove("svm_regression")
+        except Exception:
+            pass
+
     else:
         try:
             algorithms.remove("logistic_regression")
@@ -274,12 +281,20 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         except Exception:
             pass
 
+        try:
+            algorithms.remove("multinomial_nb")
+        except Exception:
+            pass
+
 
     if speed_up_model_tuning:
         # we reduce the tuning rounds for all algorithms
         class_instance.hyperparameter_tuning_rounds["xgboost"] = 10
         class_instance.hyperparameter_tuning_rounds["lgbm"] = 10
         class_instance.hyperparameter_tuning_rounds["sgd"] = 10
+        class_instance.hyperparameter_tuning_rounds["svm"] = 10
+        class_instance.hyperparameter_tuning_rounds["svm_regression"] = 10
+        class_instance.hyperparameter_tuning_rounds["multinomial_nb"] = 10
         class_instance.hyperparameter_tuning_rounds["tabnet"] = 10
         class_instance.hyperparameter_tuning_rounds["ngboost"] = 3
         class_instance.hyperparameter_tuning_rounds["sklearn_ensemble"] = 10
@@ -355,21 +370,18 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                 class_instance = automl_travel.load_checkpoint(checkpoint_to_load=checkpoint)
                 if checkpoint == "autotuned_clustering":
                     class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = True
-                    class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
                     class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
                     class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
                     class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = True
                 elif checkpoint == "delete_high_null_cols":
                     class_instance.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"] = False
                     class_instance.blueprint_step_selection_non_nlp["data_binning"] = False
-                    class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
                     class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = False
                     class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
                     class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
                 elif checkpoint == "early_numeric_only_feature_selection":
                     class_instance.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"] = False
                     class_instance.blueprint_step_selection_non_nlp["data_binning"] = False
-                    class_instance.blueprint_step_selection_non_nlp["scale_data"] = False
                     class_instance.blueprint_step_selection_non_nlp["numeric_binarizer_pca"] = False
                     class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
                     class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False

@@ -20,6 +20,7 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import SVC
+from sklearn.naive_bayes import MultinomialNB
 from pytorch_tabnet.tab_model import TabNetClassifier
 from pytorch_tabnet.pretraining import TabNetPretrainer
 from pytorch_tabnet.metrics import Metric
@@ -562,6 +563,120 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
         """
         self.get_current_timestamp(task='Predict with Support Vector Machine classifier')
         algorithm = 'svm'
+
+        if self.prediction_mode:
+            model = self.trained_models[f"{algorithm}"]
+            partial_probs = model.predict_proba(self.dataframe)
+
+            if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+            else:
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = self.trained_models[f"{algorithm}"]
+            partial_probs = model.predict_proba(X_test)
+
+            if self.class_problem == 'binary':
+                predicted_probs = np.asarray([line[1] for line in partial_probs])
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+            else:
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
+
+            if feat_importance and importance_alg == 'SHAP':
+                self.runtime_warnings(warn_about='shap_cpu')
+                try:
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
+                except Exception:
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            elif feat_importance and importance_alg == 'permutation':
+                result = permutation_importance(
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1)
+                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
+                fig, ax = plt.subplots()
+                permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
+                ax.set_title("Feature importances using permutation on full model")
+                ax.set_ylabel("Mean accuracy decrease")
+                fig.tight_layout()
+                plt.show()
+            else:
+                pass
+        self.predicted_probs[f"{algorithm}"] = predicted_probs
+        self.predicted_classes[f"{algorithm}"] = predicted_classes
+        del model
+        _ = gc.collect()
+
+    def multinomial_nb_train(self):
+        """
+        Trains a Multinomial Naive Bayes classifier.
+        :return: Trained model.
+        """
+        self.get_current_timestamp(task='Train Multinomial Naive Bayes classifier model')
+        algorithm = 'multinomial_nb'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
+            metric = make_scorer(matthews_corrcoef)
+
+            def objective(trial):
+                param = {
+                    'alpha': trial.suggest_loguniform('alpha', 1e-6, 1e2)
+                }
+                model = MultinomialNB(alpha=param["alpha"])#.fit(x_train, y_train)
+                try:
+                    scores = cross_val_score(model, x_train, y_train, cv=10, scoring=metric)
+                    mae = np.mean(scores)
+                except Exception:
+                    mae = 0
+                return mae
+
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+            self.optuna_studies[f"{algorithm}"] = {}
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                pass
+
+            try:
+                X_train = X_train.drop(self.target_variable, axis=1)
+            except Exception:
+                pass
+
+            best_parameters = study.best_trial.params
+            model = MultinomialNB(alpha=best_parameters["alpha"]).fit(X_train, Y_train)
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
+            return self.trained_models
+
+    def multinomial_nb_predict(self, feat_importance=True, importance_alg='permutation'):
+        """
+        Loads the pretrained model from the class itself and predicts on new data.
+        :param feat_importance: Set True, if feature importance shall be calculated.
+        :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
+        GPU acceleration). (Default: 'permutation')
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp(task='Predict with Multinomial Naive Bayes classifier')
+        algorithm = 'multinomial_nb'
 
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
@@ -1938,47 +2053,74 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                                                                                     "3_boosters",
                                                                                     "trees_forest",
                                                                                     "reversed_boosters",
-                                                                                    "full_ensemble"])
+                                                                                    "full_ensemble",
+                                                                                    "full_ensemble_weighted"])
                 # Step 2. Setup values for the hyperparameters:
                 if ensemble_variation == '2_boosters':
                     level0 = list()
-                    level0.append(('lgbm', LGBMClassifier(n_estimators=5000)))
-                    level1 = GradientBoostingClassifier(n_estimators=5000)
-                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
-                elif ensemble_variation == '3_boosters':
-                    level0 = list()
-                    level0.append(('lgbm', LGBMClassifier(n_estimators=5000)))
-                    level0.append(('abc', AdaBoostClassifier(n_estimators=100)))
-                    level1 = GradientBoostingClassifier(n_estimators=5000)
-                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
-                elif ensemble_variation == 'trees_forest':
-                    level0 = list()
-                    level0.append(('cart', DecisionTreeClassifier(max_depth=3)))
-                    level0.append(('rdf', RandomForestClassifier(max_depth=3)))
-                    level1 = GradientBoostingClassifier()
-                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
-                elif ensemble_variation == 'reversed_boosters':
-                    level0 = list()
-                    level0.append(('xgb', GradientBoostingClassifier(n_estimators=5000)))
-                    level0.append(('lgbm', LGBMClassifier(n_estimators=5000)))
-                    level1 = LogisticRegression(class_weight='balanced', max_iter=500)
-                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
-                elif ensemble_variation == 'full_ensemble':
-                    level0 = list()
-                    level0.append(('lgbm', LGBMClassifier(n_estimators=5000)))
                     level0.append(('lr', LogisticRegressionCV(class_weight='balanced', max_iter=500,
                                                               penalty='elasticnet',
                                                               l1_ratios=[0.1, 0.5, 0.9],
                                                               solver='saga')))
-                    level0.append(('gdc', GradientBoostingClassifier(n_estimators=5000)))
+                    level0.append(('qdr', QuadraticDiscriminantAnalysis()))
+                    level1 = LGBMClassifier()
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
+                elif ensemble_variation == '3_boosters':
+                    level0 = list()
+                    level0.append(('lgbm', LGBMClassifier()))
+                    level0.append(('abc', AdaBoostClassifier()))
+                    level1 = GradientBoostingClassifier()
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
+                elif ensemble_variation == 'trees_forest':
+                    level0 = list()
                     level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
-                    level0.append(('abc', AdaBoostClassifier(n_estimators=100)))
+                    level0.append(('rdf', RandomForestClassifier(max_depth=5)))
+                    level1 = GradientBoostingClassifier()
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
+                elif ensemble_variation == 'reversed_boosters':
+                    level0 = list()
+                    level0.append(('xgb', GradientBoostingClassifier()))
+                    level0.append(('lgbm', LGBMClassifier()))
+                    level0.append(('qdr', QuadraticDiscriminantAnalysis()))
+                    level0.append(('svc', SVC()))
+                    level1 = LogisticRegression()
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
+                elif ensemble_variation == 'full_ensemble':
+                    level0 = list()
+                    level0.append(('lgbm', LGBMClassifier()))
+                    level0.append(('lr', LogisticRegressionCV(class_weight='balanced', max_iter=500,
+                                                              penalty='elasticnet',
+                                                              l1_ratios=[0.1, 0.5, 0.9],
+                                                              solver='saga')))
+                    level0.append(('gdc', GradientBoostingClassifier()))
+                    level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
+                    level0.append(('abc', AdaBoostClassifier()))
                     level0.append(('qda', QuadraticDiscriminantAnalysis()))
+                    level0.append(('rid', RidgeClassifier()))
+                    level0.append(('svc', SVC()))
                     level0.append(('rdf', RandomForestClassifier(max_depth=5)))
                     # define meta learner model
-                    level1 = GradientBoostingClassifier(n_estimators=5000)
+                    level1 = GradientBoostingClassifier()
                     # define the stacking ensemble
-                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-2)
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
+                elif ensemble_variation == 'full_ensemble_weighted':
+                    level0 = list()
+                    level0.append(('lgbm', LGBMClassifier()))
+                    level0.append(('lr', LogisticRegressionCV(class_weight='balanced', max_iter=500,
+                                                              penalty='elasticnet',
+                                                              l1_ratios=[0.1, 0.5, 0.9],
+                                                              solver='saga')))
+                    level0.append(('gdc', GradientBoostingClassifier()))
+                    level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
+                    level0.append(('abc', AdaBoostClassifier()))
+                    level0.append(('qda', QuadraticDiscriminantAnalysis()))
+                    level0.append(('rid', RidgeClassifier(class_weight='balanced')))
+                    level0.append(('svc', SVC(class_weight='balanced')))
+                    level0.append(('rdf', RandomForestClassifier(max_depth=5, class_weight='balanced')))
+                    # define meta learner model
+                    level1 = GradientBoostingClassifier()
+                    # define the stacking ensemble
+                    model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
 
                 # Step 3: Scoring method:
                 model.fit(x_train, y_train)
@@ -1998,27 +2140,33 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             best_variant = study.best_trial.params["ensemble_variant"]
             if best_variant == '2_boosters':
                 level0 = list()
-                level0.append(('lgbm', LGBMClassifier()))
-                level1 = GradientBoostingClassifier()
-                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                level0.append(('lr', LogisticRegressionCV(class_weight='balanced', max_iter=500,
+                                                          penalty='elasticnet',
+                                                          l1_ratios=[0.1, 0.5, 0.9],
+                                                          solver='saga')))
+                level0.append(('qdr', QuadraticDiscriminantAnalysis()))
+                level1 = LGBMClassifier()
+                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
             elif best_variant == '3_boosters':
                 level0 = list()
                 level0.append(('lgbm', LGBMClassifier()))
                 level0.append(('abc', AdaBoostClassifier()))
                 level1 = GradientBoostingClassifier()
-                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
             elif best_variant == 'trees_forest':
                 level0 = list()
                 level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
                 level0.append(('rdf', RandomForestClassifier(max_depth=5)))
                 level1 = GradientBoostingClassifier()
-                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
             elif best_variant == 'reversed_boosters':
                 level0 = list()
                 level0.append(('xgb', GradientBoostingClassifier()))
                 level0.append(('lgbm', LGBMClassifier()))
+                level0.append(('qdr', QuadraticDiscriminantAnalysis()))
+                level0.append(('svc', SVC()))
                 level1 = LogisticRegression()
-                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
             elif best_variant == 'full_ensemble':
                 level0 = list()
                 level0.append(('lgbm', LGBMClassifier()))
@@ -2030,11 +2178,31 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
                 level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
                 level0.append(('abc', AdaBoostClassifier()))
                 level0.append(('qda', QuadraticDiscriminantAnalysis()))
+                level0.append(('rid', RidgeClassifier()))
+                level0.append(('svc', SVC()))
                 level0.append(('rdf', RandomForestClassifier(max_depth=5)))
                 # define meta learner model
                 level1 = GradientBoostingClassifier()
                 # define the stacking ensemble
-                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5)
+                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
+            elif best_variant == 'full_ensemble_weighted':
+                level0 = list()
+                level0.append(('lgbm', LGBMClassifier()))
+                level0.append(('lr', LogisticRegressionCV(class_weight='balanced', max_iter=500,
+                                                          penalty='elasticnet',
+                                                          l1_ratios=[0.1, 0.5, 0.9],
+                                                          solver='saga')))
+                level0.append(('gdc', GradientBoostingClassifier()))
+                level0.append(('cart', DecisionTreeClassifier(max_depth=5)))
+                level0.append(('abc', AdaBoostClassifier()))
+                level0.append(('qda', QuadraticDiscriminantAnalysis()))
+                level0.append(('rid', RidgeClassifier(class_weight='balanced')))
+                level0.append(('svc', SVC(class_weight='balanced')))
+                level0.append(('rdf', RandomForestClassifier(max_depth=5, class_weight='balanced')))
+                # define meta learner model
+                level1 = GradientBoostingClassifier()
+                # define the stacking ensemble
+                model = StackingClassifier(estimators=level0, final_estimator=level1, cv=5, n_jobs=-1)
 
             try:
                 X_train = X_train.drop(self.target_variable, axis=1)

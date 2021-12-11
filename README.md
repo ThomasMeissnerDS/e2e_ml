@@ -170,7 +170,8 @@ This step is useful, if the model overfitted (which should happen rarely), becau
 feature importance have been considered. 
 like test_class.hyperparameter_tuning_rounds["bruteforce_random"] = 400 .
 
-Generally the class instance is a control center and gives room for plenty of customization:
+Generally the class instance is a control center and gives room for plenty of customization.
+Never update the class attributes like shown below.
 
 test_class.tabnet_settings = {f"batch_size": rec_batch_size,
                                 "virtual_batch_size": virtual_batch_size,
@@ -179,16 +180,22 @@ test_class.tabnet_settings = {f"batch_size": rec_batch_size,
                                 "max_epochs": 1000}
 
 test_class.hyperparameter_tuning_rounds = {"xgboost": 100,
-                                             "lgbm": 100,
+                                             "lgbm": 500,
                                              "tabnet": 25,
                                              "ngboost": 25,
                                              "sklearn_ensemble": 10,
-                                             "ridge": 100,
+                                             "ridge": 500,
                                              "elasticnet": 100,
                                              "catboost": 25,
-                                             "sgd": 25,
+                                             "sgd": 2000,
+                                             "svm": 50,
+                                             "svm_regression": 50,
+                                             "ransac": 50,
+                                             "multinomial_nb": 100,
                                              "bruteforce_random": 400,
-                                             "autoencoder_based_oversampling": 25,
+                                             "synthetic_data_augmentation": 100,
+                                             "autoencoder_based_oversampling": 200,
+                                             "final_kernel_pca_dimensionality_reduction": 50,
                                              "final_pca_dimensionality_reduction": 50}
 
 test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
@@ -200,9 +207,18 @@ test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
                                                        "elasticnet": 2*60*60,
                                                        "catboost": 2*60*60,
                                                        "sgd": 2*60*60,
+                                                       "svm": 2*60*60,
+                                                       "svm_regression": 2*60*60,
+                                                       "ransac": 2*60*60,
+                                                       "multinomial_nb": 2*60*60,
                                                        "bruteforce_random": 2*60*60,
-                                                       "autoencoder_based_oversampling": 1*60*60,
+                                                       "synthetic_data_augmentation": 1*60*60,
+                                                       "autoencoder_based_oversampling": 2*60*60,
+                                                       "final_kernel_pca_dimensionality_reduction": 4*60*60,
                                                        "final_pca_dimensionality_reduction": 2*60*60}
+                                                       
+When these parameters have to updated, please overwrite the keys individually to not break the blueprints eventually.
+I.e.: test_class.hyperparameter_tuning_max_runtime_secs["xgboost"] = 12*60*60 would work fine. 
 
 Working with big data can bring all hardware to it's needs. e2eml has been tested with:
 - Ryzen 5950x (16 cores CPU)
@@ -248,6 +264,10 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
 ## Release History
+* 2.9.9
+- Added Multinomial Bayes Classifier
+- Added SVM for regression
+- Refined Sklearn ensembles
 * 2.9.8
 - Added Quadrant Discriminent Analysis
 - Added Support Vector machines

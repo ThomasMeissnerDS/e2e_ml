@@ -28,6 +28,7 @@ import lightgbm as lgb
 import optuna
 import lightgbm
 import xgboost as xgb
+from scipy import stats
 
 import torch
 import torch.nn as nn
@@ -377,7 +378,9 @@ class PreProcessing:
                                              "catboost": 25,
                                              "sgd": 2000,
                                              "svm": 50,
+                                             "svm_regression": 50,
                                              "ransac": 50,
+                                             "multinomial_nb": 100,
                                              "bruteforce_random": 400,
                                              "synthetic_data_augmentation": 100,
                                              "autoencoder_based_oversampling": 200,
@@ -394,7 +397,9 @@ class PreProcessing:
                                                        "catboost": 2*60*60,
                                                        "sgd": 2*60*60,
                                                        "svm": 2*60*60,
+                                                       "svm_regression": 2*60*60,
                                                        "ransac": 2*60*60,
+                                                       "multinomial_nb": 2*60*60,
                                                        "bruteforce_random": 2*60*60,
                                                        "synthetic_data_augmentation": 1*60*60,
                                                        "autoencoder_based_oversampling": 2*60*60,
