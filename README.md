@@ -271,6 +271,26 @@ loaded_test_class.ml_bp01_multiclass_full_processing_xgb_prob(holdout_df)
 print(churn_class.predicted_classes['xgboost'])
 ```
 
+## Linting and Pre-Commit
+
+This project uses pre-commit to enforce style.
+
+To install the pre-commit hooks, first install pre-commit into the project's
+virtual environment:
+
+```sh
+pip install pre-commit
+```
+
+Then install the project hooks:
+
+```sh
+pre-commit install
+```
+
+Now, whenever you make a commit, the linting and autoformatting will
+automatically run.
+
 ## Disclaimer
 
 e2e is not designed to quickly iterate over several algorithms and suggest you
