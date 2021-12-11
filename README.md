@@ -337,6 +337,16 @@ To build and publish the project, run
 poetry publish --build
 ```
 
+# Documentation
+
+This project comes with documentation. To build the docs, run:
+
+```sh
+cd docs
+make docs
+```
+
+You may then browse the HTML docs at `docs/build/docs/index.html`.
 
 # Disclaimer
 e2e is not designed to quickly iterate over several algorithms and suggest you the best. It is made to deliver
