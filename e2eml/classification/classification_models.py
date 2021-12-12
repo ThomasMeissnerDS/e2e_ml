@@ -72,6 +72,7 @@ class RidgeClassifierWithProba(RidgeClassifier):
 
 
 class FocalLoss:
+
     def __init__(self, gamma, alpha=None):
         self.alpha = alpha
         self.gamma = gamma
@@ -365,8 +366,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         Trains a simple Logistic regression classifier.
         :return: Trained model.
         """
-        self.get_current_timestamp(task='Train logistic regression model')
+        self.get_current_timestamp(task='Train LGBM with focal loss model')
         algorithm = 'lgbm_focal'
+        self.check_gpu_support(algorithm='lgbm')
+
         if self.prediction_mode:
             pass
         else:
@@ -375,53 +378,101 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
 
             x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
-            def objective(trial):
-                param = {
-                    'alpha': trial.suggest_loguniform('alpha', 1e-3, 10),
-                    'gamma': trial.suggest_int('gamma', 1, 100),
-                }
-                loss = FocalLoss(alpha=param["alpha"], gamma=param["gamma"])
-                model = OneVsRestLightGBMWithCustomizedLoss(loss=loss)
+            try:
+                x_train = x_train.drop(self.target_variable, axis=1)
+            except Exception:
+                pass
 
-                try:
-                    model.fit(x_train, y_train, **fit_params)
-                    y_pred = model.predict(X_test)
-                    mae = matthews_corrcoef(Y_test, y_pred)
-                except Exception:
-                    mae = 0
-                return mae
+
+            if self.class_problem == 'binary':
+                pass
+
+            else:
+                def objective(trial):
+                    param = {
+                        'alpha': trial.suggest_loguniform('alpha', 1e-3, 10),
+                        'gamma': trial.suggest_int('gamma', 1, 100),
+                    }
+                    loss = FocalLoss(alpha=param["alpha"], gamma=param["gamma"])
+                    model = OneVsRestLightGBMWithCustomizedLoss(loss=loss)
+
+                    try:
+                        model.fit(x_train, y_train, **fit_params)
+                        y_pred = model.predict(X_test)
+                        mae = matthews_corrcoef(Y_test, y_pred)
+                    except Exception:
+                        mae = 0
+                    return mae
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
-            self.optuna_studies[f"{algorithm}"] = {}
+            if self.class_problem == 'binary':
+                pass
+            else:
+                study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm}")
+                study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+                self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
 
-            try:
-                fig = optuna.visualization.plot_optimization_history(study)
-                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
-                fig.show()
-                fig = optuna.visualization.plot_param_importances(study)
-                self.optuna_studies[f"{algorithm}_param_importance"] = fig
-                fig.show()
-            except ZeroDivisionError:
-                pass
+                try:
+                    fig = optuna.visualization.plot_optimization_history(study)
+                    self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                    fig.show()
+                    fig = optuna.visualization.plot_param_importances(study)
+                    self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                    fig.show()
+                except ZeroDivisionError:
+                    pass
 
             try:
                 X_train = X_train.drop(self.target_variable, axis=1)
             except Exception:
                 pass
 
-            best_parameters = study.best_trial.params
-            loss = FocalLoss(alpha=best_parameters["alpha"], gamma=best_parameters["gamma"])
-            model = OneVsRestLightGBMWithCustomizedLoss(loss=loss)
-            model.fit(X_train, Y_train, **fit_params)
-            self.trained_models[f"{algorithm}"] = {}
-            self.trained_models[f"{algorithm}"] = model
-            del model
-            _ = gc.collect()
-            return self.trained_models
+            if self.class_problem == 'binary':
+                from sklearn import model_selection
+                fl = FocalLoss(alpha=None, gamma=0)
+                X_fit, X_val, y_fit, y_val = model_selection.train_test_split(
+                    X_train, Y_train,
+                    random_state=42
+                )
+                fit = lgb.Dataset(
+                    X_fit, y_fit,
+                    init_score=np.full_like(y_fit, fl.init_score(y_fit), dtype=float)
+                )
+                val = lgb.Dataset(
+                    X_val, y_val,
+                    init_score=np.full_like(y_val, fl.init_score(y_fit), dtype=float),
+                    reference=fit
+                )
+                model = lgb.train(
+                    params={'learning_rate': 0.01},
+                    train_set=fit,
+                    num_boost_round=10000,
+                    valid_sets=(fit, val),
+                    valid_names=('fit', 'val'),
+                    early_stopping_rounds=20,
+                    verbose_eval=100,
+                    fobj=fl.lgb_obj,
+                    feval=fl.lgb_eval
+                )
+
+                self.preprocess_decisions["focal_init_score"] = fl.init_score(y_fit)
+                self.trained_models[f"{algorithm}"] = {}
+                self.trained_models[f"{algorithm}"] = model
+                del model
+                _ = gc.collect()
+                return self.trained_models
+            else:
+                best_parameters = study.best_trial.params
+                loss = FocalLoss(alpha=best_parameters["alpha"], gamma=best_parameters["gamma"])
+                model = OneVsRestLightGBMWithCustomizedLoss(loss=loss)
+                model.fit(X_train, Y_train, **fit_params)
+                self.trained_models[f"{algorithm}"] = {}
+                self.trained_models[f"{algorithm}"] = model
+                del model
+                _ = gc.collect()
+                return self.trained_models
 
     def lgbm_focal_predict(self, feat_importance=True, importance_alg='SHAP'):
         """
@@ -431,23 +482,37 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with Logistic Regression')
+        self.get_current_timestamp(task='Predict with LGBM with focal loss')
         algorithm = 'lgbm_focal'
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
-            partial_probs = model.predict(self.dataframe)
+            fl_init_score = self.preprocess_decisions["focal_init_score"]
+            if self.class_problem == 'binary':
+                predicted_probs = special.expit(fl_init_score + model.predict(self.dataframe))
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+            else:
+                predicted_probs = model.predict(self.dataframe)
+                predicted_classes = predicted_probs
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
-            self.predicted_probs[f"{algorithm}"] = partial_probs
-            self.predicted_classes[f"{algorithm}"] = partial_probs
+            self.predicted_probs[f"{algorithm}"] = predicted_probs
+            self.predicted_classes[f"{algorithm}"] = predicted_classes
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
-            partial_probs = model.predict(X_test)
+            fl_init_score = self.preprocess_decisions["focal_init_score"]
+            if self.class_problem == 'binary':
+                predicted_probs = special.expit(fl_init_score + model.predict(X_test))
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+            else:
+                predicted_probs = model.predict(X_test)
+                predicted_classes = predicted_probs
+
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
-            self.predicted_probs[f"{algorithm}"] = partial_probs
-            self.predicted_classes[f"{algorithm}"] = partial_probs
+            self.predicted_probs[f"{algorithm}"] = predicted_probs
+            self.predicted_classes[f"{algorithm}"] = predicted_classes
             del model
             _ = gc.collect()
 
