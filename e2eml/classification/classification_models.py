@@ -30,8 +30,11 @@ from sklearn.model_selection import cross_val_score
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import make_scorer
 from sklearn.utils.extmath import softmax
+from sklearn.preprocessing import LabelBinarizer
 from scipy import optimize
 from scipy import special
+from joblib import Parallel, delayed
+from sklearn.multiclass import _ConstantPredictor
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
@@ -129,7 +132,90 @@ class FocalLoss:
         return 'focal_loss', self(y, p).mean(), is_higher_better
 
 
-class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
+class OneVsRestLightGBMWithCustomizedLoss:
+
+    def __init__(self, loss, n_jobs=3):
+        self.loss = loss
+        self.n_jobs = n_jobs
+
+    def fit(self, X, y, **fit_params):
+
+        self.label_binarizer_ = LabelBinarizer(sparse_output=True)
+        Y = self.label_binarizer_.fit_transform(y)
+        Y = Y.tocsc()
+        self.classes_ = self.label_binarizer_.classes_
+        columns = (col.toarray().ravel() for col in Y.T)
+        if 'eval_set' in fit_params:
+            # use eval_set for early stopping
+            X_val, y_val = fit_params['eval_set'][0]
+            Y_val = self.label_binarizer_.transform(y_val)
+            Y_val = Y_val.tocsc()
+            columns_val = (col.toarray().ravel() for col in Y_val.T)
+            self.results_ = Parallel(n_jobs=self.n_jobs)(delayed(self._fit_binary)
+                                                         (X, column, X_val, column_val, **fit_params) for
+                                                         i, (column, column_val) in
+                                                         enumerate(zip(columns, columns_val)))
+        else:
+            # eval set not available
+            self.results_ = Parallel(n_jobs=self.n_jobs)(delayed(self._fit_binary)
+                                                         (X, column, None, None, **fit_params) for i, column
+                                                         in enumerate(columns))
+
+        return self
+
+    def _fit_binary(self, X, y, X_val, y_val, **fit_params):
+        unique_y = np.unique(y)
+        init_score_value = self.loss.init_score(y)
+        if len(unique_y) == 1:
+            estimator = _ConstantPredictor().fit(X, unique_y)
+        else:
+            fit = lgb.Dataset(X, y, init_score=np.full_like(y, init_score_value, dtype=float))
+            if 'eval_set' in fit_params:
+                val = lgb.Dataset(X_val, y_val, init_score=np.full_like(y_val, init_score_value, dtype=float),
+                                  reference=fit)
+
+                estimator = lgb.train(params=fit_params,
+                                      train_set=fit,
+                                      valid_sets=(fit, val),
+                                      valid_names=('fit', 'val'),
+                                      early_stopping_rounds=10,
+                                      fobj=self.loss.lgb_obj,
+                                      feval=self.loss.lgb_eval,
+                                      verbose_eval=10)
+            else:
+                estimator = lgb.train(params=fit_params,
+                                      train_set=fit,
+                                      fobj=self.loss.lgb_obj,
+                                      feval=self.loss.lgb_eval,
+                                      verbose_eval=10)
+
+        return estimator, init_score_value
+
+    def predict(self, X):
+
+        n_samples = X.shape[0]
+        maxima = np.empty(n_samples, dtype=float)
+        maxima.fill(-np.inf)
+        argmaxima = np.zeros(n_samples, dtype=int)
+
+        for i, (e, init_score) in enumerate(self.results_):
+            margins = e.predict(X, raw_score=True)
+            prob = special.expit(margins + init_score)
+            np.maximum(maxima, prob, out=maxima)
+            argmaxima[maxima == prob] = i
+
+        return argmaxima
+
+    def predict_proba(self, X):
+        y = np.zeros((X.shape[0], len(self.results_)))
+        for i, (e, init_score) in enumerate(self.results_):
+            margins = e.predict(X, raw_score=True)
+            y[:, i] = special.expit(margins + init_score)
+        y /= np.sum(y, axis=1)[:, np.newaxis]
+        return y
+
+
+class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, OneVsRestLightGBMWithCustomizedLoss):
     """
     This class stores all model training and prediction methods for classification tasks.
     This class stores all pipeline relevant information (inherited from cpu preprocessing).
@@ -271,6 +357,97 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss):
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
             self.predicted_classes[f"{algorithm}"] = predicted_classes
+            del model
+            _ = gc.collect()
+
+    def lgbm_focal_train(self):
+        """
+        Trains a simple Logistic regression classifier.
+        :return: Trained model.
+        """
+        self.get_current_timestamp(task='Train logistic regression model')
+        algorithm = 'lgbm_focal'
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            fit_params = {'eval_set': [(X_test, Y_test)]}
+
+            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
+
+            def objective(trial):
+                param = {
+                    'alpha': trial.suggest_loguniform('alpha', 1e-3, 10),
+                    'gamma': trial.suggest_int('gamma', 1, 100),
+                }
+                loss = FocalLoss(alpha=param["alpha"], gamma=param["gamma"])
+                model = OneVsRestLightGBMWithCustomizedLoss(loss=loss)
+
+                try:
+                    model.fit(x_train, y_train, **fit_params)
+                    y_pred = model.predict(X_test)
+                    mae = matthews_corrcoef(Y_test, y_pred)
+                except Exception:
+                    mae = 0
+                return mae
+
+            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
+            study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+            self.optuna_studies[f"{algorithm}"] = {}
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                pass
+
+            try:
+                X_train = X_train.drop(self.target_variable, axis=1)
+            except Exception:
+                pass
+
+            best_parameters = study.best_trial.params
+            loss = FocalLoss(alpha=best_parameters["alpha"], gamma=best_parameters["gamma"])
+            model = OneVsRestLightGBMWithCustomizedLoss(loss=loss)
+            model.fit(X_train, Y_train, **fit_params)
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
+            return self.trained_models
+
+    def lgbm_focal_predict(self, feat_importance=True, importance_alg='SHAP'):
+        """
+        Loads the pretrained model from the class itself and predicts on new data.
+        :param feat_importance: Set True, if feature importance shall be calculated.
+        :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
+        GPU acceleration). (Default: 'permutation')
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp(task='Predict with Logistic Regression')
+        algorithm = 'lgbm_focal'
+        if self.prediction_mode:
+            model = self.trained_models[f"{algorithm}"]
+            partial_probs = model.predict(self.dataframe)
+            self.predicted_probs[f"{algorithm}"] = {}
+            self.predicted_classes[f"{algorithm}"] = {}
+            self.predicted_probs[f"{algorithm}"] = partial_probs
+            self.predicted_classes[f"{algorithm}"] = partial_probs
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = self.trained_models[f"{algorithm}"]
+            partial_probs = model.predict(X_test)
+            self.predicted_probs[f"{algorithm}"] = {}
+            self.predicted_classes[f"{algorithm}"] = {}
+            self.predicted_probs[f"{algorithm}"] = partial_probs
+            self.predicted_classes[f"{algorithm}"] = partial_probs
             del model
             _ = gc.collect()
 

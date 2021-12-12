@@ -154,16 +154,16 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset='ti
                                                     "sklearn_ensemble": False, #titanic, #synthetic_multiclass
                                                     "catboost": False
                                                     }
-    titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
+    titanic_auto_ml.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
     titanic_auto_ml.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
     titanic_auto_ml.blueprint_step_selection_non_nlp["scale_data"] = True
 
 
-    titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting()
-    titanic_auto_ml.ml_special_multiclass_full_processing_multimodel_max_voting(val_df)
-    val_y_hat = titanic_auto_ml.predicted_classes['max_voting']
+    titanic_auto_ml.ml_bp14_multiclass_full_processing_lgbm_focal()
+    titanic_auto_ml.ml_bp14_multiclass_full_processing_lgbm_focal(val_df)
+    val_y_hat = titanic_auto_ml.predicted_classes['lgbm_focal']
 
-    algorithms = [alg for alg, value in titanic_auto_ml.special_blueprint_algorithms.items() if value]
+    algorithms = ['lgbm_focal']
 
     def get_matthews(algorithm):
         # Assess prediction quality on holdout data

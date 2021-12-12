@@ -88,6 +88,7 @@ class TimeTravel():
                         "xgboost":  class_instance.ml_bp01_multiclass_full_processing_xgb_prob,
                         "ngboost": class_instance.ml_bp04_multiclass_full_processing_ngboost,
                         "lgbm": class_instance.ml_bp02_multiclass_full_processing_lgbm_prob,
+                        "lgbm_focal": class_instance.ml_bp14_multiclass_full_processing_lgbm_focal,
                         "tabnet": class_instance.ml_bp07_multiclass_full_processing_tabnet,
                         "vowpal_wabbit": class_instance.ml_bp05_multiclass_full_processing_vowpal_wabbit,
                         "sklearn_ensemble": class_instance.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble,
@@ -236,7 +237,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     if isinstance(algs_to_test, list):
         algorithms = algs_to_test
     else:
-        algorithms = ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
+        algorithms = ["ridge", "xgboost", "lgbm", "lgbm_focal", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
                       "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis", "svm", "svm_regression"]
         if len(class_instance.dataframe.index) > 10000:
             algorithms.remove("ngboost")
@@ -283,6 +284,11 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
 
         try:
             algorithms.remove("multinomial_nb")
+        except Exception:
+            pass
+
+        try:
+            algorithms.remove("lgbm_focal")
         except Exception:
             pass
 
