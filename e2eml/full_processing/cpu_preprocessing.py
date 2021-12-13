@@ -407,6 +407,7 @@ class PreProcessing:
             rec_batch_size = 16384
             virtual_batch_size = 4096
         else:
+
             virtual_batch_size = int(rec_batch_size / 4)
 
         self.tabnet_settings = {
@@ -457,6 +458,7 @@ class PreProcessing:
             "final_kernel_pca_dimensionality_reduction": 4 * 60 * 60,
             "final_pca_dimensionality_reduction": 2 * 60 * 60,
         }
+
 
         self.feature_selection_sample_size = 100000
         self.hyperparameter_tuning_sample_size = 10000

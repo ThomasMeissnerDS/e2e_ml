@@ -198,20 +198,22 @@ class TimeTravel:
         :return: Adds a class attribute.
         """
         class_instance.classification_algorithms_functions = {
-            "logistic_regression": class_instance.ml_bp00_train_test_binary_full_processing_log_reg_prob,
-            "ridge": class_instance.ml_bp08_multiclass_full_processing_ridge,
-            "catboost": class_instance.ml_bp09_multiclass_full_processing_catboost,
-            "xgboost": class_instance.ml_bp01_multiclass_full_processing_xgb_prob,
-            "ngboost": class_instance.ml_bp04_multiclass_full_processing_ngboost,
-            "lgbm": class_instance.ml_bp02_multiclass_full_processing_lgbm_prob,
-            "tabnet": class_instance.ml_bp07_multiclass_full_processing_tabnet,
-            "vowpal_wabbit": class_instance.ml_bp05_multiclass_full_processing_vowpal_wabbit,
-            "sklearn_ensemble": class_instance.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble,
-            "sgd": class_instance.ml_bp10_multiclass_full_processing_sgd,
-            "quadratic_discriminant_analysis": class_instance.ml_bp11_multiclass_full_processing_quadratic_discriminant_analysis,
-            "svm": class_instance.ml_bp12_multiclass_full_processing_svm,
-            "multinomial_nb": class_instance.ml_bp13_multiclass_full_processing_multinomial_nb,
-        }
+
+                        "logistic_regression": class_instance.ml_bp00_train_test_binary_full_processing_log_reg_prob,
+                        "ridge":  class_instance.ml_bp08_multiclass_full_processing_ridge,
+                        "catboost": class_instance.ml_bp09_multiclass_full_processing_catboost,
+                        "xgboost":  class_instance.ml_bp01_multiclass_full_processing_xgb_prob,
+                        "ngboost": class_instance.ml_bp04_multiclass_full_processing_ngboost,
+                        "lgbm": class_instance.ml_bp02_multiclass_full_processing_lgbm_prob,
+                        "lgbm_focal": class_instance.ml_bp14_multiclass_full_processing_lgbm_focal,
+                        "tabnet": class_instance.ml_bp07_multiclass_full_processing_tabnet,
+                        "vowpal_wabbit": class_instance.ml_bp05_multiclass_full_processing_vowpal_wabbit,
+                        "sklearn_ensemble": class_instance.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble,
+                        "sgd": class_instance.ml_bp10_multiclass_full_processing_sgd,
+                        "quadratic_discriminant_analysis": class_instance.ml_bp11_multiclass_full_processing_quadratic_discriminant_analysis,
+                        "svm": class_instance.ml_bp12_multiclass_full_processing_svm,
+                        "multinomial_nb": class_instance.ml_bp13_multiclass_full_processing_multinomial_nb
+                        }
 
     def call_regression_algorithm_mapping(self, class_instance):
         class_instance.regression_algorithms_functions = {
@@ -405,21 +407,10 @@ def timewalk_auto_exploration(  # noqa: C901
     if isinstance(algs_to_test, list):
         algorithms = algs_to_test
     else:
-        algorithms = [
-            "ridge",
-            "xgboost",
-            "lgbm",
-            "tabnet",
-            "ngboost",
-            "vowpal_wabbit",
-            "logistic_regression",
-            "linear_regression",
-            "elasticnet",
-            "sgd",
-            "quadratic_discriminant_analysis",
-            "svm",
-            "svm_regression",
-        ]
+
+        algorithms = ["ridge", "xgboost", "lgbm", "lgbm_focal", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
+                      "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis", "svm", "svm_regression"]
+
         if len(class_instance.dataframe.index) > 10000:
             algorithms.remove("ngboost")
         else:
@@ -465,6 +456,11 @@ def timewalk_auto_exploration(  # noqa: C901
 
         try:
             algorithms.remove("multinomial_nb")
+        except Exception:
+            pass
+
+        try:
+            algorithms.remove("lgbm_focal")
         except Exception:
             pass
 

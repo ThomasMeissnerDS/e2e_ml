@@ -287,9 +287,9 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
                             y_hat_probs, threshold=0.5
                         )
                 else:
-                    roc_auc = None
+                    roc_auc = 0.50
             else:
-                roc_auc = None
+                roc_auc = 0.50
             try:
                 matthews = matthews_corrcoef(Y_test, y_hat)
             except Exception:
@@ -315,20 +315,31 @@ class FullPipeline(cpu_preprocessing.PreProcessing):
 
             full_classification_report = classification_report(Y_test, y_hat)
             print(full_classification_report)
-            logging.info(
-                f"The classification report of {algorithm} is {full_classification_report}"
-            )
-            self.evaluation_scores[f"{algorithm}"] = {
-                "matthews": matthews,
-                "accuracy": accuracy,
-                "recall": recall,
-                "roc_auc": roc_auc,
-                "f1_score_macro": f1_score_macro,
-                "f1_score_micro": f1_score_micro,
-                "f1_score_weighted": f1_score_weighted,
-                "classfication_report": full_classification_report,
-            }
-            logging.info("Finished classification evaluation.")
+
+            logging.info(f'The classification report of {algorithm} is {full_classification_report}')
+            try:
+                self.evaluation_scores[f"{algorithm}"] = {
+                    'matthews': matthews,
+                    'accuracy': accuracy,
+                    'recall': recall,
+                    'roc_auc': roc_auc,
+                    'f1_score_macro': f1_score_macro,
+                    'f1_score_micro': f1_score_micro,
+                    'f1_score_weighted': f1_score_weighted,
+                    'classfication_report': full_classification_report
+                }
+            except UnboundLocalError:
+                self.evaluation_scores[f"{algorithm}"] = {
+                    'matthews': matthews,
+                    'accuracy': accuracy,
+                    'recall': recall,
+                    'roc_auc': 0.50,
+                    'f1_score_macro': f1_score_macro,
+                    'f1_score_micro': f1_score_micro,
+                    'f1_score_weighted': f1_score_weighted,
+                    'classfication_report': full_classification_report
+                }
+            logging.info('Finished classification evaluation.')
             return self.evaluation_scores
 
     def regression_eval(self, algorithm, pred_reg=None):
