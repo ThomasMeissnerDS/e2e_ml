@@ -1,26 +1,28 @@
 import copy
-
-import pandas as pd
-pd.set_option('display.max_colwidth', None)
-import numpy as np
-import optuna
-import warnings
-import logging
-import dill as pickle
-from e2eml.classification.classification_blueprints import ClassificationBluePrint
-from e2eml.regression.regression_blueprints import RegressionBluePrint
-from e2eml.full_processing import postprocessing
-from sklearn.metrics import matthews_corrcoef, roc_auc_score, f1_score
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, median_absolute_error, accuracy_score, recall_score
-from sklearn.metrics import confusion_matrix, classification_report
 import gc
+import logging
 import time
-import plotly.express as px
 from datetime import datetime
 
+import numpy as np
+import pandas as pd
+import plotly.express as px
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    matthews_corrcoef,
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+    recall_score,
+)
 
-class TimeTravel():
+from e2eml.full_processing import postprocessing
 
+pd.set_option("display.max_colwidth", None)
+
+
+class TimeTravel:
     def call_preprocessing_functions_mapping(self, class_instance):
         """
         A static function, that stores preprocessing step names, function objects and default arguments in a dictionbary.
@@ -30,48 +32,162 @@ class TimeTravel():
         :return: Adds a class attribute.
         """
         class_instance.preprocessing_funcs = {
-            "automatic_type_detection_casting": {"func": class_instance.automatic_type_detection_casting, "args": None},
-            "remove_duplicate_column_names": {"func": class_instance.remove_duplicate_column_names, "args": None},
-            "reset_dataframe_index": {"func": class_instance.reset_dataframe_index, "args": None},
-            "fill_infinite_values": {"func": class_instance.fill_infinite_values, "args": None},
-            "early_numeric_only_feature_selection": {"func": class_instance.automated_feature_selection, "args": (None, None, True)},
-            "delete_high_null_cols": {"func": class_instance.delete_high_null_cols, "args": (0.05)},
+            "automatic_type_detection_casting": {
+                "func": class_instance.automatic_type_detection_casting,
+                "args": None,
+            },
+            "remove_duplicate_column_names": {
+                "func": class_instance.remove_duplicate_column_names,
+                "args": None,
+            },
+            "reset_dataframe_index": {
+                "func": class_instance.reset_dataframe_index,
+                "args": None,
+            },
+            "fill_infinite_values": {
+                "func": class_instance.fill_infinite_values,
+                "args": None,
+            },
+            "early_numeric_only_feature_selection": {
+                "func": class_instance.automated_feature_selection,
+                "args": (None, None, True),
+            },
+            "delete_high_null_cols": {
+                "func": class_instance.delete_high_null_cols,
+                "args": (0.05),
+            },
             "data_binning": {"func": class_instance.data_binning, "args": None},
-            "regex_clean_text_data": {"func": class_instance.regex_clean_text_data, "args": None},
-            "handle_target_skewness": {"func": class_instance.target_skewness_handling, "args": ("fit")},
-            "datetime_converter": {"func": class_instance.datetime_converter, "args": ("all")},
-            "pos_tagging_pca": {"func": class_instance.pos_tagging_pca, "args": (True)},# slow with many categories
-            "append_text_sentiment_score": {"func": class_instance.append_text_sentiment_score, "args": None},
-            "tfidf_vectorizer_to_pca": {"func": class_instance.tfidf_vectorizer_to_pca, "args": (True)}, # slow with many categories
-            "tfidf_vectorizer": {"func": class_instance.tfidf_vectorizer_to_pca, "args": (False)},
-            "rare_feature_processing": {"func": class_instance.rare_feature_processor, "args": (0.005, 'miscellaneous', class_instance.rarity_cols)},
-            "cardinality_remover": {"func": class_instance.cardinality_remover, "args": (100)},
-            "holistic_null_filling": {"func": class_instance.holistic_null_filling, "args": (False)}, # slow
-            "numeric_binarizer_pca": {"func": class_instance.numeric_binarizer_pca, "args": None},
+            "regex_clean_text_data": {
+                "func": class_instance.regex_clean_text_data,
+                "args": None,
+            },
+            "handle_target_skewness": {
+                "func": class_instance.target_skewness_handling,
+                "args": ("fit"),
+            },
+            "datetime_converter": {
+                "func": class_instance.datetime_converter,
+                "args": ("all"),
+            },
+            "pos_tagging_pca": {
+                "func": class_instance.pos_tagging_pca,
+                "args": (True),
+            },  # slow with many categories
+            "append_text_sentiment_score": {
+                "func": class_instance.append_text_sentiment_score,
+                "args": None,
+            },
+            "tfidf_vectorizer_to_pca": {
+                "func": class_instance.tfidf_vectorizer_to_pca,
+                "args": (True),
+            },  # slow with many categories
+            "tfidf_vectorizer": {
+                "func": class_instance.tfidf_vectorizer_to_pca,
+                "args": (False),
+            },
+            "rare_feature_processing": {
+                "func": class_instance.rare_feature_processor,
+                "args": (0.005, "miscellaneous", class_instance.rarity_cols),
+            },
+            "cardinality_remover": {
+                "func": class_instance.cardinality_remover,
+                "args": (100),
+            },
+            "holistic_null_filling": {
+                "func": class_instance.holistic_null_filling,
+                "args": (False),
+            },  # slow
+            "numeric_binarizer_pca": {
+                "func": class_instance.numeric_binarizer_pca,
+                "args": None,
+            },
             "onehot_pca": {"func": class_instance.onehot_pca, "args": None},
-            "category_encoding": {"func": class_instance.category_encoding, "args": ("target")},
-            "fill_nulls_static": {"func": class_instance.fill_nulls, "args": ("static")},
-            "outlier_care": {"func": class_instance.outlier_care, "args": ('isolation', 'append')},
-            "remove_collinearity": {"func": class_instance.remove_collinearity, "args": (0.8)},
-            "skewness_removal": {"func": class_instance.skewness_removal, "args": (False)},
-            "clustering_as_a_feature_dbscan": {"func": class_instance.dbscan_clustering, "args": None},
-            "clustering_as_a_feature_kmeans_loop": {"func": class_instance.kmeans_clustering_loop, "args": None},
-            "clustering_as_a_feature_gaussian_mixture_loop": {"func": class_instance.gaussian_mixture_clustering_loop, "args": None},
-            "pca_clustering_results": {"func": class_instance.pca_clustering_results, "args": None},
-            "autotuned_clustering": {"func": class_instance.auto_tuned_clustering, "args": None},
-            "svm_outlier_detection_loop": {"func": class_instance.svm_outlier_detection_loop, "args": None},
-            "reduce_memory_footprint": {"func": class_instance.reduce_memory_footprint, "args": None},
+            "category_encoding": {
+                "func": class_instance.category_encoding,
+                "args": ("target"),
+            },
+            "fill_nulls_static": {
+                "func": class_instance.fill_nulls,
+                "args": ("static"),
+            },
+            "outlier_care": {
+                "func": class_instance.outlier_care,
+                "args": ("isolation", "append"),
+            },
+            "remove_collinearity": {
+                "func": class_instance.remove_collinearity,
+                "args": (0.8),
+            },
+            "skewness_removal": {
+                "func": class_instance.skewness_removal,
+                "args": (False),
+            },
+            "clustering_as_a_feature_dbscan": {
+                "func": class_instance.dbscan_clustering,
+                "args": None,
+            },
+            "clustering_as_a_feature_kmeans_loop": {
+                "func": class_instance.kmeans_clustering_loop,
+                "args": None,
+            },
+            "clustering_as_a_feature_gaussian_mixture_loop": {
+                "func": class_instance.gaussian_mixture_clustering_loop,
+                "args": None,
+            },
+            "pca_clustering_results": {
+                "func": class_instance.pca_clustering_results,
+                "args": None,
+            },
+            "autotuned_clustering": {
+                "func": class_instance.auto_tuned_clustering,
+                "args": None,
+            },
+            "svm_outlier_detection_loop": {
+                "func": class_instance.svm_outlier_detection_loop,
+                "args": None,
+            },
+            "reduce_memory_footprint": {
+                "func": class_instance.reduce_memory_footprint,
+                "args": None,
+            },
             "scale_data": {"func": class_instance.data_scaling, "args": None},
             "smote": {"func": class_instance.smote_binary_multiclass, "args": None},
-            "automated_feature_selection": {"func": class_instance.automated_feature_selection, "args": (None, None, False)},
-            "bruteforce_random_feature_selection": {"func": class_instance.bruteforce_random_feature_selection, "args": None}, # slow
-            "delete_unpredictable_training_rows": {"func": class_instance.delete_unpredictable_training_rows, "args": None},
-            "autoencoder_based_oversampling": {"func": class_instance.autoencoder_based_oversampling, "args": None},
-            "synthetic_data_augmentation": {"func": class_instance.synthetic_data_augmentation, "args": None},
-            "final_pca_dimensionality_reduction": {"func": class_instance.final_pca_dimensionality_reduction, "args": None},
-            "final_kernel_pca_dimensionality_reduction": {"func": class_instance.final_kernel_pca_dimensionality_reduction, "args": None},
-            "delete_low_variance_features": {"func": class_instance.delete_low_variance_features, "args": None},
-            "sort_columns_alphabetically": {"func": class_instance.sort_columns_alphabetically, "args": None},
+            "automated_feature_selection": {
+                "func": class_instance.automated_feature_selection,
+                "args": (None, None, False),
+            },
+            "bruteforce_random_feature_selection": {
+                "func": class_instance.bruteforce_random_feature_selection,
+                "args": None,
+            },  # slow
+            "delete_unpredictable_training_rows": {
+                "func": class_instance.delete_unpredictable_training_rows,
+                "args": None,
+            },
+            "autoencoder_based_oversampling": {
+                "func": class_instance.autoencoder_based_oversampling,
+                "args": None,
+            },
+            "synthetic_data_augmentation": {
+                "func": class_instance.synthetic_data_augmentation,
+                "args": None,
+            },
+            "final_pca_dimensionality_reduction": {
+                "func": class_instance.final_pca_dimensionality_reduction,
+                "args": None,
+            },
+            "final_kernel_pca_dimensionality_reduction": {
+                "func": class_instance.final_kernel_pca_dimensionality_reduction,
+                "args": None,
+            },
+            "delete_low_variance_features": {
+                "func": class_instance.delete_low_variance_features,
+                "args": None,
+            },
+            "sort_columns_alphabetically": {
+                "func": class_instance.sort_columns_alphabetically,
+                "args": None,
+            },
         }
 
     def call_classification_algorithm_mapping(self, class_instance):
@@ -82,6 +198,7 @@ class TimeTravel():
         :return: Adds a class attribute.
         """
         class_instance.classification_algorithms_functions = {
+
                         "logistic_regression": class_instance.ml_bp00_train_test_binary_full_processing_log_reg_prob,
                         "ridge":  class_instance.ml_bp08_multiclass_full_processing_ridge,
                         "catboost": class_instance.ml_bp09_multiclass_full_processing_catboost,
@@ -100,22 +217,24 @@ class TimeTravel():
 
     def call_regression_algorithm_mapping(self, class_instance):
         class_instance.regression_algorithms_functions = {
-                        "linear_regression": class_instance.ml_bp10_train_test_regression_full_processing_linear_reg,
-                        "elasticnet": class_instance.ml_bp19_regression_full_processing_elasticnet_reg,
-                        "ridge": class_instance.ml_bp18_regression_full_processing_ridge_reg,
-                        "catboost":  class_instance.ml_bp20_regression_full_processing_catboost,
-                        "xgboost": class_instance.ml_bp11_regression_full_processing_xgboost,
-                        "ngboost": class_instance.ml_bp14_regressions_full_processing_ngboost,
-                        "lgbm": class_instance.ml_bp12_regressions_full_processing_lgbm,
-                        "tabnet": class_instance.ml_bp17_regression_full_processing_tabnet_reg,
-                        "vowpal_wabbit": class_instance.ml_bp15_regression_full_processing_vowpal_wabbit_reg,
-                        "sklearn_ensemble": class_instance.ml_bp13_regression_full_processing_sklearn_stacking_ensemble,
-                        "sgd": class_instance.ml_bp20_regression_full_processing_sgd,
-                        "svm_regression": class_instance.ml_bp22_regression_full_processing_svm
-                        #"ransac": class_instance.ml_bp21_regression_full_processing_ransac
-                        }
+            "linear_regression": class_instance.ml_bp10_train_test_regression_full_processing_linear_reg,
+            "elasticnet": class_instance.ml_bp19_regression_full_processing_elasticnet_reg,
+            "ridge": class_instance.ml_bp18_regression_full_processing_ridge_reg,
+            "catboost": class_instance.ml_bp20_regression_full_processing_catboost,
+            "xgboost": class_instance.ml_bp11_regression_full_processing_xgboost,
+            "ngboost": class_instance.ml_bp14_regressions_full_processing_ngboost,
+            "lgbm": class_instance.ml_bp12_regressions_full_processing_lgbm,
+            "tabnet": class_instance.ml_bp17_regression_full_processing_tabnet_reg,
+            "vowpal_wabbit": class_instance.ml_bp15_regression_full_processing_vowpal_wabbit_reg,
+            "sklearn_ensemble": class_instance.ml_bp13_regression_full_processing_sklearn_stacking_ensemble,
+            "sgd": class_instance.ml_bp20_regression_full_processing_sgd,
+            "svm_regression": class_instance.ml_bp22_regression_full_processing_svm
+            # "ransac": class_instance.ml_bp21_regression_full_processing_ransac
+        }
 
-    def create_time_travel_checkpoints(self, class_instance, checkpoint_file_path=None, df=None, reload_instance=False):
+    def create_time_travel_checkpoints(
+        self, class_instance, checkpoint_file_path=None, df=None, reload_instance=False
+    ):
         """
         Runs a preprocessing blueprint only. Saves blueprints after certain checkpoints, which can be defined in
         :param class_instance: Accepts a an e2eml Classification or Regression class instance. This does not support
@@ -126,7 +245,7 @@ class TimeTravel():
         :return: Saves the checkpoints locally.
         """
         if not reload_instance:
-            logging.info('Start blueprint.')
+            logging.info("Start blueprint.")
             class_instance.runtime_warnings(warn_about="future_architecture_change")
             class_instance.check_prediction_mode(df)
             class_instance.train_test_split(how=class_instance.train_split_type)
@@ -135,30 +254,66 @@ class TimeTravel():
             pass
 
         self.call_preprocessing_functions_mapping(class_instance=class_instance)
-        if class_instance.class_problem in ["binary", 'multiclass']:
+        if class_instance.class_problem in ["binary", "multiclass"]:
             self.call_classification_algorithm_mapping(class_instance=class_instance)
         else:
             self.call_regression_algorithm_mapping(class_instance=class_instance)
 
-        for key, value in class_instance.blueprint_step_selection_non_nlp.items():
-            if class_instance.blueprint_step_selection_non_nlp[key] and (not class_instance.checkpoint_reached[key] or class_instance.prediction_mode):
-                if (key == "regex_clean_text_data" and len(class_instance.nlp_transformer_columns) > 0) or \
-                        (key == "tfidf_vectorizer" and len(class_instance.nlp_transformer_columns) > 0) or \
-                        (key == "append_text_sentiment_score" and len(class_instance.nlp_transformer_columns) > 0) or \
-                        (key not in ["regex_clean_text_data", "tfidf_vectorizer", "append_text_sentiment_score",
-                                     "train_test_split"]):
+        for key in class_instance.blueprint_step_selection_non_nlp.keys():
+            if class_instance.blueprint_step_selection_non_nlp[key] and (
+                not class_instance.checkpoint_reached[key]
+                or class_instance.prediction_mode
+            ):
+                if (
+                    (
+                        key == "regex_clean_text_data"
+                        and len(class_instance.nlp_transformer_columns) > 0
+                    )
+                    or (
+                        key == "tfidf_vectorizer"
+                        and len(class_instance.nlp_transformer_columns) > 0
+                    )
+                    or (
+                        key == "append_text_sentiment_score"
+                        and len(class_instance.nlp_transformer_columns) > 0
+                    )
+                    or (
+                        key
+                        not in [
+                            "regex_clean_text_data",
+                            "tfidf_vectorizer",
+                            "append_text_sentiment_score",
+                            "train_test_split",
+                        ]
+                    )
+                ):
                     if class_instance.preprocessing_funcs[key]["args"]:
                         try:
-                            if len(np.array(class_instance.preprocessing_funcs[key]["args"])) == 1:
-                                class_instance.preprocessing_funcs[key]["func"](class_instance.preprocessing_funcs[key]["args"])
+                            if (
+                                len(
+                                    np.array(
+                                        class_instance.preprocessing_funcs[key]["args"]
+                                    )
+                                )
+                                == 1
+                            ):
+                                class_instance.preprocessing_funcs[key]["func"](
+                                    class_instance.preprocessing_funcs[key]["args"]
+                                )
                             else:
-                                class_instance.preprocessing_funcs[key]["func"](*class_instance.preprocessing_funcs[key]["args"])
+                                class_instance.preprocessing_funcs[key]["func"](
+                                    *class_instance.preprocessing_funcs[key]["args"]
+                                )
                         except TypeError:
-                            class_instance.preprocessing_funcs[key]["func"](class_instance.preprocessing_funcs[key]["args"])
+                            class_instance.preprocessing_funcs[key]["func"](
+                                class_instance.preprocessing_funcs[key]["args"]
+                            )
                     else:
                         class_instance.preprocessing_funcs[key]["func"]()
                 else:
-                    print(f"Skipped preprocessing step {key} as it has not been selected by user.")
+                    print(
+                        f"Skipped preprocessing step {key} as it has not been selected by user."
+                    )
 
                 # save checkpoints, if not in predict
                 if class_instance.prediction_mode:
@@ -166,8 +321,12 @@ class TimeTravel():
                 else:
                     class_instance.checkpoint_reached[key] = True
                     self.last_checkpoint_reached = key
-                    postprocessing.save_to_production(class_instance, file_name=f'blueprint_checkpoint_{key}', clean=False,
-                                                  file_path=checkpoint_file_path)
+                    postprocessing.save_to_production(
+                        class_instance,
+                        file_name=f"blueprint_checkpoint_{key}",
+                        clean=False,
+                        file_path=checkpoint_file_path,
+                    )
             else:
                 pass
 
@@ -184,31 +343,42 @@ class TimeTravel():
         :return: Returns loaded checkpoint.
         """
         if not checkpoint_to_load:
-            class_instance = postprocessing.load_for_production(file_name=f'blueprint_checkpoint_{self.last_checkpoint_reached}',
-                                                                file_path=checkpoint_file_path)
+            class_instance = postprocessing.load_for_production(
+                file_name=f"blueprint_checkpoint_{self.last_checkpoint_reached}",
+                file_path=checkpoint_file_path,
+            )
         else:
-            class_instance = postprocessing.load_for_production(file_name=f'blueprint_checkpoint_{checkpoint_to_load}',
-                                                                file_path=checkpoint_file_path)
+            class_instance = postprocessing.load_for_production(
+                file_name=f"blueprint_checkpoint_{checkpoint_to_load}",
+                file_path=checkpoint_file_path,
+            )
         return class_instance
 
-    def timetravel_model_training(self, class_instance, algorithm='lgbm'):
+    def timetravel_model_training(self, class_instance, algorithm="lgbm"):
         def overwrite_normal_preprocess_func(df=None):
             return "overwritten"
+
         # overwriting the preprocessing function as we have done this already
         class_instance.std_preprocessing_pipeline = overwrite_normal_preprocess_func
 
-        if class_instance.class_problem in ["binary", 'multiclass']:
+        if class_instance.class_problem in ["binary", "multiclass"]:
             class_instance.classification_algorithms_functions[algorithm]()
         else:
             class_instance.regression_algorithms_functions[algorithm]()
 
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
 
-def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_to_test=None,
-                              speed_up_model_tuning=True, name_of_exist_experiment=None,
-                              experiment_name=f"timewalk.pkl",
-                              experiment_comment=f'Experiment run at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'):
+def timewalk_auto_exploration(  # noqa: C901
+    class_instance,
+    holdout_df,
+    holdout_target,
+    algs_to_test=None,
+    speed_up_model_tuning=True,
+    name_of_exist_experiment=None,
+    experiment_name="timewalk.pkl",
+    experiment_comment=f'Experiment run at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
+):
     """
     Timewalk is an extension to TimeTravel. It executes different preprocessing steps an short model training to explore
     the best combination. It returns a Pandas DataFrame with all results. Timewalk is meant to explore and is not suitable
@@ -237,8 +407,10 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
     if isinstance(algs_to_test, list):
         algorithms = algs_to_test
     else:
+
         algorithms = ["ridge", "xgboost", "lgbm", "lgbm_focal", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
                       "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis", "svm", "svm_regression"]
+
         if len(class_instance.dataframe.index) > 10000:
             algorithms.remove("ngboost")
         else:
@@ -292,7 +464,6 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         except Exception:
             pass
 
-
     if speed_up_model_tuning:
         # we reduce the tuning rounds for all algorithms
         class_instance.hyperparameter_tuning_rounds["xgboost"] = 10
@@ -308,57 +479,81 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         class_instance.hyperparameter_tuning_rounds["elasticnet"] = 10
         class_instance.hyperparameter_tuning_rounds["catboost"] = 3
         class_instance.hyperparameter_tuning_rounds["bruteforce_random"] = 50
-        class_instance.hyperparameter_tuning_rounds["autoencoder_based_oversampling"] = 10
-        class_instance.hyperparameter_tuning_rounds["final_pca_dimensionality_reduction"] = 50
+        class_instance.hyperparameter_tuning_rounds[
+            "autoencoder_based_oversampling"
+        ] = 10
+        class_instance.hyperparameter_tuning_rounds[
+            "final_pca_dimensionality_reduction"
+        ] = 50
 
         # we also limit the time for hyperparameter tuning
-        class_instance.hyperparameter_tuning_max_runtime_secs["xgboost"] = 4*60*60
-        class_instance.hyperparameter_tuning_max_runtime_secs["sgd"] = 3*60*60
-        class_instance.hyperparameter_tuning_max_runtime_secs["lgbm"] = 3*60*60
-        class_instance.hyperparameter_tuning_max_runtime_secs["tabnet"] = 3*60*60
-        class_instance.hyperparameter_tuning_max_runtime_secs["ngboost"] = 3*60*60
-        class_instance.hyperparameter_tuning_max_runtime_secs["sklearn_ensemble"] = 3*60*60
-        class_instance.hyperparameter_tuning_max_runtime_secs["ridge"] = 3*60*60
-        class_instance.hyperparameter_tuning_max_runtime_secs["elasticnet"] = 3*60*60
-        class_instance.hyperparameter_tuning_max_runtime_secs["catboost"] = 4*60*60
-        class_instance.hyperparameter_tuning_max_runtime_secs["bruteforce_random"] = 3*60*60
-        class_instance.hyperparameter_tuning_max_runtime_secs["autoencoder_based_oversampling"] = 1*60*60
-        class_instance.hyperparameter_tuning_max_runtime_secs["final_pca_dimensionality_reduction"] = 1*60*60
+        class_instance.hyperparameter_tuning_max_runtime_secs["xgboost"] = 4 * 60 * 60
+        class_instance.hyperparameter_tuning_max_runtime_secs["sgd"] = 3 * 60 * 60
+        class_instance.hyperparameter_tuning_max_runtime_secs["lgbm"] = 3 * 60 * 60
+        class_instance.hyperparameter_tuning_max_runtime_secs["tabnet"] = 3 * 60 * 60
+        class_instance.hyperparameter_tuning_max_runtime_secs["ngboost"] = 3 * 60 * 60
+        class_instance.hyperparameter_tuning_max_runtime_secs["sklearn_ensemble"] = (
+            3 * 60 * 60
+        )
+        class_instance.hyperparameter_tuning_max_runtime_secs["ridge"] = 3 * 60 * 60
+        class_instance.hyperparameter_tuning_max_runtime_secs["elasticnet"] = (
+            3 * 60 * 60
+        )
+        class_instance.hyperparameter_tuning_max_runtime_secs["catboost"] = 4 * 60 * 60
+        class_instance.hyperparameter_tuning_max_runtime_secs["bruteforce_random"] = (
+            3 * 60 * 60
+        )
+        class_instance.hyperparameter_tuning_max_runtime_secs[
+            "autoencoder_based_oversampling"
+        ] = (1 * 60 * 60)
+        class_instance.hyperparameter_tuning_max_runtime_secs[
+            "final_pca_dimensionality_reduction"
+        ] = (1 * 60 * 60)
     else:
         pass
 
     # we adjust default preprocessing
     class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = True
     class_instance.blueprint_step_selection_non_nlp["scale_data"] = True
-    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
-    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
-    class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = False
-
+    class_instance.blueprint_step_selection_non_nlp[
+        "autoencoder_based_oversampling"
+    ] = False
+    class_instance.blueprint_step_selection_non_nlp[
+        "final_pca_dimensionality_reduction"
+    ] = False
+    class_instance.blueprint_step_selection_non_nlp[
+        "svm_outlier_detection_loop"
+    ] = False
 
     # we want to store our results
     scoring_results = []
     scoring_2_results = []
     scoring_3_results = []
-    scoring_4_results = []
+    # scoring_4_results = []
     algorithms_used = []
     preprocessing_steps_used = []
     elapsed_times = []
     unique_indices = []
 
     # define checkpoints to load
-    checkpoints = ["default", "autotuned_clustering", "delete_high_null_cols", "early_numeric_only_feature_selection"]
+    checkpoints = [
+        "default",
+        "autotuned_clustering",
+        "delete_high_null_cols",
+        "early_numeric_only_feature_selection",
+    ]
 
     # define the type of scoring
     if class_instance.class_problem in ["binary", "multiclass"]:
         metric = "Matthews"
         metric_2 = "Accuracy"
         metric_3 = "Recall"
-        ascending = False
+        # ascending = False
     else:
         metric = "Mean absolute error"
         metric_2 = "R2 score"
         metric_3 = "RMSE"
-        ascending = True
+        # ascending = True
 
     # creating checkpoints and training the model
     automl_travel = TimeTravel()
@@ -371,35 +566,85 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         print(f"Start iteration for checkpoint {checkpoint} at {preprocess_start}.")
         try:
             if len(scoring_results) == 0:
-                automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=False)
+                automl_travel.create_time_travel_checkpoints(
+                    class_instance, reload_instance=False
+                )
             else:
-                class_instance = automl_travel.load_checkpoint(checkpoint_to_load=checkpoint)
+                class_instance = automl_travel.load_checkpoint(
+                    checkpoint_to_load=checkpoint
+                )
                 if checkpoint == "autotuned_clustering":
-                    class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = True
-                    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = True
-                    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
-                    class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "svm_outlier_detection_loop"
+                    ] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autoencoder_based_oversampling"
+                    ] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "final_pca_dimensionality_reduction"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autotuned_clustering"
+                    ] = True
                 elif checkpoint == "delete_high_null_cols":
-                    class_instance.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"] = False
-                    class_instance.blueprint_step_selection_non_nlp["data_binning"] = False
-                    class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = False
-                    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
-                    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "tfidf_vectorizer_to_pca"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "data_binning"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "svm_outlier_detection_loop"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autoencoder_based_oversampling"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "final_pca_dimensionality_reduction"
+                    ] = False
                 elif checkpoint == "early_numeric_only_feature_selection":
-                    class_instance.blueprint_step_selection_non_nlp["tfidf_vectorizer_to_pca"] = False
-                    class_instance.blueprint_step_selection_non_nlp["data_binning"] = False
-                    class_instance.blueprint_step_selection_non_nlp["numeric_binarizer_pca"] = False
-                    class_instance.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"] = False
-                    class_instance.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"] = False
-                    class_instance.blueprint_step_selection_non_nlp["skewness_removal"] = False
-                    class_instance.blueprint_step_selection_non_nlp["holistic_null_filling"] = False
-                    class_instance.blueprint_step_selection_non_nlp["onehot_pca"] = False
-                    class_instance.blueprint_step_selection_non_nlp["clustering_as_a_feature_dbscan"] = False
-                    class_instance.blueprint_step_selection_non_nlp["clustering_as_a_feature_kmeans_loop"] = False
-                    class_instance.blueprint_step_selection_non_nlp["clustering_as_a_feature_gaussian_mixture_loop"] = False
-                    class_instance.blueprint_step_selection_non_nlp["pca_clustering_results"] = False
-                    class_instance.blueprint_step_selection_non_nlp["svm_outlier_detection_loop"] = False
-                automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=True)
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "tfidf_vectorizer_to_pca"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "data_binning"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "numeric_binarizer_pca"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autoencoder_based_oversampling"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "final_pca_dimensionality_reduction"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "skewness_removal"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "holistic_null_filling"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "onehot_pca"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "clustering_as_a_feature_dbscan"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "clustering_as_a_feature_kmeans_loop"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "clustering_as_a_feature_gaussian_mixture_loop"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "pca_clustering_results"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "svm_outlier_detection_loop"
+                    ] = False
+                automl_travel.create_time_travel_checkpoints(
+                    class_instance, reload_instance=True
+                )
         except Exception:
             pass
         preprocess_end = time.time()
@@ -410,44 +655,89 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                 unique_indices_counter += 1
                 start = time.time()
                 print(f"Start iteration for algorithm {alg} at {start}.")
-                class_instance = automl_travel.load_checkpoint(checkpoint_to_load="sort_columns_alphabetically")  # gets latest checkpoint
-                print(f"Successfully loaded checkpoint last checkpoint.")
-                automl_travel.create_time_travel_checkpoints(class_instance, reload_instance=True)
+                class_instance = automl_travel.load_checkpoint(
+                    checkpoint_to_load="sort_columns_alphabetically"
+                )  # gets latest checkpoint
+                print("Successfully loaded checkpoint last checkpoint.")
+                automl_travel.create_time_travel_checkpoints(
+                    class_instance, reload_instance=True
+                )
                 automl_travel.timetravel_model_training(class_instance, alg)
-                automl_travel.create_time_travel_checkpoints(class_instance, df=holdout_df)
+                automl_travel.create_time_travel_checkpoints(
+                    class_instance, df=holdout_df
+                )
                 automl_travel.timetravel_model_training(class_instance, alg)
                 if class_instance.labels_encoded:
-                    hold_df_target = class_instance.label_encoder_decoder(holdout_target, mode='transform')
+                    hold_df_target = class_instance.label_encoder_decoder(
+                        holdout_target, mode="transform"
+                    )
                 else:
                     hold_df_target = holdout_target
 
                 try:
                     if class_instance.class_problem in ["binary", "multiclass"]:
-                        scoring_2 = accuracy_score(hold_df_target, class_instance.predicted_classes[alg])
-                        scoring_3 = recall_score(hold_df_target, class_instance.predicted_classes[alg], average='weighted')
-                        scoring = matthews_corrcoef(hold_df_target, class_instance.predicted_classes[alg])
-                        full_classification_report = classification_report(hold_df_target, class_instance.predicted_classes[alg])
+                        scoring_2 = accuracy_score(
+                            hold_df_target, class_instance.predicted_classes[alg]
+                        )
+                        scoring_3 = recall_score(
+                            hold_df_target,
+                            class_instance.predicted_classes[alg],
+                            average="weighted",
+                        )
+                        scoring = matthews_corrcoef(
+                            hold_df_target, class_instance.predicted_classes[alg]
+                        )
+                        full_classification_report = classification_report(
+                            hold_df_target, class_instance.predicted_classes[alg]
+                        )
                         print(full_classification_report)
                     else:
-                        scoring = mean_absolute_error(hold_df_target, class_instance.predicted_values[alg])
-                        scoring_2 = r2_score(hold_df_target, class_instance.predicted_values[alg])
-                        scoring_3 = mean_squared_error(hold_df_target, class_instance.predicted_values[alg], squared=True)
+                        scoring = mean_absolute_error(
+                            hold_df_target, class_instance.predicted_values[alg]
+                        )
+                        scoring_2 = r2_score(
+                            hold_df_target, class_instance.predicted_values[alg]
+                        )
+                        scoring_3 = mean_squared_error(
+                            hold_df_target,
+                            class_instance.predicted_values[alg],
+                            squared=True,
+                        )
                 except Exception:
                     try:
                         if class_instance.class_problem in ["binary", "multiclass"]:
-                            scoring = matthews_corrcoef(pd.Series(hold_df_target).astype(bool),
-                                                        class_instance.predicted_classes[alg])
-                            scoring_2 = accuracy_score(pd.Series(hold_df_target).astype(bool),
-                                                       class_instance.predicted_classes[alg].astype(bool))
-                            scoring_3 = recall_score(pd.Series(hold_df_target).astype(bool),
-                                                     class_instance.predicted_classes[alg].astype(bool), average='weighted')
-                            full_classification_report = classification_report(pd.Series(hold_df_target).astype(bool),
-                                                                               class_instance.predicted_classes[alg])
+                            scoring = matthews_corrcoef(
+                                pd.Series(hold_df_target).astype(bool),
+                                class_instance.predicted_classes[alg],
+                            )
+                            scoring_2 = accuracy_score(
+                                pd.Series(hold_df_target).astype(bool),
+                                class_instance.predicted_classes[alg].astype(bool),
+                            )
+                            scoring_3 = recall_score(
+                                pd.Series(hold_df_target).astype(bool),
+                                class_instance.predicted_classes[alg].astype(bool),
+                                average="weighted",
+                            )
+                            full_classification_report = classification_report(
+                                pd.Series(hold_df_target).astype(bool),
+                                class_instance.predicted_classes[alg],
+                            )
                             print(full_classification_report)
                         else:
-                            scoring = mean_absolute_error(pd.Series(hold_df_target).astype(float), class_instance.predicted_values[alg])
-                            scoring_2 = r2_score(pd.Series(hold_df_target).astype(float), class_instance.predicted_values[alg])
-                            scoring_3 = mean_squared_error(pd.Series(hold_df_target).astype(float), class_instance.predicted_values[alg], squared=True)
+                            scoring = mean_absolute_error(
+                                pd.Series(hold_df_target).astype(float),
+                                class_instance.predicted_values[alg],
+                            )
+                            scoring_2 = r2_score(
+                                pd.Series(hold_df_target).astype(float),
+                                class_instance.predicted_values[alg],
+                            )
+                            scoring_3 = mean_squared_error(
+                                pd.Series(hold_df_target).astype(float),
+                                class_instance.predicted_values[alg],
+                                squared=True,
+                            )
                     except Exception:
                         print("Evaluation on holdout failed.")
                         if class_instance.class_problem in ["binary", "multiclass"]:
@@ -469,25 +759,33 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                 scoring_3_results.append(scoring_3)
                 algorithms_used.append(alg)
                 unique_indices.append(unique_indices_counter)
-                preprocessing_steps_used.append(class_instance.blueprint_step_selection_non_nlp)
+                preprocessing_steps_used.append(
+                    class_instance.blueprint_step_selection_non_nlp
+                )
                 results_dict = {
                     "Trial number": unique_indices,
                     "Algorithm": algorithms_used,
                     metric: scoring_results,
                     "Preprocessing applied": preprocessing_steps_used,
-                    "ML model runtime in seconds": elapsed_times}
+                    "ML model runtime in seconds": elapsed_times,
+                }
 
                 results_df = pd.DataFrame(results_dict)
                 results_df["experiment_comment"] = experiment_comment
                 results_df["preprocessing_runtime_sec"] = preprocess_runtime
-                results_df["Total runtime"] = results_df["ML model runtime in seconds"] + results_df["preprocessing_runtime_sec"]
+                results_df["Total runtime"] = (
+                    results_df["ML model runtime in seconds"]
+                    + results_df["preprocessing_runtime_sec"]
+                )
                 if isinstance(name_of_exist_experiment, str):
                     try:
                         print("Try to load former experiment data.")
                         loaded_experiment = pd.read_pickle(name_of_exist_experiment)
                         results_df = pd.concat([results_df, loaded_experiment])
                     except Exception:
-                        print("Loading former experiment data failed. Will export running experiment only.")
+                        print(
+                            "Loading former experiment data failed. Will export running experiment only."
+                        )
                 else:
                     pass
                 results_df.to_pickle(experiment_name)
@@ -500,7 +798,7 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
                 except KeyError:
                     pass
         except Exception:
-            if class_instance.class_problem in ["binary", "multiclass"]:
+            if class_instance.class_problem in ["binary", "multiclass"]:  # noqa: F821
                 scoring = 0
                 scoring_2 = 0
                 scoring_3 = 0
@@ -516,33 +814,41 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
             scoring_3_results.append(scoring_3)
             algorithms_used.append(alg)
             unique_indices.append(unique_indices_counter)
-            preprocessing_steps_used.append(class_instance.blueprint_step_selection_non_nlp)
+            preprocessing_steps_used.append(  # noqa: F821
+                class_instance.blueprint_step_selection_non_nlp  # noqa: F821
+            )  # noqa: F821
             results_dict = {
                 "Trial number": unique_indices,
                 "Algorithm": algorithms_used,
                 metric: scoring_results,
                 "Preprocessing applied": preprocessing_steps_used,
-                "ML model runtime in seconds": elapsed_times}
+                "ML model runtime in seconds": elapsed_times,
+            }
 
             results_df = pd.DataFrame(results_dict)
             results_df["experiment_comment"] = experiment_comment
             results_df["preprocessing_runtime_sec"] = preprocess_runtime
-            results_df["Total runtime"] = results_df["ML model runtime in seconds"] + results_df["preprocessing_runtime_sec"]
+            results_df["Total runtime"] = (
+                results_df["ML model runtime in seconds"]
+                + results_df["preprocessing_runtime_sec"]
+            )
             if isinstance(name_of_exist_experiment, str):
                 try:
                     print("Try to load former experiment data.")
                     loaded_experiment = pd.read_pickle(name_of_exist_experiment)
                     results_df = pd.concat([results_df, loaded_experiment])
                 except Exception:
-                    print("Loading former experiment data failed. Will export running experiment only.")
+                    print(
+                        "Loading former experiment data failed. Will export running experiment only."
+                    )
             else:
                 pass
             results_df.to_pickle(experiment_name)
             print(f"End iteration for algorithm {alg} at {end}.")
             print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
             try:
-                del class_instance.trained_models[alg]
-                del class_instance
+                del class_instance.trained_models[alg]  # noqa: F821
+                del class_instance  # noqa: F821
                 _ = gc.collect()
             except KeyError:
                 pass
@@ -554,28 +860,39 @@ def timewalk_auto_exploration(class_instance, holdout_df, holdout_target, algs_t
         metric_2: scoring_2_results,
         metric_3: scoring_3_results,
         "Preprocessing applied": preprocessing_steps_used,
-        "ML model runtime in seconds": elapsed_times}
+        "ML model runtime in seconds": elapsed_times,
+    }
 
     results_df = pd.DataFrame(results_dict)
     results_df["experiment_comment"] = experiment_comment
     results_df["preprocessing_runtime_sec"] = preprocess_runtime
-    results_df["Total runtime"] = results_df["ML model runtime in seconds"] + results_df["preprocessing_runtime_sec"]
+    results_df["Total runtime"] = (
+        results_df["ML model runtime in seconds"]
+        + results_df["preprocessing_runtime_sec"]
+    )
     if isinstance(name_of_exist_experiment, str):
         try:
             print("Try to load former experiment data.")
             loaded_experiment = pd.read_pickle(name_of_exist_experiment)
             results_df = pd.concat([results_df, loaded_experiment])
         except Exception:
-            print("Loading former experiment data failed. Will export running experiment only.")
+            print(
+                "Loading former experiment data failed. Will export running experiment only."
+            )
     else:
         pass
     results_df.to_pickle(experiment_name)
 
     try:
-        fig = px.line(results_df, x="Total runtime", y=metric, color="Algorithm", text="Trial number")
+        fig = px.line(
+            results_df,
+            x="Total runtime",
+            y=metric,
+            color="Algorithm",
+            text="Trial number",
+        )
         fig.update_traces(textposition="bottom right")
         fig.show()
     except Exception:
         pass
     return results_df
-

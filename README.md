@@ -1,44 +1,63 @@
 # e2e ML
-> An end to end solution for automl.
 
-Pass in your data, add some information about it and get a full pipelines in return. Data preprocessing,
-feature creation, modelling and evaluation with just a few lines of code.
 
-![](header.png)
+> An end to end solution for automl. .
+
+
+Pass in your data, add some information about it and get a full pipelines in
+return. Data preprocessing, feature creation, modelling and evaluation with just
+a few lines of code.
+
+![Header image](header.png)
 
 ## Installation
 
-From Pypi:
+From PyPI:
 
 ```sh
 pip install e2eml
 ```
-We highly recommend to create a new virtual environment first. Then install e2e-ml into it. In the environment also download
-the pretrained spacy model with. Otherwise e2eml will do this automatically during runtime.
 
-e2eml can also be installed into a RAPIDS environment. For this we recommend to create a fresh environment following
-[RAPIDS](https://rapids.ai/start.html) instructions. After environment installation and activation, a special installation is needed to not run into installation issues.
+We highly recommend to create a new virtual environment first. Then install
+e2e-ml into it. In the environment also download the pretrained spacy model
+with. Otherwise e2eml will do this automatically during runtime.
+
+e2eml can also be installed into a RAPIDS environment. For this we recommend to
+create a fresh environment following [RAPIDS](https://rapids.ai/start.html)
+instructions. After environment installation and activation, a special
+installation is needed to not run into installation issues.
+
 Just run:
+
 ```sh
 pip install e2eml[rapids]
 ```
-This will additionally install cupy and cython to prevent issues. Additionally it is needed to run:
+
+This will additionally install cupy and cython to prevent issues. Additionally
+it is needed to run:
+
 ```sh
 pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html
 
 # also spacy supports GPU acceleration
 pip install -U spacy[cuda112] #cuda112 depends on your actual cuda version, see: https://spacy.io/usage
 ```
+
 Otherwise Pytorch will fail trying to run on GPU.
-If e2eml shall be installed together with Jupyter core and ipython, please install with:
+
+If e2eml shall be installed together with Jupyter core and ipython, please
+install with:
+
 ```sh
 pip install e2eml[full]
 ```
+
 instead.
 
 ## Usage example
 
-e2e has been designed to create state-of-the-art machine learning pipelines with a few lines of code. Basic example of usage:
+e2e has been designed to create state-of-the-art machine learning pipelines with
+a few lines of code. Basic example of usage:
 
 ```python
 import e2eml
@@ -57,7 +76,7 @@ del holdout_df[target]
 
 # instantiate the needed blueprints class
 from classification import classification_blueprints # regression bps are available with from regression import regression_blueprints
-test_class = classification_blueprints.ClassificationBluePrint(datasource=train_df, 
+test_class = classification_blueprints.ClassificationBluePrint(datasource=train_df,
                         target_variable=target,
                         train_split_type='cross',
                         rapids_acceleration=True, # if installed into a conda environment with NVIDIA Rapids, this can be used to accelerate preprocessing with GPU
@@ -66,7 +85,7 @@ test_class = classification_blueprints.ClassificationBluePrint(datasource=train_
                         #categorical_columns=cat_columns # you can define categorical columns, otherwise e2e does this automatically
                         #date_columns=date_columns # you can also define date columns (expected is YYYY-MM-DD format)
                                                                )
-                                                                 
+
 """
 *
 'Auto' is recommended for preferred_training_mode parameter, but with 'CPU' and 'GPU' it can also be controlled manually.
@@ -75,7 +94,7 @@ This will massively improve training times and speed up SHAP feature importance 
 For Xgboost this should work out of the box, if installed into a RAPIDS environment.
 """
 # run actual blueprint
-test_class.ml_bp01_multiclass_full_processing_xgb_prob() 
+test_class.ml_bp01_multiclass_full_processing_xgb_prob()
 
 """
 When choosing blueprints several options are available:
@@ -122,7 +141,7 @@ test_class.special_blueprint_algorithms = {"ridge": True,
                                              "sklearn_ensemble": True,
                                              "catboost": False
                                              }
-                                             
+
 Also preprocessing steps can be selected:
 test_class.blueprint_step_selection_non_nlp = {
             "automatic_type_detection_casting": True,
@@ -165,16 +184,16 @@ test_class.blueprint_step_selection_non_nlp = {
             "autoencoder_based_oversampling": False, # perfect for imbalanced binary and multiclass data
             "final_pca_dimensionality_reduction": False
         }
-        
+
 The bruteforce_random_feature_selection step is experimental. It showed promising results. The number of trials can be controlled.
 This step is useful, if the model overfitted (which should happen rarely), because too many features with too little
-feature importance have been considered. 
+feature importance have been considered.
 like test_class.hyperparameter_tuning_rounds["bruteforce_random"] = 400 .
 
 Generally the class instance is a control center and gives room for plenty of customization.
 Never update the class attributes like shown below.
 
-test_class.tabnet_settings = {f"batch_size": rec_batch_size,
+test_class.tabnet_settings = "batch_size": rec_batch_size,
                                 "virtual_batch_size": virtual_batch_size,
                                 # pred batch size?
                                 "num_workers": 0,
@@ -217,15 +236,15 @@ test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
                                                        "autoencoder_based_oversampling": 2*60*60,
                                                        "final_kernel_pca_dimensionality_reduction": 4*60*60,
                                                        "final_pca_dimensionality_reduction": 2*60*60}
-                                                       
+
 When these parameters have to updated, please overwrite the keys individually to not break the blueprints eventually.
-I.e.: test_class.hyperparameter_tuning_max_runtime_secs["xgboost"] = 12*60*60 would work fine. 
+I.e.: test_class.hyperparameter_tuning_max_runtime_secs["xgboost"] = 12*60*60 would work fine.
 
 Working with big data can bring all hardware to it's needs. e2eml has been tested with:
 - Ryzen 5950x (16 cores CPU)
 - Geforce RTX 3090 (24GB VRAM)
-- 64GB RAM                                                      
-e2eml has been able to process 100k rows with 200 columns approximately using these specs stable for non-blended 
+- 64GB RAM
+e2eml has been able to process 100k rows with 200 columns approximately using these specs stable for non-blended
 blueprints. Blended blueprints consume more resources as e2eml keep the trained models in memory as of now.
 
 For data bigger than 100k rows it is possible to limit the amount of data for various preprocessing steps:
@@ -233,7 +252,7 @@ For data bigger than 100k rows it is possible to limit the amount of data for va
 - test_class.hyperparameter_tuning_sample_size = 100000 # for model hyperparameter optimization
 - test_class.brute_force_selection_sample_size = 15000 # for an experimental feature selection
 
-For binary classification a sample size of 100k datapoints is sufficient in most cases. Hyperparameter tuning sample size can be much less, 
+For binary classification a sample size of 100k datapoints is sufficient in most cases. Hyperparameter tuning sample size can be much less,
 depending on class imbalance.
 
 For multiclass we recommend to start with small samples as algorithms like Xgboost and LGBM will easily grow in memory consumption
@@ -253,6 +272,42 @@ loaded_test_class.ml_bp01_multiclass_full_processing_xgb_prob(holdout_df)
 # predictions can be accessed via a class attribute
 print(churn_class.predicted_classes['xgboost'])
 ```
+
+## Linting and Pre-Commit
+
+This project uses pre-commit to enforce style.
+
+To install the pre-commit hooks, first install pre-commit into the project's
+virtual environment:
+
+```sh
+pip install pre-commit
+```
+
+Then install the project hooks:
+
+```sh
+pre-commit install
+```
+
+Now, whenever you make a commit, the linting and autoformatting will
+automatically run.
+
+## Disclaimer
+
+e2e is not designed to quickly iterate over several algorithms and suggest you
+the best. It is made to deliver state-of-the-art performance as ready-to-go
+blueprints. e2e-ml blueprints contain:
+
+* preprocessing (outlier, rare feature, datetime, categorical and NLP handling)
+* feature creation (binning, clustering, categorical and NLP features)
+* automated feature selection
+* model training (with crossfold validation)
+* automated hyperparameter tuning
+* model evaluation
+
+This comes at the cost of runtime. Depending on your data we recommend strong
+hardware.
 
 # Development
 
@@ -295,130 +350,151 @@ state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contai
 - model evaluation
   This comes at the cost of runtime. Depending on your data we recommend strong hardware.
 
+
 ## Release History
+
 * 2.9.9
-- Added Multinomial Bayes Classifier
-- Added SVM for regression
-- Refined Sklearn ensembles
+  * Added Multinomial Bayes Classifier
+  * Added SVM for regression
+  * Refined Sklearn ensembles
 * 2.9.8
-- Added Quadrant Discriminent Analysis
-- Added Support Vector machines
-- Added Ransac regressor
+  * Added Quadrant Discriminent Analysis
+  * Added Support Vector machines
+  * Added Ransac regressor
 * 2.9.7
-- updated Plotly dependency to 5.4.0
-- Improved Xgboost for imbalanced data
+  * updated Plotly dependency to 5.4.0
+  * Improved Xgboost for imbalanced data
 * 2.9.6
-- Added TimeTravel and timewalk: TimeTravel will save the class instance after each preprocessing step, timewalk will
- automatically try different preprocessing steps with different algorithms to find the best combination
-- Updated dependencies to use newest versions of scikit-learn and category-encoders
+  * Added TimeTravel and timewalk: TimeTravel will save the class instance after
+    each preprocessing step, timewalk will automatically try different
+    preprocessing steps with different algorithms to find the best combination
+  * Updated dependencies to use newest versions of scikit-learn and
+    category-encoders
 * 2.9.0
-- bug fixes with synthetic data augmentation for regression
-- bug fix of target encoding during regression
-- enhanced hyperparameter space for autoencoder based oversampling
-- added final PCA dimensionality reduction as optional preprocessing step
+  * bug fixes with synthetic data augmentation for regression
+  * bug fix of target encoding during regression
+  * enhanced hyperparameter space for autoencoder based oversampling
+  * added final PCA dimensionality reduction as optional preprocessing step
 * 2.8.1
-- autoencoder based oversampling will go through hyperprameter tuning first (for each class individually)
-- optimized TabNet performance
+  * autoencoder based oversampling will go through hyperprameter tuning first
+    (for each class individually)
+  * optimized TabNet performance
 * 2.7.5
-- added oversampling based on variational autoencoder (experimental)
+  * added oversampling based on variational autoencoder (experimental)
 * 2.7.4
- - fixed target encoding for multiclass classification
- - improved performance on multiclass tasks
- - improved Xgboost & TabNet performance on binary classification
- - added auto-tuned clustering as a feature
+  * fixed target encoding for multiclass classification
+  * improved performance on multiclass tasks
+  * improved Xgboost & TabNet performance on binary classification
+  * added auto-tuned clustering as a feature
 * 2.6.3
- - small bugfixes
+  * small bugfixes
 * 2.6.1
- - Hyperparameter tuning does happen on a sample of the train data from now on (sample size can be controlled)
- - An experimental feature has been added, which tries to find unpredictable training data rows to delete them from the training
-   (this accelerates training, but costs a bit model performance)
- - Blueprints can be accelerated with Nvidia RAPIDS (works on clustering only for now)
+  * Hyperparameter tuning does happen on a sample of the train data from now on
+    (sample size can be controlled)
+  * An experimental feature has been added, which tries to find unpredictable
+    training data rows to delete them from the training (this accelerates
+    training, but costs a bit model performance)
+  * Blueprints can be accelerated with Nvidia RAPIDS (works on clustering only f
+    or now)
 * 2.5.9
- - optimized loss function for TabNet
+  * optimized loss function for TabNet
 * 2.5.1
- - Optimized loss function for synthetic data augmentation
- - Adjusted library dependencies
- - Improved target encoding
+  * Optimized loss function for synthetic data augmentation
+  * Adjusted library dependencies
+  * Improved target encoding
 * 2.3.1
- - Changed feature selection backend from Xgboost to LGBM
- - POS tagging is off on default from this version
+  * Changed feature selection backend from Xgboost to LGBM
+  * POS tagging is off on default from this version
 * 2.2.9
- - bug fixes
- - added an experimental feature to optimize training data with synthetic data
- - added optional early feature selection (numeric only)
+  * bug fixes
+  * added an experimental feature to optimize training data with synthetic data
+  * added optional early feature selection (numeric only)
 * 2.2.2
- - transformers can be loaded into Google Colab from Gdrive
+  * transformers can be loaded into Google Colab from Gdrive
 * 2.1.2
- - Improved TFIDF vectorizer performance & non transformer NLP applications
- - Improved POS tagging stability
+  * Improved TFIDF vectorizer performance & non transformer NLP applications
+  * Improved POS tagging stability
 * 2.1.1
- - Completely overworked preprocessing setup (changed API). Preprocessing blueprints can be customized through a class
-   attribute now
- - Completely overworked special multimodel blueprints. The paricipating algorithms can be customized through a class
-   attribute now
- - Improved NULL handling & regression performance
- - Added Catboost & Elasticnet
- - Updated Readme
- - First unittests
- - Added Stochastic Gradient classifier & regressor
+  * Completely overworked preprocessing setup (changed API). Preprocessing
+    blueprints can be customized through a class attribute now
+  * Completely overworked special multimodel blueprints. The paricipating
+    algorithms can be customized through a class attribute now
+  * Improved NULL handling & regression performance
+  * Added Catboost & Elasticnet
+  * Updated Readme
+  * First unittests
+  * Added Stochastic Gradient classifier & regressor
 * 1.8.2
- - Added Ridge classifier and regression as new blueprints
+  * Added Ridge classifier and regression as new blueprints
 * 1.8.1
- - Added another layer of feature selection
+  * Added another layer of feature selection
 * 1.8.0
- - Transformer padding length will be max text length + 20% instead of static 300
- - Transformers use AutoModelForSequenceClassification instead of hardcoded transformers now
- - Hyperparameter tuning rounds and timeout can be controlled globally via class attribute now
+  * Transformer padding length will be max text length + 20% instead of static
+    300
+  * Transformers use AutoModelForSequenceClassification instead of hardcoded
+    transformers now
+  * Hyperparameter tuning rounds and timeout can be controlled globally via
+    class attribute now
 * 1.7.8
-  - Instead of a global probability threshold, e2eml stores threshold for each tested model
-  - Deprecated binary boosting blender due to lack of performance
-  - Added filling of inf values
+  * Instead of a global probability threshold, e2eml stores threshold for each
+    tested model
+  * Deprecated binary boosting blender due to lack of performance
+  * Added filling of inf values
 * 1.7.3
-  - Improved preprocessing
-  - Improved regression performance
-  - Deprecated regression boosting blender and replaced my multi model/architecture blender
-  - Transformers can optionally discard worst models, but will keep all 5 by default
-  - e2eml should be installable on Amazon Sagemaker now
+  * Improved preprocessing
+  * Improved regression performance
+  * Deprecated regression boosting blender and replaced my multi
+    model/architecture blender
+  * Transformers can optionally discard worst models, but will keep all 5 by
+    default
+  * e2eml should be installable on Amazon Sagemaker now
 * 1.7.0
-  - Added TabNet classifier and regressor with automated hyperparameter optimization
+  * Added TabNet classifier and regressor with automated hyperparameter
+    optimization
 * 1.6.5
-  - improvements of NLP transformers
+  * improvements of NLP transformers
 * 1.5.8
-  - Fixes bug around preprocessing_type='nlp'
-  - replaced pickle with dill for saving and loading objects
+  * Fixes bug around preprocessing_type='nlp'
+  * replaced pickle with dill for saving and loading objects
 * 1.5.3
-  - Added transformer blueprints for NLP classification and regression
-  - renamed Vowpal Wabbit blueprint to fit into blueprint naming convention
-  - Created "extras" options for library installation: 'rapids' installs extras, so e2eml can be installed into
-    into a rapids environment while 'jupyter' adds jupyter core and ipython. 'full' installs all of them.
+  * Added transformer blueprints for NLP classification and regression
+  * renamed Vowpal Wabbit blueprint to fit into blueprint naming convention
+  * Created "extras" options for library installation: 'rapids' installs extras,
+    so e2eml can be installed into into a rapids environment while 'jupyter'
+    adds jupyter core and ipython. 'full' installs all of them.
 * 1.3.9
-  - Fixed issue with automated GPU-acceleration detection and flagging
-  - Fixed avg regression blueprint where eval function tried to call classification evaluation
-  - Moved POS tagging + PCA step into non-NLP pipeline as it showed good results in general
-  - improved NLP part (more and better feature engineering and preprocessing) of blueprints for better performance
-  - Added Vowpal Wabbit for classification and regression and replaced stacking ensemble in automated model exploration
-    by Vowpal Wabbit as well
-  - Set random_state for train_test splits for consistency
-  - Fixed sklearn dependency to 0.22.0 due to six import error
+  * Fixed issue with automated GPU-acceleration detection and flagging
+  * Fixed avg regression blueprint where eval function tried to call
+    classification evaluation
+  * Moved POS tagging + PCA step into non-NLP pipeline as it showed good results
+    in general
+  * improved NLP part (more and better feature engineering and preprocessing) of
+    blueprints for better performance
+  * Added Vowpal Wabbit for classification and regression and replaced stacking
+    ensemble in automated model exploration by Vowpal Wabbit as well
+  * Set random_state for train_test splits for consistency
+  * Fixed sklearn dependency to 0.22.0 due to six import error
 * 1.0.1
-  - Optimized package requirements
-  - Pinned LGBM requirement to version 3.1.0 due to the bug "LightGBMError: bin size 257 cannot run on GPU #3339"
+  * Optimized package requirements
+  * Pinned LGBM requirement to version 3.1.0 due to the bug "LightGBMError: bin
+    size 257 cannot run on GPU #3339"
 * 0.9.9
   * Enabled tune_mode parameter during class instantiation.
   * Updated docstings across all functions and changed model defaults.
-  * Multiple bug fixes (LGBM regression accurate mode, label encoding and permutation tests).
+  * Multiple bug fixes (LGBM regression accurate mode, label encoding and
+    permutation tests).
   * Enhanced user information & better ROC_AUC display
   * Added automated GPU detection for LGBM and Xgboost.
   * Added functions to save and load blueprints
   * architectural changes (preprocessing organized in blueprints as well)
 * 0.9.4
-  * First release with classification and regression blueprints. (not available anymore)
+  * First release with classification and regression blueprints. (not available
+    anymore)
 
 ## Meta
 
 Creator: Thomas Meißner – [LinkedIn](https://www.linkedin.com/in/thomas-mei%C3%9Fner-m-a-3808b346)
 
 Consultant: Gabriel Stephen Alexander – [Github](https://github.com/bitsofsteve)
-
 
 [e2e-ml Github repository](https://github.com/ThomasMeissnerDS/e2e_ml)
