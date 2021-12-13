@@ -20,6 +20,7 @@ a few lines of code.
   * [Adding or Removing Dependencies](#adding-or-removing-dependencies)
   * [Building and Publishing](#building-and-publishing)
   * [Documentation](#documentation)
+  * [Pull Requests](#pull-requests)
 * [Release History](#release-history)
 * [Meta](#meta)
 
@@ -361,6 +362,10 @@ make docs
 ```
 
 You may then browse the HTML docs at `docs/build/docs/index.html`.
+
+### Pull Requests
+
+We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
