@@ -143,7 +143,6 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset="ti
         )
         titanic_auto_ml.hyperparameter_tuning_sample_size = 1100
 
-
     elif dataset == "synthetic_multiclass":
         (
             test_df,
@@ -216,7 +215,6 @@ def test_ml_special_multiclass_full_processing_multimodel_max_voting(dataset="ti
         for alg, value in titanic_auto_ml.special_blueprint_algorithms.items()
         if value
     ]
-
 
     def get_matthews(algorithm):
         # Assess prediction quality on holdout data

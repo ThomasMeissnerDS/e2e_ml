@@ -4,6 +4,8 @@ from pandas.core.common import SettingWithCopyWarning
 import numpy as np
 import optuna
 import xgboost as xgb
+from catboost import CatBoostClassifier, Pool
+from joblib import Parallel, delayed
 import lightgbm as lgb
 from lightgbm import LGBMClassifier
 from ngboost import NGBClassifier
@@ -11,6 +13,26 @@ from vowpalwabbit.sklearn_vw import VWClassifier
 from ngboost.distns import k_categorical
 from catboost import CatBoostClassifier, cv, Pool
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+
+from sklearn.ensemble import (
+    AdaBoostClassifier,
+    GradientBoostingClassifier,
+    GradientBoostingRegressor,
+    RandomForestClassifier,
+    StackingClassifier,
+)
+from sklearn.inspection import permutation_importance
+from sklearn.linear_model import (
+    LogisticRegression,
+    LogisticRegressionCV,
+    RidgeClassifier,
+    SGDClassifier,
+)
+from sklearn.metrics import make_scorer, matthews_corrcoef
+from sklearn.model_selection import cross_val_score
+from sklearn.multiclass import _ConstantPredictor
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.preprocessing import LabelBinarizer
 from sklearn.ensemble import StackingClassifier
 from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, RidgeClassifier, SGDClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -30,12 +52,14 @@ from sklearn.model_selection import cross_val_score
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import make_scorer
 from sklearn.utils.extmath import softmax
+
 from sklearn.preprocessing import LabelBinarizer
 from scipy import optimize
 from scipy import special
 from joblib import Parallel, delayed
 from sklearn.multiclass import _ConstantPredictor
 import torch.optim as optim
+
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import warnings
@@ -72,7 +96,6 @@ class RidgeClassifierWithProba(RidgeClassifier):
 
 
 class FocalLoss:
-
     def __init__(self, gamma, alpha=None):
         self.alpha = alpha
         self.gamma = gamma
@@ -134,7 +157,6 @@ class FocalLoss:
 
 
 class OneVsRestLightGBMWithCustomizedLoss:
-
     def __init__(self, loss, n_jobs=4):
         self.loss = loss
         self.n_jobs = n_jobs
@@ -146,21 +168,22 @@ class OneVsRestLightGBMWithCustomizedLoss:
         Y = Y.tocsc()
         self.classes_ = self.label_binarizer_.classes_
         columns = (col.toarray().ravel() for col in Y.T)
-        if 'eval_set' in fit_params:
+        if "eval_set" in fit_params:
             # use eval_set for early stopping
-            X_val, y_val = fit_params['eval_set'][0]
+            X_val, y_val = fit_params["eval_set"][0]
             Y_val = self.label_binarizer_.transform(y_val)
             Y_val = Y_val.tocsc()
             columns_val = (col.toarray().ravel() for col in Y_val.T)
-            self.results_ = Parallel(n_jobs=self.n_jobs)(delayed(self._fit_binary)
-                                                         (X, column, X_val, column_val, **fit_params) for
-                                                         i, (column, column_val) in
-                                                         enumerate(zip(columns, columns_val)))
+            self.results_ = Parallel(n_jobs=self.n_jobs)(
+                delayed(self._fit_binary)(X, column, X_val, column_val, **fit_params)
+                for i, (column, column_val) in enumerate(zip(columns, columns_val))
+            )
         else:
             # eval set not available
-            self.results_ = Parallel(n_jobs=self.n_jobs)(delayed(self._fit_binary)
-                                                         (X, column, None, None, **fit_params) for i, column
-                                                         in enumerate(columns))
+            self.results_ = Parallel(n_jobs=self.n_jobs)(
+                delayed(self._fit_binary)(X, column, None, None, **fit_params)
+                for i, column in enumerate(columns)
+            )
 
         return self
 
@@ -170,6 +193,7 @@ class OneVsRestLightGBMWithCustomizedLoss:
         if len(unique_y) == 1:
             estimator = _ConstantPredictor().fit(X, unique_y)
         else:
+
             fit = lgb.Dataset(X, y, init_score=np.full_like(y, init_score_value, dtype=float))
             if 'eval_set' in fit_params:
                 val = lgb.Dataset(X_val, y_val, init_score=np.full_like(y_val, init_score_value, dtype=float),
@@ -216,7 +240,12 @@ class OneVsRestLightGBMWithCustomizedLoss:
         return y
 
 
-class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, OneVsRestLightGBMWithCustomizedLoss):
+class ClassificationModels(
+    postprocessing.FullPipeline,
+    Matthews,
+    FocalLoss,
+    OneVsRestLightGBMWithCustomizedLoss,
+):
     """
     This class stores all model training and prediction methods for classification tasks.
     This class stores all pipeline relevant information (inherited from cpu preprocessing).
@@ -225,30 +254,32 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     model training. The attributes "predicted_classes" and "predicted_probs" store dictionaries (model names are dictionary keys)
     with predicted classes and probabilities (classification tasks) while "predicted_values" stores regression based
     predictions. The attribute "evaluation_scores" keeps track of model evaluation metrics (in dictionary format).
+
     :param datasource: Expects a Pandas dataframe (containing the target feature as a column)
     :param target_variable: Name of the target feature's column within the datasource dataframe.
     :param date_columns: Date columns can be passed as lists additionally for respective preprocessing. If not provided
-    e2eml will try to detect datetime columns automatically. Date format is expected as YYYY-MM-DD anyway.
+        e2eml will try to detect datetime columns automatically. Date format is expected as YYYY-MM-DD anyway.
     :param categorical_columns: Categorical columns can be passed as lists additionally for respective preprocessing.
-    If not provided e2eml will try to detect categorical columns automatically.
+        If not provided e2eml will try to detect categorical columns automatically.
     :param nlp_columns: NLP columns can be passed specifically. This only makes sense, if the chosen blueprint runs under 'nlp' processing.
-    If NLP columns are not declared, categorical columns will be interpreted as such.
+        If NLP columns are not declared, categorical columns will be interpreted as such.
     :param unique_identifier: A unique identifier (i.e. an ID column) can be passed as well to preserve this information
-     for later processing.
+        for later processing.
     :param ml_task: Can be 'binary', 'multiclass' or 'regression'. On default will be determined automatically.
     :param preferred_training_mode: Must be 'cpu', if e2eml has been installed into an environment without LGBM and Xgboost on GPU.
-    Can be set to 'gpu', if LGBM and Xgboost have been installed with GPU support. The default 'auto' will detect GPU support
-    and optimize accordingly. (Default: 'auto'). Only TabNet can only run on GPU and will not be impacted from this parameter.
+        Can be set to 'gpu', if LGBM and Xgboost have been installed with GPU support. The default 'auto' will detect GPU support
+        and optimize accordingly. (Default: 'auto'). Only TabNet can only run on GPU and will not be impacted from this parameter.
     :param logging_file_path: Preferred location to save the log file. Will otherwise stored in the current folder.
     :param low_memory_mode: Adds a preprocessing feature to reduce dataframe memory footprint. Will lead to a loss in
-    model performance. Will be extended by further memory savings features in future releases.
-    However we highly recommend GPU usage to heavily decrease model training times.
+        model performance. Will be extended by further memory savings features in future releases.
+        However we highly recommend GPU usage to heavily decrease model training times.
     """
 
     def threshold_refiner(self, probs, targets, algorithm):
         """
         Loops through predicted class probabilities in binary contexts and measures performance with
         Matthew correlation.
+
         :param probs: Takes predicted class probabilities.
         :param targets: Takes actual targets.
         :return: Stores the best threshold as class attribute.
@@ -282,6 +313,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def logistic_regression_train(self):
         """
         Trains a simple Logistic regression classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task='Train logistic regression model')
@@ -303,9 +335,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def logistic_regression_predict(self, feat_importance=True, importance_alg='permutation'):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task='Predict with Logistic Regression')
@@ -366,39 +399,65 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         Trains a simple LGBM with focal loss classifier.
         :return: Trained model.
         """
-        self.get_current_timestamp(task='Train LGBM with focal loss model')
-        algorithm = 'lgbm_focal'
-        self.check_gpu_support(algorithm='lgbm')
+        self.get_current_timestamp(task="Train LGBM with focal loss model")
+        algorithm = "lgbm_focal"
+        self.check_gpu_support(algorithm="lgbm")
 
         if self.prediction_mode:
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
             fit_params = {'eval_set': [(X_test, Y_test)]}
             x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
             if self.class_problem == 'binary':
                 def objective(trial):
                     param = {
-                        'learning_rate': trial.suggest_loguniform('learning_rate', 0.01, 0.1),
-                        'num_leaves': trial.suggest_int('num_leaves', 2, 256),
-                        'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
-                        'alpha': trial.suggest_loguniform('alpha', 1e-3, 10),
-                        'gamma': trial.suggest_int('gamma', 1, 100),
-                        'verbose': -1
+                        "learning_rate": trial.suggest_loguniform(
+                            "learning_rate", 0.01, 0.1
+                        ),
+                        "num_leaves": trial.suggest_int("num_leaves", 2, 256),
+                        "num_boost_round": trial.suggest_int(
+                            "num_boost_round", 100, 50000
+                        ),
+                        "alpha": trial.suggest_loguniform("alpha", 1e-3, 10),
+                        "gamma": trial.suggest_int("gamma", 1, 100),
+                        "verbose": -1,
                     }
                     fl = FocalLoss(alpha=param["alpha"], gamma=param["gamma"])
-                    dtrain = lgb.Dataset(x_train, label=y_train, init_score=np.full_like(y_train, fl.init_score(y_train), dtype=float))
-                    dtest = lgb.Dataset(X_test, label=Y_test, init_score=np.full_like(Y_test, fl.init_score(y_train), dtype=float),
-                                        reference=dtrain)
+                    dtrain = lgb.Dataset(
+                        x_train,
+                        label=y_train,
+                        init_score=np.full_like(
+                            y_train, fl.init_score(y_train), dtype=float
+                        ),
+                    )
+                    dtest = lgb.Dataset(  # noqa: F841
+                        X_test,
+                        label=Y_test,
+                        init_score=np.full_like(
+                            Y_test, fl.init_score(y_train), dtype=float
+                        ),
+                        reference=dtrain,
+                    )
 
-                    result = lgb.cv(param, train_set=dtrain,  nfold=10, num_boost_round=param['num_boost_round'],
-                                    early_stopping_rounds=10, seed=42,  fobj=fl.lgb_obj, feval=fl.lgb_eval,
-                                    verbose_eval=False)
+                    result = lgb.cv(
+                        param,
+                        train_set=dtrain,
+                        nfold=10,
+                        num_boost_round=param["num_boost_round"],
+                        early_stopping_rounds=10,
+                        seed=42,
+                        fobj=fl.lgb_obj,
+                        feval=fl.lgb_eval,
+                        verbose_eval=False,
+                    )
                     avg_result = np.mean(np.array(result["focal_loss-mean"]))
                     return avg_result
 
             else:
+
                 def objective(trial):
                     param = {
                         'alpha': trial.suggest_loguniform('alpha', 1e-3, 10),
@@ -424,11 +483,18 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
                     return final_cv_score
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
 
-
-                study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-                study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+                study = optuna.create_study(
+                    direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+                )
+                study.optimize(
+                    objective,
+                    n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                    timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                    gc_after_trial=True,
+                    show_progress_bar=True,
+                )
                 self.optuna_studies[f"{algorithm}"] = {}
             else:
                 study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
@@ -452,17 +518,26 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
             except Exception:
                 pass
 
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
                 best_parameters = study.best_trial.params
-                fl = FocalLoss(alpha=best_parameters["alpha"], gamma=best_parameters["gamma"])
+                fl = FocalLoss(
+                    alpha=best_parameters["alpha"], gamma=best_parameters["gamma"]
+                )
                 try:
                     X_train = X_train.drop(self.target_variable, axis=1)
                 except Exception:
                     pass
                 Dtrain = lgb.Dataset(X_train, label=Y_train)
                 Dtest = lgb.Dataset(X_test, label=Y_test)
-                model = lgb.train(best_parameters, Dtrain, valid_sets=[Dtrain, Dtest], valid_names=['train', 'valid'],
-                                  early_stopping_rounds=10, fobj=fl.lgb_obj, feval=fl.lgb_eval)
+                model = lgb.train(
+                    best_parameters,
+                    Dtrain,
+                    valid_sets=[Dtrain, Dtest],
+                    valid_names=["train", "valid"],
+                    early_stopping_rounds=10,
+                    fobj=fl.lgb_obj,
+                    feval=fl.lgb_eval,
+                )
 
                 self.preprocess_decisions["focal_init_score"] = fl.init_score(Y_train)
                 self.trained_models[f"{algorithm}"] = {}
@@ -472,7 +547,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
                 return self.trained_models
             else:
                 best_parameters = study.best_trial.params
-                loss = FocalLoss(alpha=best_parameters["alpha"], gamma=best_parameters["gamma"])
+                loss = FocalLoss(
+                    alpha=best_parameters["alpha"], gamma=best_parameters["gamma"]
+                )
                 model = OneVsRestLightGBMWithCustomizedLoss(loss=loss)
                 model.fit(X_train, Y_train, **fit_params)
                 self.trained_models[f"{algorithm}"] = {}
@@ -481,7 +558,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
                 _ = gc.collect()
                 return self.trained_models
 
-    def lgbm_focal_predict(self, feat_importance=True, importance_alg='SHAP'):
+    def lgbm_focal_predict(self, feat_importance=True, importance_alg="SHAP"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -489,14 +566,19 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with LGBM with focal loss')
-        algorithm = 'lgbm_focal'
+        self.get_current_timestamp(task="Predict with LGBM with focal loss")
+        algorithm = "lgbm_focal"
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
                 fl_init_score = self.preprocess_decisions["focal_init_score"]
-                predicted_probs = special.expit(fl_init_score + model.predict(self.dataframe))
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                predicted_probs = special.expit(
+                    fl_init_score + model.predict(self.dataframe)
+                )
+                predicted_classes = (
+                    predicted_probs
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
+                )
             else:
                 predicted_probs = model.predict(self.dataframe)
                 predicted_classes = predicted_probs
@@ -507,11 +589,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
                 fl_init_score = self.preprocess_decisions["focal_init_score"]
                 predicted_probs = special.expit(fl_init_score + model.predict(X_test))
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                predicted_classes = (
+                    predicted_probs
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
+                )
             else:
                 predicted_probs = model.predict(X_test)
                 predicted_classes = predicted_probs
@@ -526,6 +611,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def quadratic_discriminant_analysis_train(self):
         """
         Trains a simple Quadratic Discriminant model.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train Quadratic Discriminant model")
@@ -546,9 +632,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with Quadratic Discriminant Analysis")
@@ -630,6 +717,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def ridge_classifier_train(self):
         """
         Trains a simple ridge regression classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train Ridge classifier model")
@@ -719,9 +807,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with Ridge classifier")
@@ -795,6 +884,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def svm_train(self):
         """
         Trains a simple Support Vector Machine classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train Support Vector Machine classifier model")
@@ -883,9 +973,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def svm_predict(self, feat_importance=True, importance_alg="permutation"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(
@@ -1107,6 +1198,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def sgd_classifier_train(self):
         """
         Trains a simple sgd classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train SGD classifier model")
@@ -1209,9 +1301,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with SGD classifier")
@@ -1285,6 +1378,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def catboost_train(self):
         """
         Trains a Ridge regression model.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train catboost regression model")
@@ -1391,9 +1485,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def catboost_predict(self, feat_importance=True, importance_alg="permutation"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with catboost regression")
@@ -1466,6 +1561,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def tabnet_train(self):
         """
         Trains a simple Linear regression classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train Tabnet classification model")
@@ -1743,9 +1839,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def tabnet_predict(self):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with Tabnet classification")
@@ -1797,6 +1894,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def vowpal_wabbit_train(self):
         """
         Trains a simple Logistic regression classifier.
+
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train Vowpal Wabbit model")
@@ -1815,9 +1913,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def vowpal_wabbit_predict(self, feat_importance=True, importance_alg="permutation"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with Vowpal Wabbit")
@@ -1901,11 +2000,12 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     ):
         """
         Trains an XGboost model by the given parameters.
+
         :param param: Takes a dictionary with custom parameter settings.
         :param steps: Integer higher than 0. Defines maximum training steps, iuf not in autotune mode.
         :param autotune: Set "True" for automatic hyperparameter optimization. (Default: true)
         :param tune_mode: 'Simple' for simple 80-20 split validation. 'Accurate': Each hyperparameter set will be validated
-        with 5-fold crossvalidation. Longer runtimes, but higher performance. (Default: 'Accurate')
+            with 5-fold crossvalidation. Longer runtimes, but higher performance. (Default: 'Accurate')
         """
         self.get_current_timestamp(task="Train Xgboost")
         self.check_gpu_support(algorithm="xgboost")
@@ -2332,6 +2432,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def xgboost_predict(self, feat_importance=True, importance_alg="auto"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated based on SHAP values.
         :return: Updates class attributes.
         """
@@ -2427,10 +2528,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def lgbm_train(self, tune_mode="accurate", gpu_use_dp=True):  # noqa: C901
         """
         Trains an LGBM model by the given parameters.
+
         :param tune_mode: 'Simple' for simple 80-20 split validation. 'Accurate': Each hyperparameter set will be validated
-        with 10-fold cross validation. Longer runtimes, but higher performance. (Default: 'Accurate')
+            with 10-fold cross validation. Longer runtimes, but higher performance. (Default: 'Accurate')
         :param gpu_use_dp: If True and when GPU accelerated, LGBM will use bigger floats for higher accuracy, but at the
-        cost of longer runtimes (Default: True)
+            cost of longer runtimes (Default: True)
         """
         self.get_current_timestamp(task="Train LGBM")
         self.check_gpu_support(algorithm="lgbm")
@@ -2731,6 +2833,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def lgbm_predict(self, feat_importance=True, importance_alg="auto"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated based on SHAP values.
         :return: Updates class attributes.
         """
@@ -2815,6 +2918,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         """
         Trains an sklearn stacking classifier ensemble. Will automatically test different stacked classifier combinations.
         Expect very long runtimes due to CPU usage.
+
         :return: Updates class attributes by its predictions.
         """
         self.get_current_timestamp(task="Train sklearn ensemble")
@@ -3099,9 +3203,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     ):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with sklearn ensemble")
@@ -3188,6 +3293,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def ngboost_train(self, tune_mode="accurate"):  # noqa: C901
         """
         Trains an Ngboost regressor.
+
         :return: Updates class attributes by its predictions.
         """
         self.get_current_timestamp(task="Train Ngboost")
@@ -3382,9 +3488,10 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     def ngboost_predict(self, feat_importance=True, importance_alg="SHAP"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
+
         :param feat_importance: Set True, if feature importance shall be calculated.
         :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
-        GPU acceleration). (Default: 'permutation')
+            GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
         self.get_current_timestamp(task="Predict with Ngboost")

@@ -460,7 +460,6 @@ class PreProcessing:
             "final_pca_dimensionality_reduction": 2 * 60 * 60,
         }
 
-
         self.feature_selection_sample_size = 100000
         self.hyperparameter_tuning_sample_size = 10000
         self.brute_force_selection_sample_size = 15000
