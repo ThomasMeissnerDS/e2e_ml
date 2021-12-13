@@ -8,6 +8,23 @@ a few lines of code.
 
 ![Header image](header.png)
 
+## Contents
+
+<!-- toc -->
+
+* [Installation](#installation)
+* [Usage example](#usage-example)
+* [Linting and Pre-Commit](#linting-and-pre-commit)
+* [Disclaimer](#disclaimer)
+* [Development](#development)
+  * [Adding or Removing Dependencies](#adding-or-removing-dependencies)
+  * [Building and Publishing](#building-and-publishing)
+  * [Documentation](#documentation)
+* [Release History](#release-history)
+* [Meta](#meta)
+
+<!-- tocstop -->
+
 ## Installation
 
 From PyPI:
