@@ -1,6 +1,8 @@
 # e2e ML
 
+
 > An end to end solution for automl. .
+
 
 Pass in your data, add some information about it and get a full pipelines in
 return. Data preprocessing, feature creation, modelling and evaluation with just
@@ -306,6 +308,48 @@ blueprints. e2e-ml blueprints contain:
 
 This comes at the cost of runtime. Depending on your data we recommend strong
 hardware.
+
+# Development
+
+This project uses [poetry](https://python-poetry.org/).
+
+## Installation
+
+To install the project for development, run:
+
+```sh
+poetry install
+```
+
+This will install all dependencies and development dependencies into a virtual
+environment.
+
+## Adding or Removing Dependencies
+
+To add or remove a dependency, use `poetry add <package>` or
+`poetry remove <package>` respectively. Use the `--dev` flag for development
+dependencies.
+
+## Building and Publishing
+
+To build and publish the project, run
+
+```sh
+poetry publish --build
+```
+
+
+# Disclaimer
+e2e is not designed to quickly iterate over several algorithms and suggest you the best. It is made to deliver
+state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contain:
+- preprocessing (outlier, rare feature, datetime, categorical and NLP handling)
+- feature creation (binning, clustering, categorical and NLP features)
+- automated feature selection
+- model training (with crossfold validation)
+- automated hyperparameter tuning
+- model evaluation
+  This comes at the cost of runtime. Depending on your data we recommend strong hardware.
+
 
 ## Release History
 
