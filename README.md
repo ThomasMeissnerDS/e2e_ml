@@ -1,5 +1,5 @@
 # e2e ML
-> An end to end solution for automl. .
+> An end to end solution for automl.
 
 Pass in your data, add some information about it and get a full pipelines in return. Data preprocessing,
 feature creation, modelling and evaluation with just a few lines of code.
@@ -39,7 +39,8 @@ instead.
 ## Usage example
 
 e2e has been designed to create state-of-the-art machine learning pipelines with a few lines of code. Basic example of usage:
-```sh
+
+```python
 import e2eml
 from e2eml.classification import classification_blueprints
 import pandas as pd
@@ -252,6 +253,37 @@ loaded_test_class.ml_bp01_multiclass_full_processing_xgb_prob(holdout_df)
 # predictions can be accessed via a class attribute
 print(churn_class.predicted_classes['xgboost'])
 ```
+
+# Development
+
+This project uses [poetry](https://python-poetry.org/).
+
+## Installation
+
+To install the project for development, run:
+
+```sh
+poetry install
+```
+
+This will install all dependencies and development dependencies into a virtual
+environment.
+
+## Adding or Removing Dependencies
+
+To add or remove a dependency, use `poetry add <package>` or
+`poetry remove <package>` respectively. Use the `--dev` flag for development
+dependencies.
+
+## Building and Publishing
+
+To build and publish the project, run
+
+```sh
+poetry publish --build
+```
+
+
 # Disclaimer
 e2e is not designed to quickly iterate over several algorithms and suggest you the best. It is made to deliver
 state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contain:
@@ -390,4 +422,3 @@ Consultant: Gabriel Stephen Alexander – [Github](https://github.com/bitsofstev
 
 
 [e2e-ml Github repository](https://github.com/ThomasMeissnerDS/e2e_ml)
-
