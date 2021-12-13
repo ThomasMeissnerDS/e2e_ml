@@ -1,56 +1,46 @@
-import gc
-import logging
-import warnings
-
-import lightgbm as lgb
-import matplotlib.pyplot as plt
+from e2eml.full_processing import postprocessing
+import pandas as pd
+from pandas.core.common import SettingWithCopyWarning
 import numpy as np
 import optuna
-import pandas as pd
 import xgboost as xgb
-from catboost import CatBoostClassifier, Pool
+import lightgbm as lgb
 from lightgbm import LGBMClassifier
 from ngboost import NGBClassifier
+from vowpalwabbit.sklearn_vw import VWClassifier
 from ngboost.distns import k_categorical
-from pandas.core.common import SettingWithCopyWarning
-from pytorch_tabnet.metrics import Metric
-from pytorch_tabnet.pretraining import TabNetPretrainer
-from pytorch_tabnet.tab_model import TabNetClassifier
-from scipy import optimize, special
+from catboost import CatBoostClassifier, cv, Pool
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
-from sklearn.ensemble import (
-    AdaBoostClassifier,
-    GradientBoostingClassifier,
-    GradientBoostingRegressor,
-    RandomForestClassifier,
-    StackingClassifier,
-)
-from sklearn.inspection import permutation_importance
-from sklearn.linear_model import (
-    LogisticRegression,
-    LogisticRegressionCV,
-    RidgeClassifier,
-    SGDClassifier,
-)
-from sklearn.metrics import make_scorer, matthews_corrcoef
-from sklearn.model_selection import cross_val_score
-from sklearn.naive_bayes import MultinomialNB
+from sklearn.ensemble import StackingClassifier
+from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, RidgeClassifier, SGDClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.naive_bayes import MultinomialNB
+from pytorch_tabnet.tab_model import TabNetClassifier
+from pytorch_tabnet.pretraining import TabNetPretrainer
+from pytorch_tabnet.metrics import Metric
+from sklearn.metrics import matthews_corrcoef
 from sklearn.utils import class_weight
+from sklearn.model_selection import cross_val_score
+from sklearn.inspection import permutation_importance
+from sklearn.metrics import make_scorer
 from sklearn.utils.extmath import softmax
-
 from sklearn.preprocessing import LabelBinarizer
 from scipy import optimize
 from scipy import special
 from joblib import Parallel, delayed
 from sklearn.multiclass import _ConstantPredictor
 import torch.optim as optim
-
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from vowpalwabbit.sklearn_vw import VWClassifier
-
-from e2eml.full_processing import postprocessing
+import matplotlib.pyplot as plt
+import warnings
+import logging
+import gc
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
@@ -123,7 +113,9 @@ class FocalLoss:
 
     def init_score(self, y_true):
         res = optimize.minimize_scalar(
-            lambda p: self(y_true, p).sum(), bounds=(0, 1), method="bounded"
+            lambda p: self(y_true, p).sum(),
+            bounds=(0, 1),
+            method='bounded'
         )
         p = res.x
         log_odds = np.log(p / (1 - p))
@@ -138,12 +130,12 @@ class FocalLoss:
         y = train_data.get_label()
         p = special.expit(preds)
         is_higher_better = False
-        return "focal_loss", self(y, p).mean(), is_higher_better
+        return 'focal_loss', self(y, p).mean(), is_higher_better
 
 
 class OneVsRestLightGBMWithCustomizedLoss:
 
-    def __init__(self, loss, n_jobs=3):
+    def __init__(self, loss, n_jobs=4):
         self.loss = loss
         self.n_jobs = n_jobs
 
@@ -181,7 +173,7 @@ class OneVsRestLightGBMWithCustomizedLoss:
             fit = lgb.Dataset(X, y, init_score=np.full_like(y, init_score_value, dtype=float))
             if 'eval_set' in fit_params:
                 val = lgb.Dataset(X_val, y_val, init_score=np.full_like(y_val, init_score_value, dtype=float),
-                                  reference=fit)
+                                  reference=fit, silent=True)
 
                 estimator = lgb.train(params=fit_params,
                                       train_set=fit,
@@ -190,13 +182,13 @@ class OneVsRestLightGBMWithCustomizedLoss:
                                       early_stopping_rounds=10,
                                       fobj=self.loss.lgb_obj,
                                       feval=self.loss.lgb_eval,
-                                      verbose_eval=10)
+                                      verbose_eval=False)
             else:
                 estimator = lgb.train(params=fit_params,
                                       train_set=fit,
                                       fobj=self.loss.lgb_obj,
                                       feval=self.loss.lgb_eval,
-                                      verbose_eval=10)
+                                      verbose_eval=False)
 
         return estimator, init_score_value
 
@@ -265,7 +257,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         if "probability_threshold" in self.preprocess_decisions:
             pass
         else:
-            self.preprocess_decisions["probability_threshold"] = {}
+            self.preprocess_decisions[f"probability_threshold"] = {}
 
         loop_spots = np.linspace(0, 1, 100, endpoint=False)
         max_matthew = 0
@@ -284,16 +276,16 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
             if matthews > max_matthew:
                 max_matthew = matthews
                 best_threshold = iteration
-        self.preprocess_decisions["probability_threshold"][algorithm] = best_threshold
-        return self.preprocess_decisions["probability_threshold"][algorithm]
+        self.preprocess_decisions[f"probability_threshold"][algorithm] = best_threshold
+        return self.preprocess_decisions[f"probability_threshold"][algorithm]
 
     def logistic_regression_train(self):
         """
         Trains a simple Logistic regression classifier.
         :return: Trained model.
         """
-        self.get_current_timestamp(task="Train logistic regression model")
-        algorithm = "logistic_regression"
+        self.get_current_timestamp(task='Train logistic regression model')
+        algorithm = 'logistic_regression'
         if self.prediction_mode:
             pass
         else:
@@ -301,18 +293,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
             try:
                 model = LogisticRegression(random_state=0).fit(X_train, Y_train)
             except AttributeError:
-                model = LogisticRegression(random_state=0, solver="liblinear").fit(
-                    X_train, Y_train
-                )
+                model = LogisticRegression(random_state=0, solver='liblinear').fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
             _ = gc.collect()
             return self.trained_models
 
-    def logistic_regression_predict(
-        self, feat_importance=True, importance_alg="permutation"
-    ):
+    def logistic_regression_predict(self, feat_importance=True, importance_alg='permutation'):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -320,22 +308,17 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task="Predict with Logistic Regression")
-        algorithm = "logistic_regression"
+        self.get_current_timestamp(task='Predict with Logistic Regression')
+        algorithm = 'logistic_regression'
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
             partial_probs = model.predict_proba(self.dataframe)
-            if self.class_problem == "binary":
+            if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
-                predicted_classes = (
-                    predicted_probs
-                    > self.preprocess_decisions["probability_threshold"][algorithm]
-                )
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_probs = partial_probs
-                predicted_classes = np.asarray(
-                    [np.argmax(line) for line in predicted_probs]
-                )
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
             self.predicted_probs[f"{algorithm}"] = {}
             self.predicted_classes[f"{algorithm}"] = {}
             self.predicted_probs[f"{algorithm}"] = predicted_probs
@@ -344,43 +327,25 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             partial_probs = model.predict_proba(X_test)
-            if self.class_problem == "binary":
+            if self.class_problem == 'binary':
                 predicted_probs = np.asarray([line[1] for line in partial_probs])
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
-                predicted_classes = (
-                    predicted_probs
-                    > self.preprocess_decisions["probability_threshold"][algorithm]
-                )
+                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
             else:
                 predicted_probs = partial_probs
-                predicted_classes = np.asarray(
-                    [np.argmax(line) for line in predicted_probs]
-                )
+                predicted_classes = np.asarray([np.argmax(line) for line in predicted_probs])
 
-            if feat_importance and importance_alg == "SHAP":
-                self.runtime_warnings(warn_about="shap_cpu")
+            if feat_importance and importance_alg == 'SHAP':
+                self.runtime_warnings(warn_about='shap_cpu')
                 try:
-                    self.shap_explanations(
-                        model=model,
-                        test_df=X_test.sample(10000, random_state=42),
-                        cols=X_test.columns,
-                    )
+                    self.shap_explanations(model=model, test_df=X_test.sample(10000, random_state=42),
+                                           cols=X_test.columns)
                 except Exception:
-                    self.shap_explanations(
-                        model=model, test_df=X_test, cols=X_test.columns
-                    )
-            elif feat_importance and importance_alg == "permutation":
+                    self.shap_explanations(model=model, test_df=X_test, cols=X_test.columns)
+            elif feat_importance and importance_alg == 'permutation':
                 result = permutation_importance(
-                    model,
-                    X_test,
-                    Y_test.astype(int),
-                    n_repeats=10,
-                    random_state=42,
-                    n_jobs=-1,
-                )
-                permutation_importances = pd.Series(
-                    result.importances_mean, index=X_test.columns
-                )
+                    model, X_test, Y_test.astype(int), n_repeats=10, random_state=42, n_jobs=-1)
+                permutation_importances = pd.Series(result.importances_mean, index=X_test.columns)
                 fig, ax = plt.subplots()
                 permutation_importances.plot.bar(yerr=result.importances_std, ax=ax)
                 ax.set_title("Feature importances using permutation on full model")
@@ -410,13 +375,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             fit_params = {'eval_set': [(X_test, Y_test)]}
-
             x_train, y_train = self.get_hyperparameter_tuning_sample_df()
-
-            try:
-                x_train = x_train.drop(self.target_variable, axis=1)
-            except Exception:
-                pass
 
             if self.class_problem == 'binary':
                 def objective(trial):
@@ -444,17 +403,25 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
                     param = {
                         'alpha': trial.suggest_loguniform('alpha', 1e-3, 10),
                         'gamma': trial.suggest_int('gamma', 1, 100),
+                        'num_boost_round': trial.suggest_int('num_boost_round', 100, 1000),
+                        'verbose': -1,
+                        'learning_rate': trial.suggest_loguniform('learning_rate', 0.01, 0.1),
                     }
                     loss = FocalLoss(alpha=param["alpha"], gamma=param["gamma"])
                     model = OneVsRestLightGBMWithCustomizedLoss(loss=loss)
 
-                    try:
-                        model.fit(x_train, y_train, **fit_params)
-                        y_pred = model.predict(X_test)
-                        mae = matthews_corrcoef(Y_test, y_pred)
-                    except Exception:
-                        mae = 0
-                    return mae
+                    scores = []
+                    for fold in range(5):
+                        try:
+                            x_train, y_train = self.get_hyperparameter_tuning_sample_df()
+                            model.fit(x_train, y_train, **fit_params)
+                            y_pred = model.predict(X_test)
+                            mae = matthews_corrcoef(Y_test, y_pred)
+                        except Exception:
+                            mae = 0
+                        scores.append(mae)
+                    final_cv_score = np.mean(np.array(scores))
+                    return final_cv_score
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
             if self.class_problem == 'binary':
@@ -464,11 +431,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
                 study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
                 self.optuna_studies[f"{algorithm}"] = {}
             else:
-                study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm}")
+                study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
                 study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
                 self.optuna_studies[f"{algorithm}"] = {}
-            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
-            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+                # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+                # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
 
                 try:
                     fig = optuna.visualization.plot_optimization_history(study)
