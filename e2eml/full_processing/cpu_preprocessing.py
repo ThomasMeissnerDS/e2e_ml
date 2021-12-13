@@ -8,11 +8,6 @@ import warnings
 import dill as pickle
 import lightgbm
 import lightgbm as lgb
-from pandas.core.common import SettingWithCopyWarning
-from sklearn import model_selection
-from sklearn.linear_model import BayesianRidge, Ridge
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import TimeSeriesSplit
 import numpy as np
 import optuna
 import pandas as pd
@@ -463,7 +458,6 @@ class PreProcessing:
             "final_kernel_pca_dimensionality_reduction": 4 * 60 * 60,
             "final_pca_dimensionality_reduction": 2 * 60 * 60,
         }
-
 
         self.feature_selection_sample_size = 100000
         self.hyperparameter_tuning_sample_size = 10000

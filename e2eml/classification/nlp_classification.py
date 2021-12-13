@@ -80,7 +80,7 @@ class NlpModel(
     model training. The attributes "predicted_classes" and "predicted_probs" store dictionaries (model names are dictionary keys)
     with predicted classes and probabilities (classification tasks) while "predicted_values" stores regression based
     predictions. The attribute "evaluation_scores" keeps track of model evaluation metrics (in dictionary format).
-    
+
     :param datasource: Expects a Pandas dataframe (containing the target feature as a column)
     :param target_variable: Name of the target feature's column within the datasource dataframe.
     :param date_columns: Date columns can be passed as lists additionally for respective preprocessing. If not provided
@@ -99,7 +99,7 @@ class NlpModel(
         model performance. Will be extended by further memory savings features in future releases.
         However we highly recommend GPU usage to heavily decrease model training times.
     """
-    
+
     def create_train_dataset(self):
         logging.info("Create NLP train dataset.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")

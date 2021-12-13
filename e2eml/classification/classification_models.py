@@ -9,6 +9,7 @@ import optuna
 import pandas as pd
 import xgboost as xgb
 from catboost import CatBoostClassifier, Pool
+from joblib import Parallel, delayed
 from lightgbm import LGBMClassifier
 from ngboost import NGBClassifier
 from ngboost.distns import k_categorical
@@ -34,19 +35,13 @@ from sklearn.linear_model import (
 )
 from sklearn.metrics import make_scorer, matthews_corrcoef
 from sklearn.model_selection import cross_val_score
+from sklearn.multiclass import _ConstantPredictor
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.preprocessing import LabelBinarizer
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.utils import class_weight
 from sklearn.utils.extmath import softmax
-
-from sklearn.preprocessing import LabelBinarizer
-from scipy import optimize
-from scipy import special
-from joblib import Parallel, delayed
-from sklearn.multiclass import _ConstantPredictor
-import torch.optim as optim
-
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from vowpalwabbit.sklearn_vw import VWClassifier
 
@@ -82,7 +77,6 @@ class RidgeClassifierWithProba(RidgeClassifier):
 
 
 class FocalLoss:
-
     def __init__(self, gamma, alpha=None):
         self.alpha = alpha
         self.gamma = gamma
@@ -142,7 +136,6 @@ class FocalLoss:
 
 
 class OneVsRestLightGBMWithCustomizedLoss:
-
     def __init__(self, loss, n_jobs=3):
         self.loss = loss
         self.n_jobs = n_jobs
@@ -154,21 +147,22 @@ class OneVsRestLightGBMWithCustomizedLoss:
         Y = Y.tocsc()
         self.classes_ = self.label_binarizer_.classes_
         columns = (col.toarray().ravel() for col in Y.T)
-        if 'eval_set' in fit_params:
+        if "eval_set" in fit_params:
             # use eval_set for early stopping
-            X_val, y_val = fit_params['eval_set'][0]
+            X_val, y_val = fit_params["eval_set"][0]
             Y_val = self.label_binarizer_.transform(y_val)
             Y_val = Y_val.tocsc()
             columns_val = (col.toarray().ravel() for col in Y_val.T)
-            self.results_ = Parallel(n_jobs=self.n_jobs)(delayed(self._fit_binary)
-                                                         (X, column, X_val, column_val, **fit_params) for
-                                                         i, (column, column_val) in
-                                                         enumerate(zip(columns, columns_val)))
+            self.results_ = Parallel(n_jobs=self.n_jobs)(
+                delayed(self._fit_binary)(X, column, X_val, column_val, **fit_params)
+                for i, (column, column_val) in enumerate(zip(columns, columns_val))
+            )
         else:
             # eval set not available
-            self.results_ = Parallel(n_jobs=self.n_jobs)(delayed(self._fit_binary)
-                                                         (X, column, None, None, **fit_params) for i, column
-                                                         in enumerate(columns))
+            self.results_ = Parallel(n_jobs=self.n_jobs)(
+                delayed(self._fit_binary)(X, column, None, None, **fit_params)
+                for i, column in enumerate(columns)
+            )
 
         return self
 
@@ -178,25 +172,35 @@ class OneVsRestLightGBMWithCustomizedLoss:
         if len(unique_y) == 1:
             estimator = _ConstantPredictor().fit(X, unique_y)
         else:
-            fit = lgb.Dataset(X, y, init_score=np.full_like(y, init_score_value, dtype=float))
-            if 'eval_set' in fit_params:
-                val = lgb.Dataset(X_val, y_val, init_score=np.full_like(y_val, init_score_value, dtype=float),
-                                  reference=fit)
+            fit = lgb.Dataset(
+                X, y, init_score=np.full_like(y, init_score_value, dtype=float)
+            )
+            if "eval_set" in fit_params:
+                val = lgb.Dataset(
+                    X_val,
+                    y_val,
+                    init_score=np.full_like(y_val, init_score_value, dtype=float),
+                    reference=fit,
+                )
 
-                estimator = lgb.train(params=fit_params,
-                                      train_set=fit,
-                                      valid_sets=(fit, val),
-                                      valid_names=('fit', 'val'),
-                                      early_stopping_rounds=10,
-                                      fobj=self.loss.lgb_obj,
-                                      feval=self.loss.lgb_eval,
-                                      verbose_eval=10)
+                estimator = lgb.train(
+                    params=fit_params,
+                    train_set=fit,
+                    valid_sets=(fit, val),
+                    valid_names=("fit", "val"),
+                    early_stopping_rounds=10,
+                    fobj=self.loss.lgb_obj,
+                    feval=self.loss.lgb_eval,
+                    verbose_eval=10,
+                )
             else:
-                estimator = lgb.train(params=fit_params,
-                                      train_set=fit,
-                                      fobj=self.loss.lgb_obj,
-                                      feval=self.loss.lgb_eval,
-                                      verbose_eval=10)
+                estimator = lgb.train(
+                    params=fit_params,
+                    train_set=fit,
+                    fobj=self.loss.lgb_obj,
+                    feval=self.loss.lgb_eval,
+                    verbose_eval=10,
+                )
 
         return estimator, init_score_value
 
@@ -224,7 +228,12 @@ class OneVsRestLightGBMWithCustomizedLoss:
         return y
 
 
-class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, OneVsRestLightGBMWithCustomizedLoss):
+class ClassificationModels(
+    postprocessing.FullPipeline,
+    Matthews,
+    FocalLoss,
+    OneVsRestLightGBMWithCustomizedLoss,
+):
     """
     This class stores all model training and prediction methods for classification tasks.
     This class stores all pipeline relevant information (inherited from cpu preprocessing).
@@ -233,7 +242,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
     model training. The attributes "predicted_classes" and "predicted_probs" store dictionaries (model names are dictionary keys)
     with predicted classes and probabilities (classification tasks) while "predicted_values" stores regression based
     predictions. The attribute "evaluation_scores" keeps track of model evaluation metrics (in dictionary format).
-    
+
     :param datasource: Expects a Pandas dataframe (containing the target feature as a column)
     :param target_variable: Name of the target feature's column within the datasource dataframe.
     :param date_columns: Date columns can be passed as lists additionally for respective preprocessing. If not provided
@@ -405,15 +414,15 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         Trains a simple LGBM with focal loss classifier.
         :return: Trained model.
         """
-        self.get_current_timestamp(task='Train LGBM with focal loss model')
-        algorithm = 'lgbm_focal'
-        self.check_gpu_support(algorithm='lgbm')
+        self.get_current_timestamp(task="Train LGBM with focal loss model")
+        algorithm = "lgbm_focal"
+        self.check_gpu_support(algorithm="lgbm")
 
         if self.prediction_mode:
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            fit_params = {'eval_set': [(X_test, Y_test)]}
+            fit_params = {"eval_set": [(X_test, Y_test)]}
 
             x_train, y_train = self.get_hyperparameter_tuning_sample_df()
 
@@ -422,32 +431,58 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
             except Exception:
                 pass
 
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
+
                 def objective(trial):
                     param = {
-                        'learning_rate': trial.suggest_loguniform('learning_rate', 0.01, 0.1),
-                        'num_leaves': trial.suggest_int('num_leaves', 2, 256),
-                        'num_boost_round': trial.suggest_int('num_boost_round', 100, 50000),
-                        'alpha': trial.suggest_loguniform('alpha', 1e-3, 10),
-                        'gamma': trial.suggest_int('gamma', 1, 100),
-                        'verbose': -1
+                        "learning_rate": trial.suggest_loguniform(
+                            "learning_rate", 0.01, 0.1
+                        ),
+                        "num_leaves": trial.suggest_int("num_leaves", 2, 256),
+                        "num_boost_round": trial.suggest_int(
+                            "num_boost_round", 100, 50000
+                        ),
+                        "alpha": trial.suggest_loguniform("alpha", 1e-3, 10),
+                        "gamma": trial.suggest_int("gamma", 1, 100),
+                        "verbose": -1,
                     }
                     fl = FocalLoss(alpha=param["alpha"], gamma=param["gamma"])
-                    dtrain = lgb.Dataset(x_train, label=y_train, init_score=np.full_like(y_train, fl.init_score(y_train), dtype=float))
-                    dtest = lgb.Dataset(X_test, label=Y_test, init_score=np.full_like(Y_test, fl.init_score(y_train), dtype=float),
-                                        reference=dtrain)
+                    dtrain = lgb.Dataset(
+                        x_train,
+                        label=y_train,
+                        init_score=np.full_like(
+                            y_train, fl.init_score(y_train), dtype=float
+                        ),
+                    )
+                    dtest = lgb.Dataset(  # noqa: F841
+                        X_test,
+                        label=Y_test,
+                        init_score=np.full_like(
+                            Y_test, fl.init_score(y_train), dtype=float
+                        ),
+                        reference=dtrain,
+                    )
 
-                    result = lgb.cv(param, train_set=dtrain,  nfold=10, num_boost_round=param['num_boost_round'],
-                                    early_stopping_rounds=10, seed=42,  fobj=fl.lgb_obj, feval=fl.lgb_eval,
-                                    verbose_eval=False)
+                    result = lgb.cv(
+                        param,
+                        train_set=dtrain,
+                        nfold=10,
+                        num_boost_round=param["num_boost_round"],
+                        early_stopping_rounds=10,
+                        seed=42,
+                        fobj=fl.lgb_obj,
+                        feval=fl.lgb_eval,
+                        verbose_eval=False,
+                    )
                     avg_result = np.mean(np.array(result["focal_loss-mean"]))
                     return avg_result
 
             else:
+
                 def objective(trial):
                     param = {
-                        'alpha': trial.suggest_loguniform('alpha', 1e-3, 10),
-                        'gamma': trial.suggest_int('gamma', 1, 100),
+                        "alpha": trial.suggest_loguniform("alpha", 1e-3, 10),
+                        "gamma": trial.suggest_int("gamma", 1, 100),
                     }
                     loss = FocalLoss(alpha=param["alpha"], gamma=param["gamma"])
                     model = OneVsRestLightGBMWithCustomizedLoss(loss=loss)
@@ -461,18 +496,33 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
                     return mae
 
             sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
 
-
-                study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-                study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+                study = optuna.create_study(
+                    direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+                )
+                study.optimize(
+                    objective,
+                    n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                    timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                    gc_after_trial=True,
+                    show_progress_bar=True,
+                )
                 self.optuna_studies[f"{algorithm}"] = {}
             else:
-                study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm}")
-                study.optimize(objective, n_trials=self.hyperparameter_tuning_rounds[algorithm], timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm], gc_after_trial=True, show_progress_bar=True)
+                study = optuna.create_study(
+                    direction="minimize", sampler=sampler, study_name=f"{algorithm}"
+                )
+                study.optimize(
+                    objective,
+                    n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                    timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                    gc_after_trial=True,
+                    show_progress_bar=True,
+                )
                 self.optuna_studies[f"{algorithm}"] = {}
-            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
-            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+                # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+                # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
 
                 try:
                     fig = optuna.visualization.plot_optimization_history(study)
@@ -489,17 +539,26 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
             except Exception:
                 pass
 
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
                 best_parameters = study.best_trial.params
-                fl = FocalLoss(alpha=best_parameters["alpha"], gamma=best_parameters["gamma"])
+                fl = FocalLoss(
+                    alpha=best_parameters["alpha"], gamma=best_parameters["gamma"]
+                )
                 try:
                     X_train = X_train.drop(self.target_variable, axis=1)
                 except Exception:
                     pass
                 Dtrain = lgb.Dataset(X_train, label=Y_train)
                 Dtest = lgb.Dataset(X_test, label=Y_test)
-                model = lgb.train(best_parameters, Dtrain, valid_sets=[Dtrain, Dtest], valid_names=['train', 'valid'],
-                                  early_stopping_rounds=10, fobj=fl.lgb_obj, feval=fl.lgb_eval)
+                model = lgb.train(
+                    best_parameters,
+                    Dtrain,
+                    valid_sets=[Dtrain, Dtest],
+                    valid_names=["train", "valid"],
+                    early_stopping_rounds=10,
+                    fobj=fl.lgb_obj,
+                    feval=fl.lgb_eval,
+                )
 
                 self.preprocess_decisions["focal_init_score"] = fl.init_score(Y_train)
                 self.trained_models[f"{algorithm}"] = {}
@@ -509,7 +568,9 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
                 return self.trained_models
             else:
                 best_parameters = study.best_trial.params
-                loss = FocalLoss(alpha=best_parameters["alpha"], gamma=best_parameters["gamma"])
+                loss = FocalLoss(
+                    alpha=best_parameters["alpha"], gamma=best_parameters["gamma"]
+                )
                 model = OneVsRestLightGBMWithCustomizedLoss(loss=loss)
                 model.fit(X_train, Y_train, **fit_params)
                 self.trained_models[f"{algorithm}"] = {}
@@ -518,7 +579,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
                 _ = gc.collect()
                 return self.trained_models
 
-    def lgbm_focal_predict(self, feat_importance=True, importance_alg='SHAP'):
+    def lgbm_focal_predict(self, feat_importance=True, importance_alg="SHAP"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated.
@@ -526,14 +587,19 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         GPU acceleration). (Default: 'permutation')
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Predict with LGBM with focal loss')
-        algorithm = 'lgbm_focal'
+        self.get_current_timestamp(task="Predict with LGBM with focal loss")
+        algorithm = "lgbm_focal"
         if self.prediction_mode:
             model = self.trained_models[f"{algorithm}"]
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
                 fl_init_score = self.preprocess_decisions["focal_init_score"]
-                predicted_probs = special.expit(fl_init_score + model.predict(self.dataframe))
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                predicted_probs = special.expit(
+                    fl_init_score + model.predict(self.dataframe)
+                )
+                predicted_classes = (
+                    predicted_probs
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
+                )
             else:
                 predicted_probs = model.predict(self.dataframe)
                 predicted_classes = predicted_probs
@@ -544,11 +610,14 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
                 fl_init_score = self.preprocess_decisions["focal_init_score"]
                 predicted_probs = special.expit(fl_init_score + model.predict(X_test))
                 self.threshold_refiner(predicted_probs, Y_test, algorithm)
-                predicted_classes = predicted_probs > self.preprocess_decisions[f"probability_threshold"][algorithm]
+                predicted_classes = (
+                    predicted_probs
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
+                )
             else:
                 predicted_probs = model.predict(X_test)
                 predicted_classes = predicted_probs
