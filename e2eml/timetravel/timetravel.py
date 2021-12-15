@@ -28,6 +28,7 @@ class TimeTravel:
         A static function, that stores preprocessing step names, function objects and default arguments in a dictionbary.
         The order of items determines the order of preprocessing steps. We do not guarantee 100% success rate, if
         the order gets exchanged.
+
         :param class_instance:
         :return: Adds a class attribute.
         """
@@ -194,26 +195,26 @@ class TimeTravel:
         """
         A static function, that stores ml algorithms and their function objects..
         The order of items does not have any impact.
+
         :param class_instance: e2eml ClassificationBlueprint or RegressionBlueprint class instance.
         :return: Adds a class attribute.
         """
         class_instance.classification_algorithms_functions = {
-
-                        "logistic_regression": class_instance.ml_bp00_train_test_binary_full_processing_log_reg_prob,
-                        "ridge":  class_instance.ml_bp08_multiclass_full_processing_ridge,
-                        "catboost": class_instance.ml_bp09_multiclass_full_processing_catboost,
-                        "xgboost":  class_instance.ml_bp01_multiclass_full_processing_xgb_prob,
-                        "ngboost": class_instance.ml_bp04_multiclass_full_processing_ngboost,
-                        "lgbm": class_instance.ml_bp02_multiclass_full_processing_lgbm_prob,
-                        "lgbm_focal": class_instance.ml_bp14_multiclass_full_processing_lgbm_focal,
-                        "tabnet": class_instance.ml_bp07_multiclass_full_processing_tabnet,
-                        "vowpal_wabbit": class_instance.ml_bp05_multiclass_full_processing_vowpal_wabbit,
-                        "sklearn_ensemble": class_instance.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble,
-                        "sgd": class_instance.ml_bp10_multiclass_full_processing_sgd,
-                        "quadratic_discriminant_analysis": class_instance.ml_bp11_multiclass_full_processing_quadratic_discriminant_analysis,
-                        "svm": class_instance.ml_bp12_multiclass_full_processing_svm,
-                        "multinomial_nb": class_instance.ml_bp13_multiclass_full_processing_multinomial_nb
-                        }
+            "logistic_regression": class_instance.ml_bp00_train_test_binary_full_processing_log_reg_prob,
+            "ridge": class_instance.ml_bp08_multiclass_full_processing_ridge,
+            "catboost": class_instance.ml_bp09_multiclass_full_processing_catboost,
+            "xgboost": class_instance.ml_bp01_multiclass_full_processing_xgb_prob,
+            "ngboost": class_instance.ml_bp04_multiclass_full_processing_ngboost,
+            "lgbm": class_instance.ml_bp02_multiclass_full_processing_lgbm_prob,
+            "lgbm_focal": class_instance.ml_bp14_multiclass_full_processing_lgbm_focal,
+            "tabnet": class_instance.ml_bp07_multiclass_full_processing_tabnet,
+            "vowpal_wabbit": class_instance.ml_bp05_multiclass_full_processing_vowpal_wabbit,
+            "sklearn_ensemble": class_instance.ml_bp03_multiclass_full_processing_sklearn_stacking_ensemble,
+            "sgd": class_instance.ml_bp10_multiclass_full_processing_sgd,
+            "quadratic_discriminant_analysis": class_instance.ml_bp11_multiclass_full_processing_quadratic_discriminant_analysis,
+            "svm": class_instance.ml_bp12_multiclass_full_processing_svm,
+            "multinomial_nb": class_instance.ml_bp13_multiclass_full_processing_multinomial_nb,
+        }
 
     def call_regression_algorithm_mapping(self, class_instance):
         class_instance.regression_algorithms_functions = {
@@ -237,10 +238,11 @@ class TimeTravel:
     ):
         """
         Runs a preprocessing blueprint only. Saves blueprints after certain checkpoints, which can be defined in
+
         :param class_instance: Accepts a an e2eml Classification or Regression class instance. This does not support
-        NLP transformers.
+            NLP transformers.
         :param checkpoint_file_path: (Optional). Takes a file path to store the saved class instance checkpoints.
-        On default will save in current location.
+            On default will save in current location.
         :param df: Accepts a dataframe to make predictions on new data.
         :return: Saves the checkpoints locally.
         """
@@ -334,12 +336,13 @@ class TimeTravel:
         """
         This function loads saved checkpoints on demand. If no checkpoint is specified, it loads the most recent
         checkpoint executed in the pipeline.
+
         :param checkpoint_to_load: Takes a string, specifying the checkpoint to load. All strings can be looked up
-        in blueprint_step_selection_non_nlp class attribute. Only checkpoints, which have been saved explicitely can be
-        loaded. If no checkpoint is specified, it loads the most recent
-        checkpoint executed in the pipeline.
+            in blueprint_step_selection_non_nlp class attribute. Only checkpoints, which have been saved explicitely can be
+            loaded. If no checkpoint is specified, it loads the most recent
+            checkpoint executed in the pipeline.
         :param checkpoint_file_path: (Optional) Takes a string. On default loads checkpoint from current path. If specified,
-        loads the checkpoint from this path.
+            loads the checkpoint from this path.
         :return: Returns loaded checkpoint.
         """
         if not checkpoint_to_load:
@@ -383,22 +386,23 @@ def timewalk_auto_exploration(  # noqa: C901
     Timewalk is an extension to TimeTravel. It executes different preprocessing steps an short model training to explore
     the best combination. It returns a Pandas DataFrame with all results. Timewalk is meant to explore and is not suitable
     for final training for various reasons. Timewalk will result in long runtimes.
+
     :param class_instance: Expects a freshly instantiated e2eml ClassificationBlueprint or RegressionBlueprint class instance.
     :param holdout_df: Expects a Pandas Dataframe, which will be only used for final evaluation. Is not alolowed to
-     include the target as it simulates prediction on new data. It is recommended to use the most recent datapoints as holdout.
+        include the target as it simulates prediction on new data. It is recommended to use the most recent datapoints as holdout.
     :param holdout_target: Expects a Pandas Series with holdout targets.
     :param speed_up_model_tuning: If True, timewalk will run with reduced rounds of hyprparameter tuning. If False,
-    timewalk will use hyperparameter tuning rounds and maximum runtime from the imported e2eml class. If False, users can
-    control these parameter by adjusting them after e2eml class instantiation and before importing the class to timewalk.
+        timewalk will use hyperparameter tuning rounds and maximum runtime from the imported e2eml class. If False, users can
+        control these parameter by adjusting them after e2eml class instantiation and before importing the class to timewalk.
     :param name_of_exist_experiment: Expects a string. Name of a locally saved file with results from a past experiment
-    can be provided. In this case timewalk will load the file as a dataframe and concatenate old and new results into
-    one dataframe.
+        can be provided. In this case timewalk will load the file as a dataframe and concatenate old and new results into
+        one dataframe.
     :param algs_to_test: (Optional). Expects a list object with algorithms to test. Will test on default:
-    ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
-                      "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis", "svm"]
+        ["ridge", "xgboost", "lgbm", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
+        "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis", "svm"]
     :param experiment_name: Expects string. Will determine the name of the exported results dataframe (as pickle file).
     :param experiment_comment: Expects a string. This will add a comment of choice to the results dataframe. On default
-    it will add a string stating when the experiment has been started.
+        it will add a string stating when the experiment has been started.
     :return: Pandas DataFrame with results.
     """
     class_instance = copy.copy(class_instance)
@@ -408,8 +412,22 @@ def timewalk_auto_exploration(  # noqa: C901
         algorithms = algs_to_test
     else:
 
-        algorithms = ["ridge", "xgboost", "lgbm", "lgbm_focal", "tabnet", "ngboost", "vowpal_wabbit", "logistic_regression",
-                      "linear_regression", "elasticnet", "sgd", "quadratic_discriminant_analysis", "svm", "svm_regression"]
+        algorithms = [
+            "ridge",
+            "xgboost",
+            "lgbm",
+            "lgbm_focal",
+            "tabnet",
+            "ngboost",
+            "vowpal_wabbit",
+            "logistic_regression",
+            "linear_regression",
+            "elasticnet",
+            "sgd",
+            "quadratic_discriminant_analysis",
+            "svm",
+            "svm_regression",
+        ]
 
         if len(class_instance.dataframe.index) > 10000:
             algorithms.remove("ngboost")

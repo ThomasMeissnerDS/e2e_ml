@@ -21,8 +21,4 @@ ignore =
 
     # This is flake8-bugbear's "line too long" rule.
     # Since black enforces line lengths, we don't need to lint it
-    B950,
-
-    # This checks that the first argument of methods is `self`.
-    # It doesn't work with pydantic validators.
-    B902
+    B950

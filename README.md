@@ -1,14 +1,30 @@
 # e2e ML
 
-
-> An end to end solution for automl. .
-
+> An end to end solution for automl.
 
 Pass in your data, add some information about it and get a full pipelines in
 return. Data preprocessing, feature creation, modelling and evaluation with just
 a few lines of code.
 
 ![Header image](header.png)
+
+## Contents
+
+<!-- toc -->
+
+* [Installation](#installation)
+* [Usage example](#usage-example)
+* [Linting and Pre-Commit](#linting-and-pre-commit)
+* [Disclaimer](#disclaimer)
+* [Development](#development)
+  * [Adding or Removing Dependencies](#adding-or-removing-dependencies)
+  * [Building and Publishing](#building-and-publishing)
+  * [Documentation](#documentation)
+  * [Pull Requests](#pull-requests)
+* [Release History](#release-history)
+* [Meta](#meta)
+
+<!-- tocstop -->
 
 ## Installation
 
@@ -309,11 +325,9 @@ blueprints. e2e-ml blueprints contain:
 This comes at the cost of runtime. Depending on your data we recommend strong
 hardware.
 
-# Development
+## Development
 
 This project uses [poetry](https://python-poetry.org/).
-
-## Installation
 
 To install the project for development, run:
 
@@ -324,13 +338,13 @@ poetry install
 This will install all dependencies and development dependencies into a virtual
 environment.
 
-## Adding or Removing Dependencies
+### Adding or Removing Dependencies
 
 To add or remove a dependency, use `poetry add <package>` or
 `poetry remove <package>` respectively. Use the `--dev` flag for development
 dependencies.
 
-## Building and Publishing
+### Building and Publishing
 
 To build and publish the project, run
 
@@ -338,18 +352,20 @@ To build and publish the project, run
 poetry publish --build
 ```
 
+### Documentation
 
-# Disclaimer
-e2e is not designed to quickly iterate over several algorithms and suggest you the best. It is made to deliver
-state-of-the-art performance as ready-to-go blueprints. e2e-ml blueprints contain:
-- preprocessing (outlier, rare feature, datetime, categorical and NLP handling)
-- feature creation (binning, clustering, categorical and NLP features)
-- automated feature selection
-- model training (with crossfold validation)
-- automated hyperparameter tuning
-- model evaluation
-  This comes at the cost of runtime. Depending on your data we recommend strong hardware.
+This project comes with documentation. To build the docs, run:
 
+```sh
+cd docs
+make docs
+```
+
+You may then browse the HTML docs at `docs/build/docs/index.html`.
+
+### Pull Requests
+
+We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 

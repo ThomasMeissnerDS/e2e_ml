@@ -5,7 +5,6 @@ description = "An end-to-end solution for automl"
 authors = ["Thomas Meißner <meissnercorporation@gmx.de>"]
 license = "GPL-3.0-only"
 classifiers = [
-    "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
 ]
@@ -59,6 +58,7 @@ pytest = "^6.2.5"
 setuptools = "51.1.0"
 twine = "1.13.0"
 wheel = "0.36.2"
+Sphinx = "^4.3.1"
 
 [tool.poetry.extras]
 rapids = ["cupy", "cython"]
