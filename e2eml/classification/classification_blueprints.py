@@ -598,7 +598,6 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         self.prediction_mode = True
         logging.info("Finished blueprint.")
 
-
     def ml_bp14_multiclass_full_processing_lgbm_focal(self, df=None):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,

@@ -421,6 +421,7 @@ class PreProcessing:
         self.hyperparameter_tuning_rounds = {
             "xgboost": 100,
             "lgbm": 500,
+            "lgbm_focal": 50,
             "tabnet": 25,
             "ngboost": 25,
             "sklearn_ensemble": 10,
@@ -442,6 +443,7 @@ class PreProcessing:
         self.hyperparameter_tuning_max_runtime_secs = {
             "xgboost": 2 * 60 * 60,
             "lgbm": 2 * 60 * 60,
+            "lgbm_focal": 2 * 60 * 60,
             "tabnet": 2 * 60 * 60,
             "ngboost": 2 * 60 * 60,
             "sklearn_ensemble": 2 * 60 * 60,

@@ -368,7 +368,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
         """
         self.get_current_timestamp(task='Train LGBM with focal loss model')
         algorithm = 'lgbm_focal'
-        self.check_gpu_support(algorithm='lgbm')
+        #self.check_gpu_support(algorithm='lgbm')
 
         if self.prediction_mode:
             pass
@@ -1947,11 +1947,11 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
                             "verbose": 0,
                             "tree_method": train_on,  # use GPU for training
                             "num_class": Y_train.nunique(),
-                            "max_depth": trial.suggest_int("max_depth", 2, 10),  # 4
+                            "max_depth": trial.suggest_int("max_depth", 2, 7),  # 4
                             # maximum depth of the decision trees being trained
                             "alpha": trial.suggest_loguniform("alpha", 1, 1e6),
                             "lambda": trial.suggest_loguniform("lambda", 1, 1e6),
-                            "num_leaves": trial.suggest_int("num_leaves", 2, 256),  # 8
+                            "num_leaves": trial.suggest_int("num_leaves", 2, 128),  # 8
                             "subsample": trial.suggest_uniform("subsample", 0.4, 1.0),
                             "colsample_bytree": trial.suggest_uniform(
                                 "colsample_bytree", 0.5, 1.0
@@ -2112,7 +2112,7 @@ class ClassificationModels(postprocessing.FullPipeline, Matthews, FocalLoss, One
                             "verbose": 0,
                             "tree_method": train_on,  # use GPU for training
                             "num_class": Y_train.nunique(),
-                            "max_depth": trial.suggest_int("max_depth", 2, 8),
+                            "max_depth": trial.suggest_int("max_depth", 2, 7),
                             # maximum depth of the decision trees being trained
                             "alpha": trial.suggest_loguniform("alpha", 1, 1e6),
                             "lambda": trial.suggest_loguniform("lambda", 1, 1e6),

@@ -655,24 +655,27 @@ def timewalk_auto_exploration(  # noqa: C901
                 unique_indices_counter += 1
                 start = time.time()
                 print(f"Start iteration for algorithm {alg} at {start}.")
-                class_instance = automl_travel.load_checkpoint(
-                    checkpoint_to_load="sort_columns_alphabetically"
-                )  # gets latest checkpoint
-                print("Successfully loaded checkpoint last checkpoint.")
-                automl_travel.create_time_travel_checkpoints(
-                    class_instance, reload_instance=True
-                )
-                automl_travel.timetravel_model_training(class_instance, alg)
-                automl_travel.create_time_travel_checkpoints(
-                    class_instance, df=holdout_df
-                )
-                automl_travel.timetravel_model_training(class_instance, alg)
-                if class_instance.labels_encoded:
-                    hold_df_target = class_instance.label_encoder_decoder(
-                        holdout_target, mode="transform"
+                try:
+                    class_instance = automl_travel.load_checkpoint(
+                        checkpoint_to_load="sort_columns_alphabetically"
+                    )  # gets latest checkpoint
+                    print("Successfully loaded checkpoint last checkpoint.")
+                    automl_travel.create_time_travel_checkpoints(
+                        class_instance, reload_instance=True
                     )
-                else:
-                    hold_df_target = holdout_target
+                    automl_travel.timetravel_model_training(class_instance, alg)
+                    automl_travel.create_time_travel_checkpoints(
+                        class_instance, df=holdout_df
+                    )
+                    automl_travel.timetravel_model_training(class_instance, alg)
+                    if class_instance.labels_encoded:
+                        hold_df_target = class_instance.label_encoder_decoder(
+                            holdout_target, mode="transform"
+                        )
+                    else:
+                        hold_df_target = holdout_target
+                except Exception:
+                    pass
 
                 try:
                     if class_instance.class_problem in ["binary", "multiclass"]:
