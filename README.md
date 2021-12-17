@@ -369,6 +369,11 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
+* 2.9.91
+  * e2eml uses poetry
+  * introduction of Github actions to check linting
+  * bug fix of LGBM focal failing due to missing hyperparameter tuning specifications
+  * preparation for Readthedocs implementation
 * 2.9.9
   * Added Multinomial Bayes Classifier
   * Added SVM for regression

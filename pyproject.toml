@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "e2e_ml"
-version = "0.1.0"
+version = "2.9.91"
 description = "An end-to-end solution for automl"
 authors = ["Thomas Meißner <meissnercorporation@gmx.de>"]
 license = "GPL-3.0-only"
