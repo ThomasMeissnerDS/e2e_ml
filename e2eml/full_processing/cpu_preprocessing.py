@@ -47,7 +47,7 @@ from sklearn import model_selection
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.decomposition import PCA, KernelPCA
 from sklearn.ensemble import IsolationForest
-from sklearn.experimental import enable_iterative_imputer # this HAS TO STAY
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer, SimpleImputer
 from sklearn.linear_model import BayesianRidge, Ridge
 from sklearn.metrics import make_scorer, matthews_corrcoef, mean_squared_error
