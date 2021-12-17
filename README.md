@@ -369,7 +369,7 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
-* 2.9.91
+* 2.9.92
   * e2eml uses poetry
   * introduction of Github actions to check linting
   * bug fix of LGBM focal failing due to missing hyperparameter tuning specifications
