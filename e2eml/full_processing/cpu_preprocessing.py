@@ -12,6 +12,7 @@ import numpy as np
 import optuna
 import pandas as pd
 import psutil
+import shap
 import torch
 import torch.nn.functional as F
 import xgboost as xgb
@@ -52,7 +53,7 @@ from sklearn.impute import IterativeImputer, SimpleImputer
 from sklearn.linear_model import BayesianRidge, Ridge
 from sklearn.metrics import make_scorer, matthews_corrcoef, mean_squared_error
 from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import OneClassSVM
 from torch import nn, optim
@@ -479,6 +480,7 @@ class PreProcessing:
         else:
             self.target_is_skewed = False
         self.selected_feats = selected_feats
+        self.selected_shap_feats = None
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
         self.data_scaled = False
@@ -5231,3 +5233,78 @@ class PreProcessing:
 
         logging.info("Finished final PCA dimensionality reduction.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+    def shap_based_feature_selection(self):
+        logging.info("Started SHAP based feature selection.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        if self.prediction_mode:
+            final_features = self.selected_shap_feats
+            self.dataframe = self.dataframe[final_features].copy()
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            all_shap_values = []
+            # start training, prediction & Shap loop
+            skf = StratifiedKFold(n_splits=10, random_state=42, shuffle=True)
+
+            for train_index, test_index in skf.split(X_train, Y_train):
+                x_train, x_test = (
+                    X_train.iloc[train_index],
+                    X_train.iloc[test_index],
+                )
+                y_train = Y_train.iloc[train_index]
+                if self.class_problem == "binary" or self.class_problem == "multiclass":
+                    model = lgb.LGBMClassifier(random_state=42)
+                else:
+                    model = lgb.LGBMRegressor(random_state=42)
+
+                model.fit(x_train, y_train)
+
+                def get_shaps(model, to_pred):
+                    try:
+                        explainer = shap.TreeExplainer(model)
+                        shap_values = explainer.shap_values(to_pred)
+                    except AssertionError:
+                        explainer = shap.KernelExplainer(model.predict, to_pred)
+                        shap_values = explainer.shap_values(to_pred)
+
+                    vals = np.abs(shap_values.values).mean(0)
+                    feature_names = X_train.columns()
+
+                    feature_importance = pd.DataFrame(
+                        list(zip(feature_names, vals)),
+                        columns=["col_name", "feature_importance_vals"],
+                    )
+                    feature_importance.sort_values(
+                        by=["feature_importance_vals"], ascending=False, inplace=True
+                    )
+                    return feature_importance
+
+                all_shap_values.append(get_shaps(model, x_test))
+                all_shap_values.append(get_shaps(model, X_test))
+
+            shaps_all_its = pd.concat(all_shap_values)
+            # get standard deviation and sums
+            shap_stds = shaps_all_its.std()
+            shap_sums = shaps_all_its.sum()
+
+            # get 5th percentile thresholds
+            shap_stds_5th = shap_stds.quantile(0.05)
+            shap_sums_5th = shap_sums.quantile(0.05)
+
+            # filter features for each category
+            shap_stds_cols = shap_stds[(shap_stds > shap_stds_5th)].columns.to_list()
+            shap_sums_cols = shap_sums[(shap_sums > shap_sums_5th)].columns.to_list()
+
+            # final feature list
+            final_features = set(shap_stds_cols + shap_sums_cols)
+            self.selected_shap_feats = final_features
+
+            X_train = X_train[final_features].copy()
+            X_test = X_test[final_features].copy()
+
+            for i in final_features:
+                print(f" Final features are... {i}.")
+            logging.info("Finished SHAP basedfeature selection.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            optuna.logging.set_verbosity(optuna.logging.INFO)
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)

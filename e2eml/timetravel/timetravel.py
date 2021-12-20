@@ -377,6 +377,7 @@ def timewalk_auto_exploration(  # noqa: C901
     holdout_df,
     holdout_target,
     algs_to_test=None,
+    preprocess_checkpoints=None,
     speed_up_model_tuning=True,
     name_of_exist_experiment=None,
     experiment_name="timewalk.pkl",
@@ -431,6 +432,7 @@ def timewalk_auto_exploration(  # noqa: C901
 
         if len(class_instance.dataframe.index) > 10000:
             algorithms.remove("ngboost")
+            algorithms.remove("xgboost")
         else:
             pass
 
@@ -554,12 +556,15 @@ def timewalk_auto_exploration(  # noqa: C901
     unique_indices = []
 
     # define checkpoints to load
-    checkpoints = [
-        "default",
-        "autotuned_clustering",
-        "delete_high_null_cols",
-        "early_numeric_only_feature_selection",
-    ]
+    if isinstance(preprocess_checkpoints, list):
+        checkpoints = preprocess_checkpoints
+    else:
+        checkpoints = [
+            "default",
+            "autotuned_clustering",
+            "delete_high_null_cols",
+            "early_numeric_only_feature_selection",
+        ]
 
     # define the type of scoring
     if class_instance.class_problem in ["binary", "multiclass"]:
