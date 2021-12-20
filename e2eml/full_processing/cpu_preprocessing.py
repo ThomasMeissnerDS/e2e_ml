@@ -51,7 +51,12 @@ from sklearn.ensemble import IsolationForest
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer, SimpleImputer
 from sklearn.linear_model import BayesianRidge, Ridge
-from sklearn.metrics import make_scorer, matthews_corrcoef, mean_squared_error
+from sklearn.metrics import (
+    make_scorer,
+    matthews_corrcoef,
+    mean_squared_error,
+    silhouette_score,
+)
 from sklearn.mixture import GaussianMixture
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.preprocessing import MinMaxScaler
@@ -248,7 +253,7 @@ class PreProcessing:
             "category_encoding": True,
             "fill_nulls_static": True,
             "outlier_care": True,
-            "remove_collinearity": True,
+            "remove_collinearity": False,
             "skewness_removal": True,
             "clustering_as_a_feature_dbscan": True,
             "clustering_as_a_feature_kmeans_loop": True,
@@ -267,6 +272,7 @@ class PreProcessing:
             "final_pca_dimensionality_reduction": False,
             "final_kernel_pca_dimensionality_reduction": False,
             "delete_low_variance_features": True,
+            "shap_based_feature_selection": True,
             "sort_columns_alphabetically": True,
         }
 
@@ -313,7 +319,8 @@ class PreProcessing:
             "autoencoder_based_oversampling": True,
             "final_kernel_pca_dimensionality_reduction": False,
             "final_pca_dimensionality_reduction": True,
-            "delete_low_variance_features": True,
+            "delete_low_variance_features": False,
+            "shap_based_feature_selection": True,
         }
         self.checkpoint_reached = {}
         for key in self.checkpoints.keys():
@@ -1605,11 +1612,12 @@ class PreProcessing:
         Takes a dataframe and optimizes for best clustering hyperparameters and columns to be used.
         :return: Updates class attributes/dataframes.
         """
-        from sklearn.metrics import silhouette_score
+        self.get_current_timestamp("Start autotuned kmeans clustering.")
 
         algorithm = "autotuned_clustering"
         logging.info("Start adding autotuned clusters as additional features.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
         if not self.data_scaled:
             self.data_scaling()
 
@@ -1632,6 +1640,7 @@ class PreProcessing:
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            optuna.logging.set_verbosity(optuna.logging.WARNING)
 
             if self.hyperparameter_tuning_sample_size > len(X_train.index):
                 cluster_sample_size = len(X_train.index)
@@ -1728,6 +1737,7 @@ class PreProcessing:
 
             logging.info("Finished adding autotuned clusters as additional features.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def delete_low_variance_features(self):
@@ -5235,13 +5245,55 @@ class PreProcessing:
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
 
     def shap_based_feature_selection(self):
+        """
+        Takes the training data and trains an LGBM model on it. Calculates SHAP values on 10-fold CV and eliminates
+        features, which have a very high SHAP standard deviation or very low SHAP values overall.
+        :return: Updates class attribute
+        """
+        self.get_current_timestamp("SHAP based feature selection")
         logging.info("Started SHAP based feature selection.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
             final_features = self.selected_shap_feats
             self.dataframe = self.dataframe[final_features].copy()
+            logging.info("Finished SHAP basedfeature selection.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            print(
+                f"Number of columns before SHAP feature selection is: {len(X_train.columns.to_list())}"
+            )
+
+            def global_shap_importance(model, X):
+                """Return a dataframe containing the features sorted by Shap importance
+                Parameters
+                ----------
+                model : The tree-based model
+                X : pd.Dataframe
+                     training set/test set/the whole dataset ... (without the label)
+                Returns
+                -------
+                pd.Dataframe
+                    A dataframe containing the features sorted by Shap importance
+                """
+                explainer = shap.Explainer(model)
+                shap_values = explainer(X)
+                cohorts = {"": shap_values}
+                cohort_exps = list(cohorts.values())
+                for i in range(len(cohort_exps)):
+                    if len(cohort_exps[i].shape) == 2:
+                        cohort_exps[i] = cohort_exps[i].abs.mean(0)
+                feature_names = cohort_exps[0].feature_names
+                values = np.array(
+                    [cohort_exps[i].values for i in range(len(cohort_exps))]
+                )
+                feature_importance = pd.DataFrame(
+                    list(zip(feature_names, sum(values))),
+                    columns=["features", "importance"],
+                )
+
+                return feature_importance
+
             all_shap_values = []
             # start training, prediction & Shap loop
             skf = StratifiedKFold(n_splits=10, random_state=42, shuffle=True)
@@ -5252,59 +5304,56 @@ class PreProcessing:
                     X_train.iloc[test_index],
                 )
                 y_train = Y_train.iloc[train_index]
-                if self.class_problem == "binary" or self.class_problem == "multiclass":
-                    model = lgb.LGBMClassifier(random_state=42)
-                else:
-                    model = lgb.LGBMRegressor(random_state=42)
 
+                model = lgb.LGBMClassifier(random_state=42)
                 model.fit(x_train, y_train)
 
-                def get_shaps(model, to_pred):
-                    try:
-                        explainer = shap.TreeExplainer(model)
-                        shap_values = explainer.shap_values(to_pred)
-                    except AssertionError:
-                        explainer = shap.KernelExplainer(model.predict, to_pred)
-                        shap_values = explainer.shap_values(to_pred)
-
-                    vals = np.abs(shap_values.values).mean(0)
-                    feature_names = X_train.columns()
-
-                    feature_importance = pd.DataFrame(
-                        list(zip(feature_names, vals)),
-                        columns=["col_name", "feature_importance_vals"],
-                    )
-                    feature_importance.sort_values(
-                        by=["feature_importance_vals"], ascending=False, inplace=True
-                    )
-                    return feature_importance
-
-                all_shap_values.append(get_shaps(model, x_test))
-                all_shap_values.append(get_shaps(model, X_test))
+                all_shap_values.append(global_shap_importance(model, x_test))
 
             shaps_all_its = pd.concat(all_shap_values)
+
+            def column_sum(lst):
+                arr = np.array(lst)
+                res = [np.sum(abs(i)) for i in arr]
+                return res
+
+            shaps_all_its = shaps_all_its.assign(
+                Product=lambda x: column_sum(x["importance"])
+            )
+
+            shaps_all_its_all_folds = shaps_all_its.groupby("features").sum()
             # get standard deviation and sums
-            shap_stds = shaps_all_its.std()
-            shap_sums = shaps_all_its.sum()
+            shap_stds = shaps_all_its_all_folds["Product"].std()
 
             # get 5th percentile thresholds
-            shap_stds_5th = shap_stds.quantile(0.05)
-            shap_sums_5th = shap_sums.quantile(0.05)
+            shap_5th = shaps_all_its_all_folds["Product"].quantile(0.05)
 
             # filter features for each category
-            shap_stds_cols = shap_stds[(shap_stds > shap_stds_5th)].columns.to_list()
-            shap_sums_cols = shap_sums[(shap_sums > shap_sums_5th)].columns.to_list()
+            shap_stds_cols = shaps_all_its_all_folds[
+                (
+                    shaps_all_its_all_folds["Product"]
+                    > (shaps_all_its_all_folds["Product"].mean() - 2 * shap_stds)
+                )
+                & (
+                    shaps_all_its_all_folds["Product"]
+                    < (shaps_all_its_all_folds["Product"].mean() + 2 * shap_stds)
+                )
+            ].index.to_list()
+            shap_sums_cols = shaps_all_its_all_folds[
+                (shaps_all_its_all_folds["Product"] > shap_5th)
+            ].index.to_list()
 
             # final feature list
-            final_features = set(shap_stds_cols + shap_sums_cols)
+            final_features = set(shap_stds_cols).intersection(shap_sums_cols)
+
             self.selected_shap_feats = final_features
 
             X_train = X_train[final_features].copy()
             X_test = X_test[final_features].copy()
 
-            for i in final_features:
-                print(f" Final features are... {i}.")
+            print(
+                f"Number of columns after SHAP feature selection is: {len(X_train.columns.to_list())}"
+            )
             logging.info("Finished SHAP basedfeature selection.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
-            optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)

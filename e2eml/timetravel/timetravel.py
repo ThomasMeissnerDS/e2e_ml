@@ -189,6 +189,10 @@ class TimeTravel:
                 "func": class_instance.sort_columns_alphabetically,
                 "args": None,
             },
+            "shap_based_feature_selection": {
+                "func": class_instance.shap_based_feature_selection,
+                "args": None,
+            },
         }
 
     def call_classification_algorithm_mapping(self, class_instance):
