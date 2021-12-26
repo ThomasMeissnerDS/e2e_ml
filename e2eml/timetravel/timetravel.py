@@ -123,6 +123,10 @@ class TimeTravel:
                 "func": class_instance.skewness_removal,
                 "args": (False),
             },
+            "automated_feature_transformation": {
+                "func": class_instance.automated_feature_transformation,
+                "args": None,
+            },
             "clustering_as_a_feature_dbscan": {
                 "func": class_instance.dbscan_clustering,
                 "args": None,
@@ -160,14 +164,6 @@ class TimeTravel:
             "bruteforce_random_feature_selection": {
                 "func": class_instance.bruteforce_random_feature_selection,
                 "args": None,
-            },  # slow
-            "delete_unpredictable_training_rows": {
-                "func": class_instance.delete_unpredictable_training_rows,
-                "args": None,
-            },
-            "autoencoder_based_oversampling": {
-                "func": class_instance.autoencoder_based_oversampling,
-                "args": None,
             },
             "synthetic_data_augmentation": {
                 "func": class_instance.synthetic_data_augmentation,
@@ -185,12 +181,24 @@ class TimeTravel:
                 "func": class_instance.delete_low_variance_features,
                 "args": None,
             },
-            "sort_columns_alphabetically": {
-                "func": class_instance.sort_columns_alphabetically,
-                "args": None,
-            },
             "shap_based_feature_selection": {
                 "func": class_instance.shap_based_feature_selection,
+                "args": None,
+            },
+            "autoencoder_based_oversampling": {
+                "func": class_instance.autoencoder_based_oversampling,
+                "args": None,
+            },
+            "random_trees_embedding": {
+                "func": class_instance.random_trees_embedding,
+                "args": None,
+            },  # slow
+            "delete_unpredictable_training_rows": {
+                "func": class_instance.delete_unpredictable_training_rows,
+                "args": None,
+            },
+            "sort_columns_alphabetically": {
+                "func": class_instance.sort_columns_alphabetically,
                 "args": None,
             },
         }
@@ -566,6 +574,7 @@ def timewalk_auto_exploration(  # noqa: C901
         checkpoints = [
             "default",
             "autotuned_clustering",
+            "cardinality_remover",
             "delete_high_null_cols",
             "early_numeric_only_feature_selection",
         ]
@@ -603,7 +612,7 @@ def timewalk_auto_exploration(  # noqa: C901
                 if checkpoint == "autotuned_clustering":
                     class_instance.blueprint_step_selection_non_nlp[
                         "svm_outlier_detection_loop"
-                    ] = True
+                    ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "autoencoder_based_oversampling"
                     ] = True
@@ -613,13 +622,29 @@ def timewalk_auto_exploration(  # noqa: C901
                     class_instance.blueprint_step_selection_non_nlp[
                         "autotuned_clustering"
                     ] = True
+                elif checkpoint == "cardinality_remover":
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autoencoder_based_oversampling"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "svm_outlier_detection_loop"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autotuned_clustering"
+                    ] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "shap_based_feature_selection"
+                    ] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "automated_feature_transformation"
+                    ] = True
                 elif checkpoint == "delete_high_null_cols":
                     class_instance.blueprint_step_selection_non_nlp[
                         "tfidf_vectorizer_to_pca"
-                    ] = False
+                    ] = True
                     class_instance.blueprint_step_selection_non_nlp[
                         "data_binning"
-                    ] = False
+                    ] = True
                     class_instance.blueprint_step_selection_non_nlp[
                         "svm_outlier_detection_loop"
                     ] = False
@@ -628,6 +653,12 @@ def timewalk_auto_exploration(  # noqa: C901
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "final_pca_dimensionality_reduction"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "automated_feature_transformation"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "shap_based_feature_selection"
                     ] = False
                 elif checkpoint == "early_numeric_only_feature_selection":
                     class_instance.blueprint_step_selection_non_nlp[
@@ -637,7 +668,7 @@ def timewalk_auto_exploration(  # noqa: C901
                         "data_binning"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
-                        "numeric_binarizer_pca"
+                        "svm_outlier_detection_loop"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "autoencoder_based_oversampling"
@@ -646,29 +677,8 @@ def timewalk_auto_exploration(  # noqa: C901
                         "final_pca_dimensionality_reduction"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
-                        "skewness_removal"
-                    ] = False
-                    class_instance.blueprint_step_selection_non_nlp[
-                        "holistic_null_filling"
-                    ] = False
-                    class_instance.blueprint_step_selection_non_nlp[
-                        "onehot_pca"
-                    ] = False
-                    class_instance.blueprint_step_selection_non_nlp[
-                        "clustering_as_a_feature_dbscan"
-                    ] = False
-                    class_instance.blueprint_step_selection_non_nlp[
-                        "clustering_as_a_feature_kmeans_loop"
-                    ] = False
-                    class_instance.blueprint_step_selection_non_nlp[
-                        "clustering_as_a_feature_gaussian_mixture_loop"
-                    ] = False
-                    class_instance.blueprint_step_selection_non_nlp[
-                        "pca_clustering_results"
-                    ] = False
-                    class_instance.blueprint_step_selection_non_nlp[
-                        "svm_outlier_detection_loop"
-                    ] = False
+                        "automated_feature_transformation"
+                    ] = True
                 automl_travel.create_time_travel_checkpoints(
                     class_instance, reload_instance=True
                 )
@@ -796,6 +806,8 @@ def timewalk_auto_exploration(  # noqa: C901
                     "Trial number": unique_indices,
                     "Algorithm": algorithms_used,
                     metric: scoring_results,
+                    metric_2: scoring_2_results,
+                    metric_3: scoring_3_results,
                     "Preprocessing applied": preprocessing_steps_used,
                     "ML model runtime in seconds": elapsed_times,
                 }
@@ -851,6 +863,8 @@ def timewalk_auto_exploration(  # noqa: C901
                 "Trial number": unique_indices,
                 "Algorithm": algorithms_used,
                 metric: scoring_results,
+                metric_2: scoring_2_results,
+                metric_3: scoring_3_results,
                 "Preprocessing applied": preprocessing_steps_used,
                 "ML model runtime in seconds": elapsed_times,
             }

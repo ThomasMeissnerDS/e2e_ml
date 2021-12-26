@@ -369,6 +369,13 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
+* 2.9.95
+  * SHAP based feature selection increased to 20 folds (from 10)
+  * less unnecessary print outs
+* 2.9.93
+  * Added SHAP based feature selection
+  * Removed Xgboost from Timewalk as default due to computational and runtime costs
+  * Suppress all warnings of LGBM focal during multiclass tasks
 * 2.9.92
   * e2eml uses poetry
   * introduction of Github actions to check linting

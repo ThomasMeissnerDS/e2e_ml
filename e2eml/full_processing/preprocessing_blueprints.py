@@ -137,6 +137,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             )
         if self.blueprint_step_selection_non_nlp["cardinality_remover"]:
             self.cardinality_remover(threshold=100)
+        if self.blueprint_step_selection_non_nlp["categorical_column_embeddings"]:
+            self.categorical_column_embeddings()
         if self.blueprint_step_selection_non_nlp["holistic_null_filling"]:
             self.holistic_null_filling(iterative=False)
         if self.blueprint_step_selection_non_nlp["numeric_binarizer_pca"]:
@@ -153,6 +155,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.remove_collinearity(threshold=0.8)
         if self.blueprint_step_selection_non_nlp["skewness_removal"]:
             self.skewness_removal(overwrite_orig_col=False)
+        if self.blueprint_step_selection_non_nlp["automated_feature_transformation"]:
+            self.automated_feature_transformation()
         if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_dbscan"]:
             try:
                 self.clustering_as_a_feature(
@@ -206,20 +210,24 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.automated_feature_selection(numeric_only=False)
         if self.blueprint_step_selection_non_nlp["bruteforce_random_feature_selection"]:
             self.bruteforce_random_feature_selection()
-        if self.blueprint_step_selection_non_nlp["delete_unpredictable_training_rows"]:
-            self.delete_unpredictable_training_rows()
-        if self.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"]:
-            self.autoencoder_based_oversampling()
         if self.blueprint_step_selection_non_nlp[
             "final_kernel_pca_dimensionality_reduction"
         ]:
             self.final_kernel_pca_dimensionality_reduction()
-        if self.blueprint_step_selection_non_nlp["synthetic_data_augmentation"]:
-            self.synthetic_data_augmentation()
         if self.blueprint_step_selection_non_nlp["final_pca_dimensionality_reduction"]:
             self.final_pca_dimensionality_reduction()
         if self.blueprint_step_selection_non_nlp["delete_low_variance_features"]:
             self.delete_low_variance_features()
+        if self.blueprint_step_selection_non_nlp["shap_based_feature_selection"]:
+            self.shap_based_feature_selection()
+        if self.blueprint_step_selection_non_nlp["autoencoder_based_oversampling"]:
+            self.autoencoder_based_oversampling()
+        if self.blueprint_step_selection_non_nlp["synthetic_data_augmentation"]:
+            self.synthetic_data_augmentation()
+        if self.blueprint_step_selection_non_nlp["delete_unpredictable_training_rows"]:
+            self.delete_unpredictable_training_rows()
+        if self.blueprint_step_selection_non_nlp["random_trees_embedding"]:
+            self.random_trees_embedding()
         if self.blueprint_step_selection_non_nlp["sort_columns_alphabetically"]:
             self.sort_columns_alphabetically()
 

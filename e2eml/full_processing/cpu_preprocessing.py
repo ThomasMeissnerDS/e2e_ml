@@ -47,10 +47,10 @@ from scipy.stats import (
 from sklearn import model_selection
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.decomposition import PCA, KernelPCA
-from sklearn.ensemble import IsolationForest
+from sklearn.ensemble import IsolationForest, RandomTreesEmbedding
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer, SimpleImputer
-from sklearn.linear_model import BayesianRidge, Ridge
+from sklearn.linear_model import BayesianRidge
 from sklearn.metrics import (
     make_scorer,
     matthews_corrcoef,
@@ -58,8 +58,15 @@ from sklearn.metrics import (
     silhouette_score,
 )
 from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import StratifiedKFold, cross_val_score
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
+from sklearn.preprocessing import (
+    MaxAbsScaler,
+    MinMaxScaler,
+    Normalizer,
+    PowerTransformer,
+    QuantileTransformer,
+    RobustScaler,
+)
 from sklearn.svm import OneClassSVM
 from torch import nn, optim
 from torch.autograd import Variable
@@ -67,11 +74,36 @@ from torch.utils.data import DataLoader, Dataset
 from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
 
 warnings.filterwarnings("ignore")
-# from copy import deepcopy
-# from IPython.display import clear_output
 
 pd.options.display.max_colwidth = 1000
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
+
+
+def get_scaler(param):
+    """
+    Takes the Optuna dictionary and returns scaler accordingly.
+    :param param: Dictionary
+    :return: scaler object from sklearn
+    """
+    if param["transformer"] == "quantile":
+        scaler = QuantileTransformer()
+    elif param["transformer"] == "maxabs":
+        scaler = MaxAbsScaler()
+    elif param["transformer"] == "robust":
+        scaler = RobustScaler()
+    elif param["transformer"] == "minmax":
+        scaler = MinMaxScaler()
+    elif param["transformer"] == "yeo-johnson":
+        scaler = PowerTransformer(method="yeo-johnson")
+    elif param["transformer"] == "box_cox":
+        scaler = PowerTransformer(method="box-cox")
+    elif param["transformer"] == "l1":
+        scaler = Normalizer(norm="l1")
+    elif param["transformer"] == "l2":
+        scaler = Normalizer(norm="l2")
+    else:
+        scaler = QuantileTransformer(n_quantiles=param["n_quantiles"], random_state=23)
+    return scaler
 
 
 class PreProcessing:
@@ -247,14 +279,17 @@ class PreProcessing:
             "tfidf_vectorizer": False,
             "rare_feature_processing": True,
             "cardinality_remover": True,
+            "categorical_column_embeddings": False,
             "holistic_null_filling": True,  # slow
             "numeric_binarizer_pca": True,
             "onehot_pca": True,
             "category_encoding": True,
             "fill_nulls_static": True,
             "outlier_care": True,
-            "remove_collinearity": False,
+            "remove_collinearity": True,
             "skewness_removal": True,
+            "automated_feature_transformation": False,
+            "random_trees_embedding": False,
             "clustering_as_a_feature_dbscan": True,
             "clustering_as_a_feature_kmeans_loop": True,
             "clustering_as_a_feature_gaussian_mixture_loop": True,
@@ -262,17 +297,17 @@ class PreProcessing:
             "svm_outlier_detection_loop": False,
             "autotuned_clustering": False,
             "reduce_memory_footprint": False,
-            "scale_data": True,
+            "scale_data": False,
             "smote": False,
             "automated_feature_selection": True,
             "bruteforce_random_feature_selection": False,  # slow
-            "delete_unpredictable_training_rows": False,
             "autoencoder_based_oversampling": False,
             "synthetic_data_augmentation": False,
             "final_pca_dimensionality_reduction": False,
             "final_kernel_pca_dimensionality_reduction": False,
             "delete_low_variance_features": True,
             "shap_based_feature_selection": True,
+            "delete_unpredictable_training_rows": True,
             "sort_columns_alphabetically": True,
         }
 
@@ -286,13 +321,14 @@ class PreProcessing:
             "holistic_null_filling": True,  # slow
             "iterative_null_imputation": True,
             "fill_infinite_values": True,
-            "datetime_converter": True,
+            "datetime_converter": False,
             "pos_tagging_pca": True,  # slow with many categories
             "append_text_sentiment_score": True,
             "tfidf_vectorizer_to_pca": True,  # slow with many categories
             "tfidf_vectorizer": True,
             "rare_feature_processing": True,
             "cardinality_remover": True,
+            "categorical_column_embeddings": False,
             "delete_high_null_cols": True,
             "numeric_binarizer_pca": True,
             "onehot_pca": True,
@@ -302,6 +338,8 @@ class PreProcessing:
             "outlier_care": True,
             "remove_collinearity": True,
             "skewness_removal": True,
+            "automated_feature_transformation": True,
+            "random_trees_embedding": False,
             "autotuned_clustering": True,
             "clustering_as_a_feature_dbscan": True,
             "clustering_as_a_feature_kmeans_loop": True,
@@ -313,14 +351,14 @@ class PreProcessing:
             "bruteforce_random_feature_selection": True,  # slow
             "sort_columns_alphabetically": True,
             "synthetic_data_augmentation": True,
-            "delete_unpredictable_training_rows": True,
             "scale_data": True,
-            "smote": True,
+            "smote": False,
             "autoencoder_based_oversampling": True,
             "final_kernel_pca_dimensionality_reduction": False,
-            "final_pca_dimensionality_reduction": True,
+            "final_pca_dimensionality_reduction": False,
             "delete_low_variance_features": False,
             "shap_based_feature_selection": True,
+            "delete_unpredictable_training_rows": True,
         }
         self.checkpoint_reached = {}
         for key in self.checkpoints.keys():
@@ -1556,6 +1594,72 @@ class PreProcessing:
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
+    def categorical_column_embeddings(self):
+        self.get_current_timestamp(task="Create categorical column embeddings.")
+        logging.info("Start categorical column embeddings.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+        import spacy
+
+        try:
+            nlp = spacy.load("en_core_web_sm")
+        except OSError:
+            print(
+                "Downloading language model for the spaCy POS tagger\n"
+                "(don't worry, this will only happen once)"
+            )
+            from spacy.cli import download
+
+            download("en_core_web_sm")
+            nlp = spacy.load("en_core_web_sm")
+
+        def get_spacy_embeddings(df, text_col):
+            df[text_col] = df[text_col].astype(str)
+            df["tokenized"] = df[text_col].apply(nlp)
+            df["sent_vectors"] = df["tokenized"].apply(
+                lambda sent: np.mean(
+                    [token.vector for token in sent if not token.is_stop]
+                )
+            )
+            return df["sent_vectors"]
+
+        if self.prediction_mode:
+            cat_columns = self.preprocess_decisions["spacy_embedding_cols"]
+            for col in cat_columns:
+                self.dataframe[col] = self.dataframe[col] + ". "
+                self.dataframe[f"Spacy_embeddings_{col}"] = get_spacy_embeddings(
+                    self.dataframe, col
+                )
+
+            self.dataframe["Spacy_embeddings"] = self.dataframe[cat_columns].sum(axis=1)
+            self.dataframe["Spacy_embeddings"] = get_spacy_embeddings(
+                self.dataframe, "Spacy_embeddings"
+            )
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            cat_columns = X_train.select_dtypes(include=["object"]).columns.to_list()
+            for col in cat_columns:
+                X_train[col] = X_train[col] + ". "
+                X_test[col] = X_test[col] + ". "
+                X_train[f"Spacy_embeddings_{col}"] = get_spacy_embeddings(X_train, col)
+                X_test[f"Spacy_embeddings_{col}"] = get_spacy_embeddings(X_test, col)
+
+            X_train["Spacy_embeddings"] = X_train[cat_columns].sum(axis=1)
+            X_test["Spacy_embeddings"] = X_test[cat_columns].sum(axis=1)
+
+            X_train["Spacy_embeddings"] = get_spacy_embeddings(
+                X_train, "Spacy_embeddings"
+            )
+            X_test["Spacy_embeddings"] = get_spacy_embeddings(
+                X_test, "Spacy_embeddings"
+            )
+
+            self.preprocess_decisions["spacy_embedding_cols"] = cat_columns
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            logging.info("Finished categorical column embeddings.")
+
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
     def rare_feature_processor(
         self, threshold=0.005, mask_as="miscellaneous", rarity_cols=None, normalize=True
     ):
@@ -1775,6 +1879,11 @@ class PreProcessing:
             self.preprocess_decisions[
                 "delete_low_variance_features_columns_left"
             ] = variable
+
+            features_dropped = list(set(columns) - set(variable))
+            print("The following features have been dropped....:")
+            for col in features_dropped:
+                print(col)
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
             logging.info("Finished deleting low variance features.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
@@ -2747,7 +2856,6 @@ class PreProcessing:
                 X_train_branch.fillna(0, inplace=True)
                 X_test_branch.fillna(0, inplace=True)
                 pca = PCA(n_components=2)
-                # pac = pacmap.PaCMAP(n_dims=2)
                 train_comps = pca.fit_transform(X_train_branch[onehot_cols])
                 X_train_branch = pd.DataFrame(train_comps, columns=["PC-1", "PC-2"])
                 test_comps = pca.transform(X_test_branch[onehot_cols])
@@ -4247,69 +4355,98 @@ class PreProcessing:
             )
 
     def delete_unpredictable_training_rows(self):
+        self.get_current_timestamp("Delete bad training rows")
+        logging.info("Started deleting bad training rows.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+        def get_test_result(Y_test, scores_2_test):
+            try:
+                if self.class_problem in ["binary", "multiclass"]:
+                    matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
+                    test_mae = matthew_2 * 100
+                else:
+                    test_mae = mean_squared_error(Y_test, scores_2_test, squared=True)
+                    test_mae *= -1
+            except Exception:
+                test_mae = 0
+            return test_mae
+
         if self.prediction_mode:
             pass
         else:
-            from sklearn.ensemble import (
-                GradientBoostingClassifier,
-                GradientBoostingRegressor,
-            )
-            from sklearn.linear_model import (
-                RidgeClassifier,
-                SGDClassifier,
-                SGDRegressor,
-            )
+            # from sklearn.linear_model import RidgeClassifier
 
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            columns = X_train.columns.to_list()
             if self.class_problem == "binary" or self.class_problem == "multiclass":
                 model = lgb.LGBMClassifier()
-                model_2 = VWClassifier()
-                model_3 = RidgeClassifier()
-                model_4 = SGDClassifier()
-                model_5 = GradientBoostingClassifier()
+                # model_3 = RidgeClassifier()
             else:
                 model = lgb.LGBMRegressor()
-                model_2 = VWRegressor()
-                model_3 = Ridge()
-                model_4 = SGDRegressor()
-                model_5 = GradientBoostingRegressor
-            model.fit(X_test, Y_test)
-            preds = model.predict(X_train)
-            model_2.fit(X_test, Y_test)
-            preds_2 = model_2.predict(X_train)
-            model_3.fit(X_test, Y_test)
-            preds_3 = model_3.predict(X_train)
-            model_4.fit(X_test, Y_test)
-            preds_4 = model_4.predict(X_train)
-            model_5.fit(X_test, Y_test)
-            preds_5 = model_5.predict(X_train)
+                # model_3 = Ridge()
 
-            X_train[self.target_variable] = Y_train
-            X_train["lgbm_temp_preds"] = preds
-            X_train["vowpal_temp_preds"] = preds_2
-            X_train["ridge_temp_preds"] = preds_3
-            X_train["sgd_temp_preds"] = preds_4
-            X_train["gradient_boosting_temp_preds"] = preds_5
-            X_train["bad_row"] = (
-                (X_train[self.target_variable] != X_train["lgbm_temp_preds"])
-                & (X_train[self.target_variable] != X_train["vowpal_temp_preds"])
-                & (X_train[self.target_variable] != X_train["ridge_temp_preds"])
-                & (X_train[self.target_variable] != X_train["sgd_temp_preds"])
-                & (
-                    X_train[self.target_variable]
-                    != X_train["gradient_boosting_temp_preds"]
+            fold_cols_created = []
+            for sample in range(100):
+                temp_results = []
+                try:
+                    X_train_sample = X_train.sample(frac=0.3, random_state=sample)
+                    X_train_sample = X_train_sample[columns]
+                    y_train_sample = Y_train.iloc[X_train_sample.index]
+                    model.fit(X_train_sample, y_train_sample)
+                    preds = model.predict(X_test)
+                    temp_results.append(get_test_result(Y_test, preds))
+                    # model_3.fit(X_train_sample, y_train_sample)
+                    # preds = model_3.predict(X_test)
+                    temp_results.append(get_test_result(Y_test, preds))
+                    mean_results = np.mean(np.array(temp_results))
+                    X_train_sample[f"fold_result_{sample}"] = mean_results
+                    X_train = X_train.merge(
+                        X_train_sample[f"fold_result_{sample}"],
+                        left_index=True,
+                        right_index=True,
+                        how="left",
+                    )
+                    fold_cols_created.append(f"fold_result_{sample}")
+                    print(
+                        f"Started epoch {sample} from 100 with score of {mean_results}."
+                    )
+                except Exception:
+                    pass
+
+            if self.class_problem in ["binary", "multiclass"]:
+                temp_dfs = []
+                X_train[self.target_variable] = Y_train
+                for one_class in X_train[self.target_variable].unique():
+                    class_df = X_train[
+                        (X_train[self.target_variable] == one_class)
+                    ].copy()
+                    class_df["all_sample_mean"] = class_df[fold_cols_created].mean(
+                        axis=1, skipna=True
+                    )
+                    std = class_df["all_sample_mean"].std()
+                    class_df = class_df[
+                        (
+                            class_df["all_sample_mean"]
+                            > (class_df["all_sample_mean"] - 1.96 * std)
+                        )
+                    ]
+                    temp_dfs.append(class_df)
+                X_train = pd.concat(temp_dfs)
+                X_train = X_train.reset_index(drop=True)
+                Y_train = X_train[self.target_variable]
+                X_train = X_train.drop(self.target_variable, axis=1)
+                X_train = X_train[columns]
+            else:
+                X_train["all_sample_mean"] = X_train[fold_cols_created].mean(
+                    axis=1, skipna=True
                 )
-            )
-            X_train = X_train[(X_train["bad_row"] == False)]  # noqa: E712
-            Y_train = X_train[self.target_variable]
-            X_train = X_train.drop(self.target_variable, axis=1)
-            X_train = X_train.drop("lgbm_temp_preds", axis=1)
-            X_train = X_train.drop("vowpal_temp_preds", axis=1)
-            X_train = X_train.drop("ridge_temp_preds", axis=1)
-            X_train = X_train.drop("sgd_temp_preds", axis=1)
-            X_train = X_train.drop("gradient_boosting_temp_preds", axis=1)
-            X_train = X_train.drop("bad_row", axis=1)
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+                quantile = X_train["all_sample_mean"].quantile(0.10)
+                X_train = X_train[(X_train["all_sample_mean"] > quantile)][columns]
+                X_train = X_train.reset_index(drop=True)
+                Y_train = Y_train.iloc[X_train.index]
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            logging.info("Finished deleting bad training rows.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
 
     def get_hyperparameter_tuning_sample_df(self):
         if self.prediction_mode:
@@ -5256,13 +5393,14 @@ class PreProcessing:
         if self.prediction_mode:
             final_features = self.selected_shap_feats
             self.dataframe = self.dataframe[final_features].copy()
-            logging.info("Finished SHAP basedfeature selection.")
+            logging.info("Finished SHAP based feature selection.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             print(
                 f"Number of columns before SHAP feature selection is: {len(X_train.columns.to_list())}"
             )
+            original_features = X_train.columns.to_list()
 
             def global_shap_importance(model, X):
                 """Return a dataframe containing the features sorted by Shap importance
@@ -5294,66 +5432,247 @@ class PreProcessing:
 
                 return feature_importance
 
-            all_shap_values = []
-            # start training, prediction & Shap loop
-            skf = StratifiedKFold(n_splits=10, random_state=42, shuffle=True)
+            def get_final_features(quantile=0.05, outlier_factor=2.0):
+                all_shap_values = []
+                # start training, prediction & Shap loop
+                if self.class_problem in ["binary", "multiclass"]:
+                    least_rep_class = Y_test.value_counts().min()
+                    if least_rep_class < 10:
+                        n_folds = least_rep_class
+                    else:
+                        n_folds = 10
+                else:
+                    n_folds = 10
 
-            for train_index, test_index in skf.split(X_train, Y_train):
-                x_train, x_test = (
-                    X_train.iloc[train_index],
-                    X_train.iloc[test_index],
+                if self.class_problem in ["binary", "multiclass"]:
+                    skf = StratifiedKFold(
+                        n_splits=n_folds, random_state=42, shuffle=True
+                    )
+                else:
+                    skf = KFold(n_splits=n_folds, random_state=42, shuffle=True)
+
+                for train_index, test_index in skf.split(X_train, Y_train):
+                    x_train, x_test = (
+                        X_train.iloc[train_index],
+                        X_train.iloc[test_index],
+                    )
+                    y_train = Y_train.iloc[train_index]
+
+                    model = lgb.LGBMClassifier(random_state=42)
+                    model.fit(x_train, y_train)
+
+                    all_shap_values.append(global_shap_importance(model, x_test))
+
+                shaps_all_its = pd.concat(all_shap_values)
+
+                def column_sum(lst):
+                    arr = np.array(lst)
+                    res = [np.sum(abs(i)) for i in arr]
+                    return res
+
+                shaps_all_its = shaps_all_its.assign(
+                    Product=lambda x: column_sum(x["importance"])
                 )
-                y_train = Y_train.iloc[train_index]
 
-                model = lgb.LGBMClassifier(random_state=42)
-                model.fit(x_train, y_train)
+                shaps_all_its_all_folds = shaps_all_its.groupby("features").sum()
+                # get standard deviation and sums
+                shap_stds = shaps_all_its_all_folds["Product"].std()
 
-                all_shap_values.append(global_shap_importance(model, x_test))
+                # get 5th percentile thresholds
+                shap_5th = shaps_all_its_all_folds["Product"].quantile(quantile)
 
-            shaps_all_its = pd.concat(all_shap_values)
+                # filter features for each category
+                shap_stds_cols = shaps_all_its_all_folds[
+                    (
+                        shaps_all_its_all_folds["Product"]
+                        > (
+                            shaps_all_its_all_folds["Product"].mean()
+                            - outlier_factor * shap_stds
+                        )
+                    )
+                    & (
+                        shaps_all_its_all_folds["Product"]
+                        < (
+                            shaps_all_its_all_folds["Product"].mean()
+                            + outlier_factor * shap_stds
+                        )
+                    )
+                ].index.to_list()
+                shap_sums_cols = shaps_all_its_all_folds[
+                    (shaps_all_its_all_folds["Product"] > shap_5th)
+                ].index.to_list()
 
-            def column_sum(lst):
-                arr = np.array(lst)
-                res = [np.sum(abs(i)) for i in arr]
-                return res
+                # final feature list
+                final_features = set(shap_stds_cols).intersection(shap_sums_cols)
+                return final_features
 
-            shaps_all_its = shaps_all_its.assign(
-                Product=lambda x: column_sum(x["importance"])
-            )
-
-            shaps_all_its_all_folds = shaps_all_its.groupby("features").sum()
-            # get standard deviation and sums
-            shap_stds = shaps_all_its_all_folds["Product"].std()
-
-            # get 5th percentile thresholds
-            shap_5th = shaps_all_its_all_folds["Product"].quantile(0.05)
-
-            # filter features for each category
-            shap_stds_cols = shaps_all_its_all_folds[
-                (
-                    shaps_all_its_all_folds["Product"]
-                    > (shaps_all_its_all_folds["Product"].mean() - 2 * shap_stds)
-                )
-                & (
-                    shaps_all_its_all_folds["Product"]
-                    < (shaps_all_its_all_folds["Product"].mean() + 2 * shap_stds)
-                )
-            ].index.to_list()
-            shap_sums_cols = shaps_all_its_all_folds[
-                (shaps_all_its_all_folds["Product"] > shap_5th)
-            ].index.to_list()
-
-            # final feature list
-            final_features = set(shap_stds_cols).intersection(shap_sums_cols)
+            final_features = get_final_features()
 
             self.selected_shap_feats = final_features
-
+            features_dropped = list(set(original_features) - set(final_features))
+            print("The following features have been dropped....:")
+            for col in features_dropped:
+                print(col)
             X_train = X_train[final_features].copy()
             X_test = X_test[final_features].copy()
-
             print(
                 f"Number of columns after SHAP feature selection is: {len(X_train.columns.to_list())}"
             )
-            logging.info("Finished SHAP basedfeature selection.")
+
+            logging.info("Finished SHAP based feature selection.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def random_trees_embedding(self):
+        """
+        Creates random forest tree embeddings adn appends them as features on original dataframe.
+        :return:
+        """
+        self.get_current_timestamp("Random trees embedding")
+        logging.info("Started Random trees embedding.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        if self.prediction_mode:
+            random_trees = self.preprocess_decisions["random_tres_embedder"]
+            X_sparse_embedding = random_trees.transform(self.dataframe.toarray())
+            new_cols = [
+                f"Forest_embedding_{i}" for i in range(X_sparse_embedding.shape[1])
+            ]
+            pred_df = pd.DataFrame(X_sparse_embedding, columns=new_cols)
+            self.dataframe = self.dataframe.merge(
+                pred_df, left_index=True, right_index=True
+            )
+
+            logging.info("Finished Random trees embedding.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            random_trees = RandomTreesEmbedding(
+                n_estimators=100, random_state=5, max_depth=1, n_jobs=-1
+            ).fit(X_train)
+            X_sparse_embedding = random_trees.transform(X_train)
+            new_cols = [
+                f"Forest_embedding_{i}" for i in range(X_sparse_embedding.shape[1])
+            ]
+            X_train_df = pd.DataFrame(X_sparse_embedding.toarray(), columns=new_cols)
+            X_train = X_train.merge(X_train_df, left_index=True, right_index=True)
+
+            X_sparse_embedding = random_trees.transform(X_test)
+            X_test_df = pd.DataFrame(X_sparse_embedding.toarray(), columns=new_cols)
+            X_test = X_test.merge(X_test_df, left_index=True, right_index=True)
+
+            self.preprocess_decisions["random_tres_embedder"] = random_trees
+            logging.info("Finished Random trees embedding.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def automated_feature_transformation(self):
+        """
+        Tries different feature space transformation algorithms and transforms the dataset.
+        :return: Updates class attribute.
+        """
+        self.get_current_timestamp("Automated feature transformation")
+        logging.info("Started automated feature transformation.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+        if self.prediction_mode:
+            best_parameters = self.preprocess_decisions["scaler_param"]
+            scaler = get_scaler(best_parameters)
+            if best_parameters["transformer"] == "no_scaling":
+                pass
+            else:
+                columns = self.dataframe.columns
+                self.dataframe = pd.DataFrame(
+                    scaler.fit_transform(self.dataframe), columns=columns
+                )
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            columns = X_train.columns
+            if self.class_problem == "binary":
+                metric = make_scorer(matthews_corrcoef)
+            elif self.class_problem == "multiclass":
+                metric = make_scorer(matthews_corrcoef)
+            elif self.class_problem == "regression":
+                metric = "neg_mean_squared_error"
+
+            def objective(trial):
+                param = {
+                    "transformer": trial.suggest_categorical(
+                        "transformer",
+                        [
+                            "quantile",
+                            "maxabs",
+                            "robust",
+                            "minmax",
+                            "yeo-johnson",
+                            # "box_cox",
+                            "l1",
+                            "l2",
+                            "no_scaling",
+                        ],
+                    ),
+                    "n_quantiles": trial.suggest_uniform("n_quantiles", 10, 1000),
+                }
+                scaler = get_scaler(param)
+
+                if param["transformer"] == "no_scaling":
+                    X_train_scaled = X_train
+
+                else:
+                    X_train_scaled = pd.DataFrame(
+                        scaler.fit_transform(X_train), columns=columns
+                    )
+
+                if self.class_problem == "binary" or self.class_problem == "multiclass":
+                    model = lgb.LGBMClassifier(random_state=42)
+                else:
+                    model = lgb.LGBMRegressor(random_state=42)
+
+                try:
+                    scores = cross_val_score(
+                        model, X_train_scaled, Y_train, cv=10, scoring=metric
+                    )
+                    train_mae = np.mean(scores)
+                    if self.class_problem in ["binary", "multiclass"]:
+                        train_mae *= 100
+                except Exception:
+                    train_mae = 0
+
+                return train_mae
+
+            algorithm = "automated_feature_transformation"
+
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=42, consider_endpoints=True
+            )
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=20,
+                timeout=1 * 60 * 60,
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
+            self.optuna_studies[f"{algorithm}"] = {}
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                print(
+                    "Plotting of hyperparameter performances failed. This usually implicates an error during training."
+                )
+
+            best_parameters = study.best_trial.params
+            scaler = get_scaler(best_parameters)
+            if best_parameters["transformer"] == "no_scaling":
+                pass
+            else:
+                X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=columns)
+                X_test = pd.DataFrame(scaler.fit_transform(X_test), columns=columns)
+                self.data_scaled = True
+            self.preprocess_decisions["scaler_param"] = best_parameters
+            logging.info("Finished automated feature transformation.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
