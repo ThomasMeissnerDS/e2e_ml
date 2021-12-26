@@ -4385,8 +4385,9 @@ class PreProcessing:
                 model = lgb.LGBMRegressor()
                 # model_3 = Ridge()
 
+            total_rounds = 300
             fold_cols_created = []
-            for sample in range(100):
+            for sample in range(total_rounds):
                 temp_results = []
                 try:
                     X_train_sample = X_train.sample(frac=0.3, random_state=sample)
@@ -4395,9 +4396,10 @@ class PreProcessing:
                     model.fit(X_train_sample, y_train_sample)
                     preds = model.predict(X_test)
                     temp_results.append(get_test_result(Y_test, preds))
-                    # model_3.fit(X_train_sample, y_train_sample)
-                    # preds = model_3.predict(X_test)
-                    temp_results.append(get_test_result(Y_test, preds))
+                    # if self.class_problem in ['binary', 'multiclass']:
+                    #    model_3.fit(X_train_sample, y_train_sample)
+                    #    preds = model_3.predict(X_test)
+                    #    temp_results.append(get_test_result(Y_test, preds))
                     mean_results = np.mean(np.array(temp_results))
                     X_train_sample[f"fold_result_{sample}"] = mean_results
                     X_train = X_train.merge(
@@ -4408,7 +4410,7 @@ class PreProcessing:
                     )
                     fold_cols_created.append(f"fold_result_{sample}")
                     print(
-                        f"Started epoch {sample} from 100 with score of {mean_results}."
+                        f"Started epoch {sample} from {total_rounds} with score of {mean_results}."
                     )
                 except Exception:
                     pass
@@ -4420,6 +4422,7 @@ class PreProcessing:
                     class_df = X_train[
                         (X_train[self.target_variable] == one_class)
                     ].copy()
+                    original_len = len(class_df.index)
                     class_df["all_sample_mean"] = class_df[fold_cols_created].mean(
                         axis=1, skipna=True
                     )
@@ -4427,10 +4430,14 @@ class PreProcessing:
                     class_df = class_df[
                         (
                             class_df["all_sample_mean"]
-                            > (class_df["all_sample_mean"] - 1.96 * std)
+                            > (class_df["all_sample_mean"].mean() - 1.96 * std)
                         )
                     ]
                     temp_dfs.append(class_df)
+                    new_len = len(class_df.index)
+                    print(
+                        f"Class {one_class} reduced from {original_len} to {new_len} samples."
+                    )
                 X_train = pd.concat(temp_dfs)
                 X_train = X_train.reset_index(drop=True)
                 Y_train = X_train[self.target_variable]
