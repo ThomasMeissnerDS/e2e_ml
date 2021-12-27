@@ -4374,7 +4374,7 @@ class PreProcessing:
         if self.prediction_mode:
             pass
         else:
-            # from sklearn.linear_model import RidgeClassifier
+            # from sklearn.linear_model import Ridge
 
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             columns = X_train.columns.to_list()
@@ -4396,7 +4396,7 @@ class PreProcessing:
                     model.fit(X_train_sample, y_train_sample)
                     preds = model.predict(X_test)
                     temp_results.append(get_test_result(Y_test, preds))
-                    # if self.class_problem in ['binary', 'multiclass']:
+                    # if self.class_problem in ['regression']:
                     #    model_3.fit(X_train_sample, y_train_sample)
                     #    preds = model_3.predict(X_test)
                     #    temp_results.append(get_test_result(Y_test, preds))
@@ -4426,8 +4426,13 @@ class PreProcessing:
                     class_df["all_sample_mean"] = class_df[fold_cols_created].mean(
                         axis=1, skipna=True
                     )
-                    quantile = class_df["all_sample_mean"].quantile(0.10)
-                    class_df = class_df[(class_df["all_sample_mean"] > quantile)]
+                    std = class_df["all_sample_mean"].std()
+                    class_df = class_df[
+                        (
+                            class_df["all_sample_mean"]
+                            > (class_df["all_sample_mean"].mean() - 1.96 * std)
+                        )
+                    ]
                     temp_dfs.append(class_df)
                     new_len = len(class_df.index)
                     print(
@@ -4442,10 +4447,12 @@ class PreProcessing:
                 X_train["all_sample_mean"] = X_train[fold_cols_created].mean(
                     axis=1, skipna=True
                 )
-                quantile = X_train["all_sample_mean"].quantile(0.10)
+                quantile = X_train["all_sample_mean"].quantile(0.20)
                 X_train = X_train[(X_train["all_sample_mean"] > quantile)][columns]
+                X_train[self.target_variable] = Y_train
                 X_train = X_train.reset_index(drop=True)
-                Y_train = Y_train.iloc[X_train.index]
+                Y_train = X_train[self.target_variable]
+                X_train = X_train.drop(self.target_variable, axis=1)
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
             logging.info("Finished deleting bad training rows.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
