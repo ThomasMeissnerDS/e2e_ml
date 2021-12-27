@@ -5499,13 +5499,6 @@ class PreProcessing:
                             - outlier_factor * shap_stds
                         )
                     )
-                    & (
-                        shaps_all_its_all_folds["Product"]
-                        < (
-                            shaps_all_its_all_folds["Product"].mean()
-                            + outlier_factor * shap_stds
-                        )
-                    )
                 ].index.to_list()
                 shap_sums_cols = shaps_all_its_all_folds[
                     (shaps_all_its_all_folds["Product"] > shap_5th)
