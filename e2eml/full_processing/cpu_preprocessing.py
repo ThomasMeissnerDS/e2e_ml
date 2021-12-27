@@ -4426,13 +4426,8 @@ class PreProcessing:
                     class_df["all_sample_mean"] = class_df[fold_cols_created].mean(
                         axis=1, skipna=True
                     )
-                    std = class_df["all_sample_mean"].std()
-                    class_df = class_df[
-                        (
-                            class_df["all_sample_mean"]
-                            > (class_df["all_sample_mean"].mean() - 1.96 * std)
-                        )
-                    ]
+                    quantile = class_df["all_sample_mean"].quantile(0.10)
+                    class_df = class_df[(class_df["all_sample_mean"] > quantile)]
                     temp_dfs.append(class_df)
                     new_len = len(class_df.index)
                     print(
