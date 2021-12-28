@@ -115,6 +115,10 @@ class TimeTravel:
                 "func": class_instance.outlier_care,
                 "args": ("isolation", "append"),
             },
+            "delete_outliers": {
+                "func": class_instance.outlier_care,
+                "args": ("isolation", "delete", -0.5),
+            },
             "remove_collinearity": {
                 "func": class_instance.remove_collinearity,
                 "args": (0.8),
@@ -551,8 +555,8 @@ def timewalk_auto_exploration(  # noqa: C901
         "autoencoder_based_oversampling"
     ] = False
     class_instance.blueprint_step_selection_non_nlp[
-        "final_pca_dimensionality_reduction"
-    ] = False
+        "delete_unpredictable_training_rows"
+    ] = True
     class_instance.blueprint_step_selection_non_nlp[
         "svm_outlier_detection_loop"
     ] = False
@@ -617,8 +621,8 @@ def timewalk_auto_exploration(  # noqa: C901
                         "autoencoder_based_oversampling"
                     ] = True
                     class_instance.blueprint_step_selection_non_nlp[
-                        "final_pca_dimensionality_reduction"
-                    ] = False
+                        "delete_unpredictable_training_rows"
+                    ] = True
                     class_instance.blueprint_step_selection_non_nlp[
                         "autotuned_clustering"
                     ] = True
@@ -634,6 +638,9 @@ def timewalk_auto_exploration(  # noqa: C901
                     ] = True
                     class_instance.blueprint_step_selection_non_nlp[
                         "shap_based_feature_selection"
+                    ] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "delete_outliers"
                     ] = True
                     class_instance.blueprint_step_selection_non_nlp[
                         "automated_feature_transformation"
@@ -653,6 +660,9 @@ def timewalk_auto_exploration(  # noqa: C901
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "final_pca_dimensionality_reduction"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "delete_outliers"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "automated_feature_transformation"
@@ -676,6 +686,9 @@ def timewalk_auto_exploration(  # noqa: C901
                     class_instance.blueprint_step_selection_non_nlp[
                         "final_pca_dimensionality_reduction"
                     ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "delete_outliers"
+                    ] = True
                     class_instance.blueprint_step_selection_non_nlp[
                         "automated_feature_transformation"
                     ] = True

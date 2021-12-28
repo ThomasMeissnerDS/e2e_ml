@@ -1606,6 +1606,8 @@ class ClassificationModels(
                 x_train_sample.columns.to_list()
             ].astype(float)
 
+            y_train_sample = y_train_sample.astype(int)
+
             if len(x_train_sample.index) < len(X_train.index):
                 rec_batch_size = (len(x_train_sample.index) * 0.8) / 20
                 if int(rec_batch_size) % 2 == 0:
@@ -1784,6 +1786,9 @@ class ClassificationModels(
                 X_train = X_train.drop(self.target_variable, axis=1)
             except Exception:
                 pass
+
+            Y_train = Y_train.astype(int)
+            Y_test = Y_test.astype(int)
 
             Y_train = Y_train.values.reshape(-1)
             Y_test = Y_test.values.reshape(-1)

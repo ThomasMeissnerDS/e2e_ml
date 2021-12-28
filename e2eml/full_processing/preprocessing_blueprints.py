@@ -151,6 +151,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.fill_nulls(how="static")  # can only be here when "static"
         if self.blueprint_step_selection_non_nlp["outlier_care"]:
             self.outlier_care(method="isolation", how="append")
+        if self.blueprint_step_selection_non_nlp["delete_outliers"]:
+            self.outlier_care(method="isolation", how="delete", threshold=-0.5)
         if self.blueprint_step_selection_non_nlp["remove_collinearity"]:
             self.remove_collinearity(threshold=0.8)
         if self.blueprint_step_selection_non_nlp["skewness_removal"]:

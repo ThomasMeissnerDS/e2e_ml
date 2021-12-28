@@ -286,6 +286,7 @@ class PreProcessing:
             "category_encoding": True,
             "fill_nulls_static": True,
             "outlier_care": True,
+            "delete_outlers": False,
             "remove_collinearity": True,
             "skewness_removal": True,
             "automated_feature_transformation": False,
@@ -307,7 +308,7 @@ class PreProcessing:
             "final_kernel_pca_dimensionality_reduction": False,
             "delete_low_variance_features": True,
             "shap_based_feature_selection": True,
-            "delete_unpredictable_training_rows": True,
+            "delete_unpredictable_training_rows": False,
             "sort_columns_alphabetically": True,
         }
 
@@ -336,6 +337,7 @@ class PreProcessing:
             "fill_nulls_static": True,
             "data_binning": True,
             "outlier_care": True,
+            "delete_outliers": False,
             "remove_collinearity": True,
             "skewness_removal": True,
             "automated_feature_transformation": True,
@@ -2512,10 +2514,18 @@ class PreProcessing:
                 ] = outlier_detector
                 self.preprocess_decisions["isolation_forest"]["how"] = how
             elif how == "delete":
+                original_len = len(X_train.index)
                 outlier_detector.fit(X_train)
                 outlier_predictions_train = outlier_detector.decision_function(X_train)
                 X_train["isolation_probs"] = outlier_predictions_train
-                X_train = X_train[(X_train["isolation_probs"] < threshold)]
+
+                X_train[self.target_variable] = Y_train
+                X_train = X_train[(X_train["isolation_probs"] > threshold)].copy()
+                X_train = X_train.reset_index(drop=True)
+                Y_train = X_train[self.target_variable].copy()
+                X_train = X_train.drop(self.target_variable, axis=1)
+                new_len = len(X_train.index)
+                print(f"Training data size reduced from {original_len} to {new_len}.")
                 self.preprocess_decisions["isolation_forest"] = {}
                 self.preprocess_decisions["isolation_forest"][
                     "model"
@@ -4439,10 +4449,11 @@ class PreProcessing:
                         f"Class {one_class} reduced from {original_len} to {new_len} samples."
                     )
                 X_train = pd.concat(temp_dfs)
+                X_train = X_train.sample(frac=1.0, random_state=42)
                 X_train = X_train.reset_index(drop=True)
-                Y_train = X_train[self.target_variable]
+                Y_train = X_train[self.target_variable].copy()
                 X_train = X_train.drop(self.target_variable, axis=1)
-                X_train = X_train[columns]
+                X_train = X_train[columns].copy()
             else:
                 X_train["all_sample_mean"] = X_train[fold_cols_created].mean(
                     axis=1, skipna=True
@@ -5446,12 +5457,12 @@ class PreProcessing:
                 # start training, prediction & Shap loop
                 if self.class_problem in ["binary", "multiclass"]:
                     least_rep_class = Y_test.value_counts().min()
-                    if least_rep_class < 10:
+                    if least_rep_class < 20:
                         n_folds = least_rep_class
                     else:
-                        n_folds = 10
+                        n_folds = 20
                 else:
-                    n_folds = 10
+                    n_folds = 20
 
                 if self.class_problem in ["binary", "multiclass"]:
                     skf = StratifiedKFold(
