@@ -127,6 +127,10 @@ class TimeTravel:
                 "func": class_instance.skewness_removal,
                 "args": (False),
             },
+            "supervised_distance": {
+                "func": class_instance.supervised_distance,
+                "args": None,
+            },
             "automated_feature_transformation": {
                 "func": class_instance.automated_feature_transformation,
                 "args": None,

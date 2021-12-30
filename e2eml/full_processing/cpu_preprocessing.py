@@ -289,6 +289,7 @@ class PreProcessing:
             "delete_outlers": False,
             "remove_collinearity": True,
             "skewness_removal": True,
+            "supervised_distance": True,
             "automated_feature_transformation": False,
             "random_trees_embedding": False,
             "clustering_as_a_feature_dbscan": True,
@@ -340,6 +341,7 @@ class PreProcessing:
             "delete_outliers": False,
             "remove_collinearity": True,
             "skewness_removal": True,
+            "supervised_distance": False,
             "automated_feature_transformation": True,
             "random_trees_embedding": False,
             "autotuned_clustering": True,
@@ -5712,18 +5714,261 @@ class PreProcessing:
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def supervised_distance(self):
+    def supervised_distance_original(self):
         """
-        Finds class middle points and creates features based on it..
+        Finds class middle points and creates features based on it.
         :return: Updates class attribute.
         """
         self.get_current_timestamp("Supervised distance metrics")
         logging.info("Started supervised distance metrics.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            pass
+            if self.class_problem in ["binary", "multiclass"]:
+                unique_classes = self.preprocess_decisions[
+                    "supervised_distance_meta_data"
+                ]["classes_used"]
+                delta_cols_created = self.preprocess_decisions[
+                    "supervised_distance_meta_data"
+                ]["delta_sum_columns_created"]
+                delta_cols_mapping = self.preprocess_decisions[
+                    "supervised_distance_meta_data"
+                ]["delta_cols_mapping"]
+                for ind_class in unique_classes:
+                    meta_data = self.preprocess_decisions[
+                        "supervised_distance_meta_data"
+                    ][f"class_{ind_class}"]
+                    delta_to_mean = (
+                        self.dataframe.iloc[:, :].values
+                        - meta_data.loc["mean", :].values
+                    )
+                    delta_to_mean_df = pd.DataFrame(delta_to_mean)
+                    self.dataframe[
+                        f"total_delta_sum_to_class_{ind_class}"
+                    ] = delta_to_mean_df.sum(axis=1).values
+                    self.dataframe[
+                        f"total_delta_std_to_class_{ind_class}"
+                    ] = delta_to_mean_df.std(axis=1).values
+
+                self.dataframe["supervised_distance_nearest_class"] = (
+                    self.dataframe[delta_cols_created].idxmax(axis=1).values
+                )
+                self.dataframe["supervised_distance_nearest_class"] = self.dataframe[
+                    "supervised_distance_nearest_class"
+                ].map(delta_cols_mapping)
+            else:
+                pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             logging.info("Finished supervised distance metrics.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            self.preprocess_decisions["supervised_distance_meta_data"] = {}
+
+            if self.class_problem in ["binary", "multiclass"]:
+                unique_classes = np.unique(Y_train.values)
+                delta_cols_created = []
+                delta_cols_mapping = {}
+
+                # loop through all classes
+                for ind_class in unique_classes:
+                    X_train_class_only = X_train.iloc[np.where(Y_train == ind_class)[0]]
+                    # get DataFrame meta data
+                    meta_data = X_train_class_only.describe()
+                    # get delta of all rows and mean of the class for all columns
+                    delta_to_mean = (
+                        X_train.iloc[:, :].values - meta_data.loc["mean", :].values
+                    )
+                    delta_to_mean_df = pd.DataFrame(delta_to_mean)
+                    X_train[
+                        f"total_delta_sum_to_class_{ind_class}"
+                    ] = delta_to_mean_df.sum(axis=1).values
+                    X_train[
+                        f"total_delta_std_to_class_{ind_class}"
+                    ] = delta_to_mean_df.std(axis=1).values
+
+                    delta_to_mean = (
+                        X_test.iloc[:, :].values - meta_data.loc["mean", :].values
+                    )
+                    delta_to_mean_df = pd.DataFrame(delta_to_mean)
+                    X_test[
+                        f"total_delta_sum_to_class_{ind_class}"
+                    ] = delta_to_mean_df.sum(axis=1).values
+                    X_test[
+                        f"total_delta_std_to_class_{ind_class}"
+                    ] = delta_to_mean_df.std(axis=1).values
+
+                    delta_cols_created.append(f"total_delta_sum_to_class_{ind_class}")
+                    self.preprocess_decisions["supervised_distance_meta_data"][
+                        f"class_{ind_class}"
+                    ] = meta_data
+                    delta_cols_mapping[
+                        f"total_delta_sum_to_class_{ind_class}"
+                    ] = ind_class
+
+                X_train["supervised_distance_nearest_class"] = (
+                    X_train[delta_cols_created].idxmax(axis=1).values
+                )
+                X_test["supervised_distance_nearest_class"] = (
+                    X_test[delta_cols_created].idxmax(axis=1).values
+                )
+
+                X_train["supervised_distance_nearest_class"] = X_train[
+                    "supervised_distance_nearest_class"
+                ].map(delta_cols_mapping)
+                X_test["supervised_distance_nearest_class"] = X_test[
+                    "supervised_distance_nearest_class"
+                ].map(delta_cols_mapping)
+                self.preprocess_decisions["supervised_distance_meta_data"][
+                    "classes_used"
+                ] = unique_classes
+                self.preprocess_decisions["supervised_distance_meta_data"][
+                    "delta_sum_columns_created"
+                ] = delta_cols_created
+                self.preprocess_decisions["supervised_distance_meta_data"][
+                    "delta_cols_mapping"
+                ] = delta_cols_mapping
+            else:
+                pass
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def supervised_distance(self):
+        """
+        Finds class middle points and creates features based on it.
+        :return: Updates class attribute.
+        """
+        self.get_current_timestamp("Supervised distance metrics")
+        logging.info("Started supervised distance metrics.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        if self.prediction_mode:
+            if self.class_problem in ["binary", "multiclass"]:
+                unique_classes = self.preprocess_decisions[
+                    "supervised_distance_meta_data"
+                ]["classes_used"]
+                delta_cols_created = self.preprocess_decisions[
+                    "supervised_distance_meta_data"
+                ]["delta_sum_columns_created"]
+                delta_cols_mapping = self.preprocess_decisions[
+                    "supervised_distance_meta_data"
+                ]["delta_cols_mapping"]
+                for ind_class in unique_classes:
+                    meta_data = self.preprocess_decisions[
+                        "supervised_distance_meta_data"
+                    ][f"class_{ind_class}"]
+                    delta_to_mean = (
+                        self.dataframe.iloc[:, :].values
+                        - meta_data.loc["mean", :].values
+                    )
+                    delta_to_max = (
+                        self.dataframe.iloc[:, :].values
+                        - meta_data.loc["max", :].values
+                    )
+                    delta_to_min = (
+                        self.dataframe.iloc[:, :].values
+                        - meta_data.loc["min", :].values
+                    )
+                    total_delta_df = pd.DataFrame(
+                        delta_to_mean + delta_to_max + delta_to_min
+                    )
+                    self.dataframe[
+                        f"total_delta_sum_to_class_{ind_class}"
+                    ] = total_delta_df.sum(axis=1).values
+                    self.dataframe[
+                        f"total_delta_std_to_class_{ind_class}"
+                    ] = total_delta_df.std(axis=1).values
+
+                self.dataframe["supervised_distance_nearest_class"] = (
+                    self.dataframe[delta_cols_created].idxmax(axis=1).values
+                )
+                self.dataframe["supervised_distance_nearest_class"] = self.dataframe[
+                    "supervised_distance_nearest_class"
+                ].map(delta_cols_mapping)
+            else:
+                pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            logging.info("Finished supervised distance metrics.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            self.preprocess_decisions["supervised_distance_meta_data"] = {}
+
+            if self.class_problem in ["binary", "multiclass"]:
+                unique_classes = np.unique(Y_train.values)
+                delta_cols_created = []
+                delta_cols_mapping = {}
+
+                # loop through all classes
+                for ind_class in unique_classes:
+                    X_train_class_only = X_train.iloc[np.where(Y_train == ind_class)[0]]
+                    # get DataFrame meta data
+                    meta_data = X_train_class_only.describe()
+                    # get delta of all rows and mean of the class for all columns
+                    delta_to_mean = (
+                        X_train.iloc[:, :].values - meta_data.loc["mean", :].values
+                    )
+                    delta_to_max = (
+                        X_train.iloc[:, :].values - meta_data.loc["max", :].values
+                    )
+                    delta_to_min = (
+                        X_train.iloc[:, :].values - meta_data.loc["min", :].values
+                    )
+                    total_delta_df = pd.DataFrame(
+                        delta_to_mean + delta_to_max + delta_to_min
+                    )
+
+                    X_train[
+                        f"total_delta_sum_to_class_{ind_class}"
+                    ] = total_delta_df.sum(axis=1).values
+                    X_train[
+                        f"total_delta_std_to_class_{ind_class}"
+                    ] = total_delta_df.std(axis=1).values
+
+                    delta_to_mean = (
+                        X_test.iloc[:, :].values - meta_data.loc["mean", :].values
+                    )
+                    delta_to_max = (
+                        X_test.iloc[:, :].values - meta_data.loc["max", :].values
+                    )
+                    delta_to_min = (
+                        X_test.iloc[:, :].values - meta_data.loc["min", :].values
+                    )
+                    total_delta_df = pd.DataFrame(
+                        delta_to_mean + delta_to_max + delta_to_min
+                    )
+                    X_test[
+                        f"total_delta_sum_to_class_{ind_class}"
+                    ] = total_delta_df.sum(axis=1).values
+                    X_test[
+                        f"total_delta_std_to_class_{ind_class}"
+                    ] = total_delta_df.std(axis=1).values
+
+                    delta_cols_created.append(f"total_delta_sum_to_class_{ind_class}")
+                    self.preprocess_decisions["supervised_distance_meta_data"][
+                        f"class_{ind_class}"
+                    ] = meta_data
+                    delta_cols_mapping[
+                        f"total_delta_sum_to_class_{ind_class}"
+                    ] = ind_class
+
+                X_train["supervised_distance_nearest_class"] = (
+                    X_train[delta_cols_created].idxmax(axis=1).values
+                )
+                X_test["supervised_distance_nearest_class"] = (
+                    X_test[delta_cols_created].idxmax(axis=1).values
+                )
+
+                X_train["supervised_distance_nearest_class"] = X_train[
+                    "supervised_distance_nearest_class"
+                ].map(delta_cols_mapping)
+                X_test["supervised_distance_nearest_class"] = X_test[
+                    "supervised_distance_nearest_class"
+                ].map(delta_cols_mapping)
+                self.preprocess_decisions["supervised_distance_meta_data"][
+                    "classes_used"
+                ] = unique_classes
+                self.preprocess_decisions["supervised_distance_meta_data"][
+                    "delta_sum_columns_created"
+                ] = delta_cols_created
+                self.preprocess_decisions["supervised_distance_meta_data"][
+                    "delta_cols_mapping"
+                ] = delta_cols_mapping
+            else:
+                pass
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
