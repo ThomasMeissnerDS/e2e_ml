@@ -2480,7 +2480,10 @@ class PreProcessing:
         :return: Returns modified dataframe.
         """
         if self.prediction_mode:
-            if self.preprocess_decisions["isolation_forest"]["how"] == "append":
+            if (
+                self.preprocess_decisions["isolation_forest"]["how"] == "append"
+                and how == "append"
+            ):
                 outlier_detector = self.preprocess_decisions["isolation_forest"][
                     "model"
                 ]
@@ -2517,20 +2520,18 @@ class PreProcessing:
                 original_len = len(X_train.index)
                 outlier_detector.fit(X_train)
                 outlier_predictions_train = outlier_detector.decision_function(X_train)
-                X_train["isolation_probs"] = outlier_predictions_train
+                X_train["isolation_probs_for_deletion"] = outlier_predictions_train
 
                 X_train[self.target_variable] = Y_train
-                X_train = X_train[(X_train["isolation_probs"] > threshold)].copy()
+                X_train = X_train[
+                    (X_train["isolation_probs_for_deletion"] > threshold)
+                ].copy()
                 X_train = X_train.reset_index(drop=True)
                 Y_train = X_train[self.target_variable].copy()
                 X_train = X_train.drop(self.target_variable, axis=1)
+                X_train = X_train.drop("isolation_probs_for_deletion", axis=1)
                 new_len = len(X_train.index)
                 print(f"Training data size reduced from {original_len} to {new_len}.")
-                self.preprocess_decisions["isolation_forest"] = {}
-                self.preprocess_decisions["isolation_forest"][
-                    "model"
-                ] = outlier_detector
-                self.preprocess_decisions["isolation_forest"]["how"] = how
                 del outlier_predictions_train
             del outlier_detector
             _ = gc.collect()
@@ -4064,6 +4065,16 @@ class PreProcessing:
                     )
             print("Export training data with synthetic optimized features.")
             optuna.logging.set_verbosity(optuna.logging.INFO)
+            # shuffle dataframe for Tabnet
+            X_train[self.target_variable] = Y_train
+            X_train = X_train.sample(frac=1.0, random_state=42)
+            X_train = X_train.reset_index(drop=True)
+            Y_train = X_train[self.target_variable].copy()
+            X_train = X_train.drop(self.target_variable, axis=1)
+            try:
+                del X_train[self.target_variable]
+            except KeyError:
+                pass
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def automated_feature_selection(  # noqa: C901
@@ -4453,6 +4464,10 @@ class PreProcessing:
                 X_train = X_train.reset_index(drop=True)
                 Y_train = X_train[self.target_variable].copy()
                 X_train = X_train.drop(self.target_variable, axis=1)
+                try:
+                    del X_train[self.target_variable]
+                except KeyError:
+                    pass
                 X_train = X_train[columns].copy()
             else:
                 X_train["all_sample_mean"] = X_train[fold_cols_created].mean(
@@ -5083,8 +5098,15 @@ class PreProcessing:
                     Y_train = np.append(Y_train, Y_train_other_classes)
                     Y_train = pd.Series(Y_train)
 
+                    X_train[self.target_variable] = Y_train
+                    X_train = X_train.sample(frac=1.0, random_state=42)
                     X_train = X_train.reset_index(drop=True)
-                    Y_train = Y_train.reset_index(drop=True)
+                    Y_train = X_train[self.target_variable].copy()
+                    X_train = X_train.drop(self.target_variable, axis=1)
+                    try:
+                        del X_train[self.target_variable]
+                    except KeyError:
+                        pass
 
                     self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
@@ -5687,5 +5709,21 @@ class PreProcessing:
                 self.data_scaled = True
             self.preprocess_decisions["scaler_param"] = best_parameters
             logging.info("Finished automated feature transformation.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def supervised_distance(self):
+        """
+        Finds class middle points and creates features based on it..
+        :return: Updates class attribute.
+        """
+        self.get_current_timestamp("Supervised distance metrics")
+        logging.info("Started supervised distance metrics.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            logging.info("Finished supervised distance metrics.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)

@@ -581,6 +581,7 @@ def timewalk_auto_exploration(  # noqa: C901
             "cardinality_remover",
             "delete_high_null_cols",
             "early_numeric_only_feature_selection",
+            # "fill_infinite_values",
         ]
 
     # define the type of scoring
@@ -692,9 +693,32 @@ def timewalk_auto_exploration(  # noqa: C901
                     class_instance.blueprint_step_selection_non_nlp[
                         "automated_feature_transformation"
                     ] = True
-                automl_travel.create_time_travel_checkpoints(
-                    class_instance, reload_instance=True
-                )
+                elif checkpoint == "fill_infinite_values":
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "tfidf_vectorizer_to_pca"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "data_binning"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "svm_outlier_detection_loop"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autoencoder_based_oversampling"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "synthetic_data_augmentation"
+                    ] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "delete_outliers"
+                    ] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "automated_feature_transformation"
+                    ] = True
+            automl_travel.create_time_travel_checkpoints(
+                class_instance, reload_instance=True
+            )
+
         except Exception:
             pass
         preprocess_end = time.time()

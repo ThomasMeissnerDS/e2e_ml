@@ -369,6 +369,9 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
+* 2.9.96
+  * Timewalk got adjustments
+  * Fixed a bug where row deletion has been incompatible with Tabnet
 * 2.9.95
   * SHAP based feature selection increased to 20 folds (from 10)
   * less unnecessary print outs
