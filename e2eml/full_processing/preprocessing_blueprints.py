@@ -157,8 +157,6 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.remove_collinearity(threshold=0.8)
         if self.blueprint_step_selection_non_nlp["skewness_removal"]:
             self.skewness_removal(overwrite_orig_col=False)
-        if self.blueprint_step_selection_non_nlp["supervised_distance"]:
-            self.supervised_distance()
         if self.blueprint_step_selection_non_nlp["automated_feature_transformation"]:
             self.automated_feature_transformation()
         if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_dbscan"]:

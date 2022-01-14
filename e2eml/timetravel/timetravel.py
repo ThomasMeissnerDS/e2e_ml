@@ -2,6 +2,7 @@ import copy
 import gc
 import logging
 import time
+import traceback
 from datetime import datetime
 
 import numpy as np
@@ -127,10 +128,6 @@ class TimeTravel:
                 "func": class_instance.skewness_removal,
                 "args": (False),
             },
-            "supervised_distance": {
-                "func": class_instance.supervised_distance,
-                "args": None,
-            },
             "automated_feature_transformation": {
                 "func": class_instance.automated_feature_transformation,
                 "args": None,
@@ -234,6 +231,7 @@ class TimeTravel:
             "quadratic_discriminant_analysis": class_instance.ml_bp11_multiclass_full_processing_quadratic_discriminant_analysis,
             "svm": class_instance.ml_bp12_multiclass_full_processing_svm,
             "multinomial_nb": class_instance.ml_bp13_multiclass_full_processing_multinomial_nb,
+            "deesc": class_instance.ml_bp15_multiclass_full_processing_deesc,
         }
 
     def call_regression_algorithm_mapping(self, class_instance):
@@ -555,15 +553,6 @@ def timewalk_auto_exploration(  # noqa: C901
     # we adjust default preprocessing
     class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = True
     class_instance.blueprint_step_selection_non_nlp["scale_data"] = True
-    class_instance.blueprint_step_selection_non_nlp[
-        "autoencoder_based_oversampling"
-    ] = False
-    class_instance.blueprint_step_selection_non_nlp[
-        "delete_unpredictable_training_rows"
-    ] = True
-    class_instance.blueprint_step_selection_non_nlp[
-        "svm_outlier_detection_loop"
-    ] = False
 
     # we want to store our results
     scoring_results = []
@@ -581,11 +570,12 @@ def timewalk_auto_exploration(  # noqa: C901
     else:
         checkpoints = [
             "default",
+            "automated_feature_selection",
             "autotuned_clustering",
             "cardinality_remover",
             "delete_high_null_cols",
             "early_numeric_only_feature_selection",
-            # "fill_infinite_values",
+            "fill_infinite_values",
         ]
 
     # define the type of scoring
@@ -618,12 +608,16 @@ def timewalk_auto_exploration(  # noqa: C901
                 class_instance = automl_travel.load_checkpoint(
                     checkpoint_to_load=checkpoint
                 )
-                if checkpoint == "autotuned_clustering":
+                if checkpoint == "automated_feature_selection":
                     class_instance.blueprint_step_selection_non_nlp[
-                        "svm_outlier_detection_loop"
+                        "shap_based_feature_selection"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
-                        "autoencoder_based_oversampling"
+                        "autotuned_clustering"
+                    ] = False
+                elif checkpoint == "autotuned_clustering":
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "shap_based_feature_selection"
                     ] = True
                     class_instance.blueprint_step_selection_non_nlp[
                         "delete_unpredictable_training_rows"
@@ -640,7 +634,7 @@ def timewalk_auto_exploration(  # noqa: C901
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "autotuned_clustering"
-                    ] = True
+                    ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "shap_based_feature_selection"
                     ] = True
@@ -664,9 +658,6 @@ def timewalk_auto_exploration(  # noqa: C901
                         "autoencoder_based_oversampling"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
-                        "final_pca_dimensionality_reduction"
-                    ] = False
-                    class_instance.blueprint_step_selection_non_nlp[
                         "delete_outliers"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
@@ -683,15 +674,6 @@ def timewalk_auto_exploration(  # noqa: C901
                         "data_binning"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
-                        "svm_outlier_detection_loop"
-                    ] = False
-                    class_instance.blueprint_step_selection_non_nlp[
-                        "autoencoder_based_oversampling"
-                    ] = False
-                    class_instance.blueprint_step_selection_non_nlp[
-                        "final_pca_dimensionality_reduction"
-                    ] = False
-                    class_instance.blueprint_step_selection_non_nlp[
                         "delete_outliers"
                     ] = True
                     class_instance.blueprint_step_selection_non_nlp[
@@ -700,6 +682,9 @@ def timewalk_auto_exploration(  # noqa: C901
                 elif checkpoint == "fill_infinite_values":
                     class_instance.blueprint_step_selection_non_nlp[
                         "tfidf_vectorizer_to_pca"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "numeric_binarizer_pca"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "data_binning"
@@ -711,20 +696,32 @@ def timewalk_auto_exploration(  # noqa: C901
                         "autoencoder_based_oversampling"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
-                        "synthetic_data_augmentation"
-                    ] = True
+                        "clustering_as_a_feature_dbscan"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "clustering_as_a_feature_kmeans_loop"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "clustering_as_a_feature_gaussian_mixture_loop"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "pca_clustering_results"
+                    ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "delete_outliers"
                     ] = True
                     class_instance.blueprint_step_selection_non_nlp[
                         "automated_feature_transformation"
                     ] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "shap_based_feature_selection"
+                    ] = True
             automl_travel.create_time_travel_checkpoints(
                 class_instance, reload_instance=True
             )
 
         except Exception:
-            pass
+            print(traceback.format_exc())
         preprocess_end = time.time()
         preprocess_runtime = preprocess_end - preprocess_start
         print(f"All algorithms to be tested are: {algorithms}.")
@@ -753,7 +750,7 @@ def timewalk_auto_exploration(  # noqa: C901
                     else:
                         hold_df_target = holdout_target
                 except Exception:
-                    pass
+                    print(traceback.format_exc())
 
                 try:
                     if class_instance.class_problem in ["binary", "multiclass"]:
@@ -785,6 +782,7 @@ def timewalk_auto_exploration(  # noqa: C901
                             squared=True,
                         )
                 except Exception:
+                    print(traceback.format_exc())
                     try:
                         if class_instance.class_problem in ["binary", "multiclass"]:
                             scoring = matthews_corrcoef(
@@ -820,6 +818,7 @@ def timewalk_auto_exploration(  # noqa: C901
                                 squared=True,
                             )
                     except Exception:
+                        print(traceback.format_exc())
                         print("Evaluation on holdout failed.")
                         if class_instance.class_problem in ["binary", "multiclass"]:
                             scoring = 0
@@ -866,6 +865,7 @@ def timewalk_auto_exploration(  # noqa: C901
                         loaded_experiment = pd.read_pickle(name_of_exist_experiment)
                         results_df = pd.concat([results_df, loaded_experiment])
                     except Exception:
+                        print(traceback.format_exc())
                         print(
                             "Loading former experiment data failed. Will export running experiment only."
                         )
@@ -881,6 +881,7 @@ def timewalk_auto_exploration(  # noqa: C901
                 except KeyError:
                     pass
         except Exception:
+            print(traceback.format_exc())
             if class_instance.class_problem in ["binary", "multiclass"]:  # noqa: F821
                 scoring = 0
                 scoring_2 = 0
@@ -923,6 +924,7 @@ def timewalk_auto_exploration(  # noqa: C901
                     loaded_experiment = pd.read_pickle(name_of_exist_experiment)
                     results_df = pd.concat([results_df, loaded_experiment])
                 except Exception:
+                    print(traceback.format_exc())
                     print(
                         "Loading former experiment data failed. Will export running experiment only."
                     )
@@ -961,6 +963,7 @@ def timewalk_auto_exploration(  # noqa: C901
             loaded_experiment = pd.read_pickle(name_of_exist_experiment)
             results_df = pd.concat([results_df, loaded_experiment])
         except Exception:
+            print(traceback.format_exc())
             print(
                 "Loading former experiment data failed. Will export running experiment only."
             )
@@ -979,5 +982,5 @@ def timewalk_auto_exploration(  # noqa: C901
         fig.update_traces(textposition="bottom right")
         fig.show()
     except Exception:
-        pass
+        print(traceback.format_exc())
     return results_df

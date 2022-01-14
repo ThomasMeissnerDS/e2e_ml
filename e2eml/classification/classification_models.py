@@ -3574,3 +3574,65 @@ class ClassificationModels(
         del model
         _ = gc.collect()
         return self.predicted_probs
+
+    def deesc_train(self):  # noqa: C901
+        """
+        Trains an DEESC classifier
+        :return: Updates class attributes by its predictions.
+        """
+        self.get_current_timestamp(task="Train DEESC")
+        algorithm = "deesc"
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            from e2eml.model_utils.deesc_classifier import DEESCClassifier
+
+            model = DEESCClassifier(X_train, X_test, Y_train, Y_test)
+            model.fit()
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
+            return self.trained_models
+
+    def deesc_predict(self):
+        self.get_current_timestamp(task="Predict with DEESC")
+        algorithm = "deesc"
+        model = self.trained_models[f"{algorithm}"]
+        if self.prediction_mode:
+            X_test = self.dataframe
+            partial_probs = model.predict_proba(X_test)
+            if self.class_problem == "binary":
+                predicted_classes = (
+                    partial_probs
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
+                )
+                predicted_classes = predicted_classes.astype(int)
+                predicted_probs = partial_probs
+            else:
+                predicted_probs = partial_probs
+                predicted_classes = np.asarray(
+                    [np.argmax(line) for line in partial_probs]
+                )
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            predicted_probs = model.predict_proba(X_test)
+            if self.class_problem == "binary":
+                self.threshold_refiner(predicted_probs, Y_test, algorithm)
+                predicted_classes = (
+                    predicted_probs
+                    > self.preprocess_decisions["probability_threshold"][algorithm]
+                )
+            else:
+                predicted_classes = np.asarray(
+                    [np.argmax(line) for line in predicted_probs]
+                )
+
+        self.predicted_probs[f"{algorithm}"] = {}
+        self.predicted_classes[f"{algorithm}"] = {}
+        self.predicted_probs[f"{algorithm}"] = predicted_probs
+        self.predicted_classes[f"{algorithm}"] = predicted_classes
+        del model
+        _ = gc.collect()
+        return self.predicted_probs
