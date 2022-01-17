@@ -571,7 +571,7 @@ def timewalk_auto_exploration(  # noqa: C901
     else:
         checkpoints = [
             "default",
-            "shap_based_feature_selection",
+            "delete_low_variance_features",
             "automated_feature_selection",
             "autotuned_clustering",
             "cardinality_remover",
@@ -614,7 +614,7 @@ def timewalk_auto_exploration(  # noqa: C901
                 class_instance = automl_travel.load_checkpoint(
                     checkpoint_to_load=checkpoint
                 )
-                if checkpoint == "shap_based_feature_selection":
+                if checkpoint == "delete_low_variance_features":
                     class_instance.blueprint_step_selection_non_nlp[
                         "autoencoder_based_oversampling"
                     ] = True

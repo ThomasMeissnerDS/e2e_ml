@@ -370,7 +370,7 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
-* 2.9.98
+* 2.10.01
   * Added references & citations to Readme
   * Added is_imbalanced flag to Timewalk
   * Removed babel from dependencies & updated some of them
