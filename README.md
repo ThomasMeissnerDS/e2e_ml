@@ -22,6 +22,7 @@ a few lines of code.
   * [Documentation](#documentation)
   * [Pull Requests](#pull-requests)
 * [Release History](#release-history)
+* [References](#references)
 * [Meta](#meta)
 
 <!-- tocstop -->
@@ -369,6 +370,10 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
+* 2.9.98
+  * Added references & citations to Readme
+  * Added is_imbalanced flag to Timewalk
+  * Removed babel from dependencies & updated some of them
 * 2.9.96
   * Timewalk got adjustments
   * Fixed a bug where row deletion has been incompatible with Tabnet
@@ -522,10 +527,29 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
   * First release with classification and regression blueprints. (not available
     anymore)
 
+## References
+
+* Focal loss
+  * [Focal loss for LGBM](https://maxhalford.github.io/blog/lightgbm-focal-loss/#first-order-derivative)
+  * [Focal loss for LGBM multiclass](https://towardsdatascience.com/multi-class-classification-using-focal-loss-and-lightgbm-a6a6dec28872)
+* Autoencoder
+  * [Variational Autoencoder for imbalanced data](https://github.com/lschmiddey/Autoencoder/blob/master/VAE_for_imbalanced_data.ipynb)
+* Target Encoding
+  * [Target encoding for multiclass](https://towardsdatascience.com/target-encoding-for-multi-class-classification-c9a7bcb1a53)
+* Pytorch-TabNet
+  * [Arik, S. O., & Pfister, T. (2019). TabNet: Attentive Interpretable Tabular Learning. arXiv preprint arXiv:1908.07442.](https://arxiv.org/pdf/1908.07442.pdf)
+  * [Implementing TabNet in Pytorch](https://towardsdatascience.com/implementing-tabnet-in-pytorch-fc977c383279)
+* Ngboost
+  * [NGBoost: Natural Gradient Boosting for Probabilistic Prediction, arXiv:1910.03225](https://arxiv.org/abs/1910.03225)
+* Vowpal Wabbit
+  * [Vowpal Wabbit Research overview](https://vowpalwabbit.org/research.html)
+
 ## Meta
 
 Creator: Thomas Meißner – [LinkedIn](https://www.linkedin.com/in/thomas-mei%C3%9Fner-m-a-3808b346)
 
 Consultant: Gabriel Stephen Alexander – [Github](https://github.com/bitsofsteve)
 
-[e2e-ml Github repository](https://github.com/ThomasMeissnerDS/e2e_ml)
+Special thanks to: Alex McKenzie - [LinkedIn](https://de.linkedin.com/in/alex-mckenzie)
+
+[e2eml Github repository](https://github.com/ThomasMeissnerDS/e2e_ml)

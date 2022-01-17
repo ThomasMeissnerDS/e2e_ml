@@ -394,6 +394,7 @@ def timewalk_auto_exploration(  # noqa: C901
     class_instance,
     holdout_df,
     holdout_target,
+    is_imbalanced=False,
     algs_to_test=None,
     preprocess_checkpoints=None,
     speed_up_model_tuning=True,
@@ -506,8 +507,8 @@ def timewalk_auto_exploration(  # noqa: C901
         # we reduce the tuning rounds for all algorithms
         class_instance.hyperparameter_tuning_rounds["xgboost"] = 10
         class_instance.hyperparameter_tuning_rounds["lgbm"] = 10
-        class_instance.hyperparameter_tuning_rounds["sgd"] = 10
-        class_instance.hyperparameter_tuning_rounds["svm"] = 10
+        class_instance.hyperparameter_tuning_rounds["sgd"] = 100
+        class_instance.hyperparameter_tuning_rounds["svm"] = 25
         class_instance.hyperparameter_tuning_rounds["svm_regression"] = 10
         class_instance.hyperparameter_tuning_rounds["multinomial_nb"] = 10
         class_instance.hyperparameter_tuning_rounds["tabnet"] = 10
@@ -528,7 +529,7 @@ def timewalk_auto_exploration(  # noqa: C901
         class_instance.hyperparameter_tuning_max_runtime_secs["xgboost"] = 4 * 60 * 60
         class_instance.hyperparameter_tuning_max_runtime_secs["sgd"] = 3 * 60 * 60
         class_instance.hyperparameter_tuning_max_runtime_secs["lgbm"] = 3 * 60 * 60
-        class_instance.hyperparameter_tuning_max_runtime_secs["tabnet"] = 3 * 60 * 60
+        class_instance.hyperparameter_tuning_max_runtime_secs["tabnet"] = 2 * 60 * 60
         class_instance.hyperparameter_tuning_max_runtime_secs["ngboost"] = 3 * 60 * 60
         class_instance.hyperparameter_tuning_max_runtime_secs["sklearn_ensemble"] = (
             3 * 60 * 60
@@ -570,6 +571,7 @@ def timewalk_auto_exploration(  # noqa: C901
     else:
         checkpoints = [
             "default",
+            "shap_based_feature_selection",
             "automated_feature_selection",
             "autotuned_clustering",
             "cardinality_remover",
@@ -577,6 +579,10 @@ def timewalk_auto_exploration(  # noqa: C901
             "early_numeric_only_feature_selection",
             "fill_infinite_values",
         ]
+
+    if not is_imbalanced:
+        if "shap_based_feature_selection" in checkpoints:
+            checkpoints.remove("shap_based_feature_selection")
 
     # define the type of scoring
     if class_instance.class_problem in ["binary", "multiclass"]:
@@ -608,7 +614,20 @@ def timewalk_auto_exploration(  # noqa: C901
                 class_instance = automl_travel.load_checkpoint(
                     checkpoint_to_load=checkpoint
                 )
-                if checkpoint == "automated_feature_selection":
+                if checkpoint == "shap_based_feature_selection":
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autoencoder_based_oversampling"
+                    ] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "shap_based_feature_selection"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autotuned_clustering"
+                    ] = False
+                elif checkpoint == "automated_feature_selection":
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autoencoder_based_oversampling"
+                    ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "shap_based_feature_selection"
                     ] = False
@@ -619,6 +638,9 @@ def timewalk_auto_exploration(  # noqa: C901
                     class_instance.blueprint_step_selection_non_nlp[
                         "shap_based_feature_selection"
                     ] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autotuned_clustering"
+                    ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "delete_unpredictable_training_rows"
                     ] = True
@@ -646,6 +668,9 @@ def timewalk_auto_exploration(  # noqa: C901
                     ] = True
                 elif checkpoint == "delete_high_null_cols":
                     class_instance.blueprint_step_selection_non_nlp[
+                        "autotuned_clustering"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
                         "tfidf_vectorizer_to_pca"
                     ] = True
                     class_instance.blueprint_step_selection_non_nlp[
@@ -667,6 +692,9 @@ def timewalk_auto_exploration(  # noqa: C901
                         "shap_based_feature_selection"
                     ] = False
                 elif checkpoint == "early_numeric_only_feature_selection":
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "autoencoder_based_oversampling"
+                    ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "tfidf_vectorizer_to_pca"
                     ] = False
