@@ -370,6 +370,8 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
+* 2.10.02
+  * Adjusted dependencies for Pandas and Spacy
 * 2.10.01
   * Added references & citations to Readme
   * Added is_imbalanced flag to Timewalk
