@@ -34,7 +34,9 @@ class DEESCClassifier:
         random_state=1000,
         use_long_warmup: bool = False,
         auto_select_features: bool = False,
-        max_tuning_time_h: float = 2,
+        no_stacking: bool = True,
+        max_tuning_time_h: float = 0.06,
+        rapids_acceleration: bool = False,
     ):
         if isinstance(Y_train, pd.Series):
             pass
@@ -74,6 +76,8 @@ class DEESCClassifier:
         self.max_tuning_time_h = max_tuning_time_h
         self.use_long_warmup = use_long_warmup
         self.auto_select_features = auto_select_features
+        self.no_stacking = no_stacking
+        self.rapids_acceleration = rapids_acceleration
         self.stats_to_consider = ["min", "25%", "50%", "75%", "mean", "max"]
         self.ext_stats_to_consider = [
             "min",
@@ -644,14 +648,6 @@ class DEESCClassifier:
                 "Plotting of hyperparameter performances failed. This usually implicates an error during training."
             )
 
-        try:
-            fig = optuna.visualization.plot_param_importances(study)
-            fig.show()
-        except ZeroDivisionError:
-            print(
-                "Plotting of hyperparameter performances failed. This usually implicates an error during training."
-            )
-
     def delta_correlations(
         self, dataframe: pd.DataFrame, delta_array, stat, lookup_class
     ):
@@ -920,6 +916,13 @@ class DEESCClassifier:
         ridge_model.fit(embeddings_df, self.Y_train)
         self.ridge_model = ridge_model
 
+        if self.rapids_acceleration:
+            import cuml
+            from cuml.svm import SVC
+
+            cuml.set_global_output_type("numpy")
+        else:
+            from sklearn.svm import SVC
         svm_model = SVC(random_state=self.random_state, probability=True)
         svm_model.fit(embeddings_df, self.Y_train)
         self.svm_model = svm_model
@@ -928,7 +931,10 @@ class DEESCClassifier:
         self.fit_delta_weights()
         self.fit_cosine_similarity()
         self.fit_correlations()
-        self.fit_base_models()
+        if self.no_stacking:
+            pass
+        else:
+            self.fit_base_models()
 
     def predict_cosine_similarity(self, dataframe: pd.DataFrame):
         for lookup_class in self.unique_classes:
@@ -1085,7 +1091,10 @@ class DEESCClassifier:
 
         dataframe = self.predict_cosine_similarity(dataframe)
         dataframe = self.predict_correlations(dataframe)
-        dataframe = self.predict_base_models(dataframe)
+        if self.no_stacking:
+            pass
+        else:
+            dataframe = self.predict_base_models(dataframe)
 
         for lookup_class in self.unique_classes:
             total_delta_matrix = np.ones(
@@ -1138,7 +1147,10 @@ class DEESCClassifier:
 
     def fit(self):
         self.fit_1st_layer()
-        self.last_layer_feature_selection()
+        if self.auto_select_features:
+            self.last_layer_feature_selection()
+        else:
+            self.selected_feats_2nd_layer = self.X_train_2nd_layer.columns.to_list()
         dataframe = self.predict_1st_layer(self.X_train_2nd_layer)
 
         X_train = dataframe[self.selected_feats_2nd_layer].copy()

@@ -370,8 +370,20 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
-* 2.10.02
-  * Adjusted dependencies for Pandas and Spacy
+* 2.11
+  * Added datasets library to dependencies
+  * Calculation of feature importance can be controlled via class instance now.
+    This is helpful when using TF-IDF matrices where 10-fold permutation test
+    run out of memory
+  * Fixed loading of BERT weights from manual path
+  * DEESC parameters can be controlled via class attributes now
+  * Fixed a bug with LGBM on regression tasks
+* 2.10.04
+  * Adjusted dependency for SHAP
+  * Fixed a bug where early numeric feature selection failed due to
+    the absence of numerical features
+* 2.10.03
+  * Adjusted dependencies for Pandas, Spacy, Optuna, Setuptools, Transformers
 * 2.10.01
   * Added references & citations to Readme
   * Added is_imbalanced flag to Timewalk

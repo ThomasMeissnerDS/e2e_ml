@@ -3588,7 +3588,19 @@ class ClassificationModels(
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             from e2eml.model_utils.deesc_classifier import DEESCClassifier
 
-            model = DEESCClassifier(X_train, X_test, Y_train, Y_test)
+            model = DEESCClassifier(
+                X_train,
+                X_test,
+                Y_train,
+                Y_test,
+                learning_rate=self.deesc_settings["learning_rate"],
+                random_state=self.deesc_settings["random_state"],
+                use_long_warmup=self.deesc_settings["use_long_warmup"],
+                auto_select_features=self.deesc_settings["auto_select_features"],
+                no_stacking=self.deesc_settings["no_stacking"],
+                max_tuning_time_h=self.deesc_settings["max_tuning_time_h"],
+                rapids_acceleration=False,
+            )
             model.fit()
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model

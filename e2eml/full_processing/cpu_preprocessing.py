@@ -152,6 +152,8 @@ class PreProcessing:
         transformer_model_load_from_path=None,
         transformer_model_save_states_path=None,
         transformer_epochs=25,
+        max_tfidf_features=25000,
+        tfidf_ngrams=(1, 3),
         prediction_mode=False,
         preferred_training_mode="auto",
         preprocess_decisions=None,
@@ -255,6 +257,8 @@ class PreProcessing:
         self.nlp_transformers = {}
         self.transformer_chosen = transformer_chosen
         self.transformer_epochs = transformer_epochs
+        self.max_tfidf_features = max_tfidf_features
+        self.tfidf_ngrams = tfidf_ngrams
         self.cat_columns_encoded = None
         self.num_columns_encoded = None
         self.unique_identifier = unique_identifier
@@ -309,6 +313,7 @@ class PreProcessing:
             "delete_low_variance_features": True,
             "shap_based_feature_selection": True,
             "delete_unpredictable_training_rows": False,
+            "trained_tokenizer_embedding": False,
             "sort_columns_alphabetically": True,
         }
 
@@ -361,6 +366,7 @@ class PreProcessing:
             "delete_low_variance_features": False,
             "shap_based_feature_selection": True,
             "delete_unpredictable_training_rows": True,
+            "trained_tokenizer_embedding": True,
         }
         self.checkpoint_reached = {}
         for key in self.checkpoints.keys():
@@ -427,6 +433,25 @@ class PreProcessing:
             "vowpal_wabbit": True,
             "sklearn_ensemble": True,
         }
+        self.get_feature_importance = {
+            "ridge": True,
+            "elasticnet": True,
+            "catboost": True,
+            "xgboost": True,
+            "ngboost": True,
+            "lgbm": True,
+            "lgbm_focal": True,
+            "sgd": True,
+            "vowpal_wabbit": True,
+            "sklearn_ensemble": True,
+            "svm": True,
+            "svm_regression": True,
+            "quadratic_discriminant_analysis": True,
+            "logistic_regression": True,
+            "linear_regression": True,
+            "ransac": True,
+            "multinomial_nb": True,
+        }
         # store chosen preprocessing settings
         if not preprocess_decisions:
             self.preprocess_decisions = {}
@@ -444,7 +469,14 @@ class PreProcessing:
             "model_save_states_path": {self.transformer_model_save_states_path},
             "keep_best_model_only": False,
         }
-
+        self.deesc_settings = {
+            "learning_rate": 0.3,
+            "random_state": 1000,
+            "use_long_warmup": False,
+            "auto_select_features": False,
+            "no_stacking": False,
+            "max_tuning_time_h": 0.06,
+        }
         # automatically determine batch sizes for Tabnet
 
         rec_batch_size = (len(self.dataframe.index) * 0.8) / 20
@@ -1361,6 +1393,9 @@ class PreProcessing:
                 pass
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
+    def get_training_df_length(self, df: pd.DataFrame, identifier: str = "X_train"):
+        self.preprocess_decisions["identifier_length"] = len(df.index)
+
     def train_test_split(
         self, how="cross", split_by_col=None, split_date=None, train_size=0.70
     ):
@@ -1406,6 +1441,7 @@ class PreProcessing:
             _ = gc.collect()
             logging.info("Finished test train split.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            self.get_training_df_length(X_train)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         elif how == "time":
             logging.info("Started test train split.")
@@ -1441,6 +1477,7 @@ class PreProcessing:
                 Y_test = X_test[self.target_variable]
                 del X_train[self.target_variable]
                 del X_test[self.target_variable]
+                self.get_training_df_length(X_train)
                 logging.info("Finished test train split.")
                 logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -4092,9 +4129,14 @@ class PreProcessing:
             logging.info("Start filtering for preselected columns.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             if numeric_only:
-                self.dataframe = self.dataframe[
-                    self.preprocess_decisions["early_selected_features"]
-                ]
+                if len(self.preprocess_decisions["early_selected_features"]) == 0:
+                    print(
+                        "Skipped early numeric feature selection due to missing numerical features."
+                    )
+                else:
+                    self.dataframe = self.dataframe[
+                        self.preprocess_decisions["early_selected_features"]
+                    ]
             else:
                 self.dataframe = self.dataframe[self.selected_feats]
             logging.info("Finished filtering preselected columns.")
@@ -4153,15 +4195,22 @@ class PreProcessing:
                 other_cols = [
                     x for x in X_train.columns.to_list() if x not in float_cols
                 ]
-                X_train_temp = X_train_sample[float_cols]
-                br.fit(X_train_temp, Y_train_sample)
-                selected = br.keep_vars_
-                all_cols = selected.values.tolist() + other_cols
-                X_train = X_train[all_cols]
-                X_test = X_test[all_cols]
-                self.preprocess_decisions["early_selected_features"] = all_cols
-                for i in selected:
-                    print(f" Selected features are... {i}.")
+
+                if len(float_cols) == 0:
+                    print(
+                        "Skipped early numeric feature selection due to missing numerical features."
+                    )
+                    self.preprocess_decisions["early_selected_features"] = []
+                else:
+                    X_train_temp = X_train_sample[float_cols]
+                    br.fit(X_train_temp, Y_train_sample)
+                    selected = br.keep_vars_
+                    all_cols = selected.values.tolist() + other_cols
+                    X_train = X_train[all_cols]
+                    X_test = X_test[all_cols]
+                    self.preprocess_decisions["early_selected_features"] = all_cols
+                    for i in selected:
+                        print(f" Selected features are... {i}.")
             else:
                 br.fit(X_train_sample, Y_train_sample)
                 selected = br.keep_vars_
@@ -4489,24 +4538,41 @@ class PreProcessing:
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
-            if self.hyperparameter_tuning_sample_size > len(X_train.index):
-                sample_size = len(X_train.index)
+            if self.blueprint_step_selection_non_nlp["trained_tokenizer_embedding"]:
+                if self.hyperparameter_tuning_sample_size > self.preprocess_decisions[
+                    "identifier_length"
+                ] - int(self.hyperparameter_tuning_sample_size / 5):
+                    sample_size = self.preprocess_decisions["identifier_length"]
+                else:
+                    sample_size = self.hyperparameter_tuning_sample_size
+                indices = np.random.choice(X_train.shape[0], sample_size, replace=False)
+
+                X_train = np.append(
+                    X_train.toarray(), Y_train.values.reshape(-1, 1), axis=1
+                )
+                X_train_sample = X_train[indices]
+                Y_train_sample = pd.Series(X_train_sample[:, -1:].ravel())
+                X_train_sample = X_train_sample[:, :-1]
+                return X_train_sample, Y_train_sample
             else:
-                sample_size = self.hyperparameter_tuning_sample_size
+                if self.hyperparameter_tuning_sample_size > len(X_train.index):
+                    sample_size = len(X_train.index)
+                else:
+                    sample_size = self.hyperparameter_tuning_sample_size
 
-            X_train[self.target_variable] = Y_train
-            X_train_sample = X_train.sample(sample_size, random_state=42).copy()
-            X_train_sample = X_train_sample.reset_index(drop=True)
-            Y_train_sample = X_train_sample[self.target_variable]  # .copy()
+                X_train[self.target_variable] = Y_train
+                X_train_sample = X_train.sample(sample_size, random_state=42).copy()
+                X_train_sample = X_train_sample.reset_index(drop=True)
+                Y_train_sample = X_train_sample[self.target_variable]  # .copy()
 
-            X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
-            # Y_train_sample = Y_train_sample.reset_index(drop=True)
+                X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+                # Y_train_sample = Y_train_sample.reset_index(drop=True)
 
-            try:
-                del X_train[self.target_variable]
-            except KeyError:
-                pass
-            return X_train_sample, Y_train_sample
+                try:
+                    del X_train[self.target_variable]
+                except KeyError:
+                    pass
+                return X_train_sample, Y_train_sample
 
     def autoencoder_based_oversampling(self):  # noqa: C901
         if self.prediction_mode:
@@ -5490,8 +5556,10 @@ class PreProcessing:
                     skf = StratifiedKFold(
                         n_splits=n_folds, random_state=42, shuffle=True
                     )
+                    model = lgb.LGBMClassifier(random_state=42)
                 else:
                     skf = KFold(n_splits=n_folds, random_state=42, shuffle=True)
+                    model = lgb.LGBMRegressor(random_state=42)
 
                 for train_index, test_index in skf.split(X_train, Y_train):
                     x_train, x_test = (
@@ -5500,7 +5568,6 @@ class PreProcessing:
                     )
                     y_train = Y_train.iloc[train_index]
 
-                    model = lgb.LGBMClassifier(random_state=42)
                     model.fit(x_train, y_train)
 
                     all_shap_values.append(global_shap_importance(model, x_test))

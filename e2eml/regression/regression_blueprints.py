@@ -149,7 +149,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
             self.linear_regression_train()
         algorithm = "linear_regression"
         self.linear_regression_predict(
-            feat_importance=True, importance_alg="permutation"
+            feat_importance=self.get_feature_importance[algorithm],
+            importance_alg="permutation",
         )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
@@ -170,7 +171,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
             pass
         else:
             self.xg_boost_train(autotune=True)
-        self.xgboost_predict(feat_importance=True)
+        algorithm = "xgboost"
+        self.xgboost_predict(feat_importance=self.get_feature_importance[algorithm])
         self.regression_eval("xgboost")
         self.prediction_mode = True
         logging.info("Finished blueprint.")
@@ -190,7 +192,8 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
             pass
         else:
             self.lgbm_train(tune_mode=self.tune_mode)
-        self.lgbm_predict(feat_importance=True)
+        algorithm = "lgbm"
+        self.lgbm_predict(feat_importance=self.get_feature_importance[algorithm])
         self.regression_eval("lgbm")
         self.prediction_mode = True
         logging.info("Finished blueprint.")
@@ -210,10 +213,12 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
             pass
         else:
             self.sklearn_ensemble_train()
+        algorithm = "sklearn_ensemble"
         self.sklearn_ensemble_predict(
-            feat_importance=True, importance_alg="permutation"
+            feat_importance=self.get_feature_importance[algorithm],
+            importance_alg="permutation",
         )
-        self.regression_eval("sklearn_ensemble")
+        self.regression_eval(algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")
 
@@ -232,8 +237,12 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
             pass
         else:
             self.ngboost_train(tune_mode=self.tune_mode)
-        self.ngboost_predict(feat_importance=True, importance_alg="permutation")
-        self.regression_eval("ngboost")
+        algorithm = "ngboost"
+        self.ngboost_predict(
+            feat_importance=self.get_feature_importance[algorithm],
+            importance_alg="permutation",
+        )
+        self.regression_eval(algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")
 
@@ -253,7 +262,10 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
         else:
             self.vowpal_wabbit_train()
         algorithm = "vowpal_wabbit"
-        self.vowpal_wabbit_predict(feat_importance=True, importance_alg="permutation")
+        self.vowpal_wabbit_predict(
+            feat_importance=self.get_feature_importance[algorithm],
+            importance_alg="permutation",
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")
@@ -314,7 +326,9 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
         else:
             self.ridge_regression_train()
         algorithm = "ridge"
-        self.ridge_regression_predict()
+        self.ridge_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")
@@ -335,7 +349,9 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
         else:
             self.elasticnet_regression_train()
         algorithm = "elasticnet"
-        self.elasticnet_regression_predict()
+        self.elasticnet_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")
@@ -356,7 +372,9 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
         else:
             self.catboost_regression_train()
         algorithm = "catboost"
-        self.catboost_regression_predict()
+        self.catboost_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")
@@ -377,7 +395,9 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
         else:
             self.sgd_regression_train()
         algorithm = "sgd"
-        self.sgd_regression_predict()
+        self.sgd_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")
@@ -398,7 +418,9 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
         else:
             self.ransac_regression_train()
         algorithm = "ransac"
-        self.ransac_regression_predict()
+        self.ransac_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")
@@ -419,7 +441,9 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
         else:
             self.svm_regression_train()
         algorithm = "svm_regression"
-        self.svm_regression_predict()
+        self.svm_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")

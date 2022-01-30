@@ -25,6 +25,11 @@ class BERTDataSet(Dataset):
         self.tokenizer = tokenizer
         self.max_sen_length = max_length
 
+        if int(self.max_sen_length * 1.2) > 512:
+            self.max_sen_length = 512
+        else:
+            self.max_sen_length = int(self.max_sen_length * 1.2)
+
     def __len__(self):
         return len(self.sentences)
 
@@ -35,7 +40,7 @@ class BERTDataSet(Dataset):
             sentence,
             None,
             add_special_tokens=True,
-            max_length=int(self.max_sen_length * 1.2),  # changed from static 300
+            max_length=self.max_sen_length,  # changed from static 300
             padding="max_length",
             return_token_type_ids=True,
             truncation=True,
@@ -578,7 +583,7 @@ class NlpModel(
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         self.reset_test_train_index()
         model = self.create_bert_regression_model(chosen_model=self.transformer_chosen)
-        pthes = self.load_model_states()
+        pthes = self.load_model_states(path=self.transformer_model_save_states_path)
         print(pthes)
         pred_dataloader = self.pred_dataloader()
         allpreds, mode_cols = self.predicting(pred_dataloader, model, pthes)

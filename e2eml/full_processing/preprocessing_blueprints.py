@@ -131,6 +131,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             and len(self.nlp_transformer_columns) > 0
         ):
             self.tfidf_vectorizer_to_pca(pca_pos_tags=False)
+        if self.blueprint_step_selection_non_nlp["trained_tokenizer_embedding"]:
+            self.trained_tokenizer_embedding()
         if self.blueprint_step_selection_non_nlp["rare_feature_processing"]:
             self.rare_feature_processor(
                 threshold=0.005, mask_as="miscellaneous", rarity_cols=self.rarity_cols

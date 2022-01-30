@@ -24,6 +24,11 @@ class BERTDataSet(Dataset):
         self.tokenizer = tokenizer
         self.max_sen_length = max_length
 
+        if int(self.max_sen_length * 1.2) > 512:
+            self.max_sen_length = 512
+        else:
+            self.max_sen_length = int(self.max_sen_length * 1.2)
+
     def __len__(self):
         return len(self.sentences)
 
@@ -34,7 +39,7 @@ class BERTDataSet(Dataset):
             sentence,
             None,
             add_special_tokens=True,
-            max_length=int(self.max_sen_length * 1.2),  # changed from static 300
+            max_length=self.max_sen_length,  # changed from static 300
             padding="max_length",
             return_token_type_ids=True,
             truncation=True,
@@ -367,6 +372,7 @@ class NlpModel(
         allpreds = []
         model_no = 0
         mode_cols = []
+        algorithm = "nlp_transformer"
         for m_path in pathes:
             state = torch.load(m_path)
             model.load_state_dict(state["state_dict"])
@@ -387,12 +393,16 @@ class NlpModel(
                 preds = np.concatenate(preds)
                 pred_classes = np.asarray([np.argmax(line) for line in preds])
 
+                if self.class_problem in ["binary", "multiclass"]:
+                    pred_probas = np.asarray([line[1] for line in preds])
+
                 if self.prediction_mode:
                     self.dataframe[f"preds_model{model_no}"] = pred_classes
                 else:
                     X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                     X_test[f"preds_model{model_no}"] = pred_classes
                 mode_cols.append(f"preds_model{model_no}")
+                self.predicted_probs[f"{algorithm}_{model_no}"] = pred_probas
 
                 allpreds.append(preds)
                 model_no += 1

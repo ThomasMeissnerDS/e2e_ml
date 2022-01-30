@@ -224,7 +224,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.logistic_regression_train()
         algorithm = "logistic_regression"
         self.logistic_regression_predict(
-            feat_importance=True, importance_alg="permutation"
+            feat_importance=self.get_feature_importance[algorithm],
+            importance_alg="permutation",
         )
         self.classification_eval(algorithm=algorithm)
         if self.class_problem == "binary":
@@ -252,8 +253,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             pass
         else:
             self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
-        self.xgboost_predict(feat_importance=True)
         algorithm = "xgboost"
+        self.xgboost_predict(feat_importance=self.get_feature_importance[algorithm])
         self.classification_eval(algorithm=algorithm)
         if self.class_problem == "binary":
             self.visualize_probability_distribution(
@@ -280,8 +281,8 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             pass
         else:
             self.lgbm_train(tune_mode=self.tune_mode)
-        self.lgbm_predict(feat_importance=True)
         algorithm = "lgbm"
+        self.lgbm_predict(feat_importance=self.get_feature_importance[algorithm])
         self.classification_eval(algorithm=algorithm)
         if self.class_problem == "binary":
             self.visualize_probability_distribution(
@@ -310,10 +311,11 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             pass
         else:
             self.sklearn_ensemble_train()
-        self.sklearn_ensemble_predict(
-            feat_importance=True, importance_alg="permutation"
-        )
         algorithm = "sklearn_ensemble"
+        self.sklearn_ensemble_predict(
+            feat_importance=self.get_feature_importance[algorithm],
+            importance_alg="permutation",
+        )
         self.classification_eval(algorithm=algorithm)
         if self.class_problem == "binary":
             self.visualize_probability_distribution(
@@ -340,8 +342,10 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             pass
         else:
             self.ngboost_train(tune_mode=self.tune_mode)
-        self.ngboost_predict(feat_importance=True, importance_alg="permutation")
         algorithm = "ngboost"
+        self.ngboost_predict(
+            self.get_feature_importance[algorithm], importance_alg="permutation"
+        )
         self.classification_eval(algorithm)
         if self.class_problem == "binary":
             self.visualize_probability_distribution(
@@ -368,8 +372,10 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             pass
         else:
             self.vowpal_wabbit_train()
-        self.vowpal_wabbit_predict(feat_importance=True, importance_alg="permutation")
         algorithm = "vowpal_wabbit"
+        self.vowpal_wabbit_predict(
+            self.get_feature_importance[algorithm], importance_alg="permutation"
+        )
         self.classification_eval(algorithm)
         if self.class_problem == "binary":
             self.visualize_probability_distribution(
@@ -444,7 +450,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         else:
             self.ridge_classifier_train()
         algorithm = "ridge"
-        self.ridge_classifier_predict()
+        self.ridge_classifier_predict(self.get_feature_importance[algorithm])
         self.classification_eval(algorithm=algorithm)
         if self.class_problem == "binary":
             self.visualize_probability_distribution(
@@ -472,7 +478,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         else:
             self.catboost_train()
         algorithm = "catboost"
-        self.catboost_predict()
+        self.catboost_predict(self.get_feature_importance[algorithm])
         self.classification_eval(algorithm=algorithm)
         if self.class_problem == "binary":
             self.visualize_probability_distribution(
@@ -500,7 +506,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         else:
             self.sgd_classifier_train()
         algorithm = "sgd"
-        self.sgd_classifier_predict()
+        self.sgd_classifier_predict(self.get_feature_importance[algorithm])
         self.classification_eval(algorithm=algorithm)
         if self.class_problem == "binary":
             self.visualize_probability_distribution(
@@ -530,7 +536,9 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         else:
             self.quadratic_discriminant_analysis_train()
         algorithm = "quadratic_discriminant_analysis"
-        self.quadratic_discriminant_analysis_predict()
+        self.quadratic_discriminant_analysis_predict(
+            self.get_feature_importance[algorithm]
+        )
         self.classification_eval(algorithm=algorithm)
         if self.class_problem == "binary":
             self.visualize_probability_distribution(
@@ -558,7 +566,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         else:
             self.svm_train()
         algorithm = "svm"
-        self.svm_predict()
+        self.svm_predict(self.get_feature_importance[algorithm])
         self.classification_eval(algorithm=algorithm)
         if self.class_problem == "binary":
             self.visualize_probability_distribution(
@@ -586,7 +594,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         else:
             self.multinomial_nb_train()
         algorithm = "multinomial_nb"
-        self.multinomial_nb_predict()
+        self.multinomial_nb_predict(self.get_feature_importance[algorithm])
         self.classification_eval(algorithm=algorithm)
         if self.class_problem == "binary":
             self.visualize_probability_distribution(
@@ -614,7 +622,7 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
         else:
             self.lgbm_focal_train()
         algorithm = "lgbm_focal"
-        self.lgbm_focal_predict()
+        self.lgbm_focal_predict(self.get_feature_importance[algorithm])
         self.classification_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")

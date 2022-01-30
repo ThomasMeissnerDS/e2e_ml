@@ -18,7 +18,7 @@ from nltk.tokenize import word_tokenize
 from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
 from textblob import TextBlob
-from transformers import AutoConfig, AutoModel, AutoTokenizer
+from transformers import AutoConfig, AutoModel, AutoTokenizer, PreTrainedTokenizerFast
 
 from e2eml.full_processing import cpu_preprocessing
 
@@ -117,6 +117,14 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
         text = re.sub(r"won\'t've", " will not have", text)
         text = re.sub(r"can\'t", " can not", text)
         text = re.sub(r"don\'t", " do not", text)
+        text = re.sub(r"what's", "what is ", text)
+        text = re.sub(r"\'scuse", " excuse ", text)
+        text = re.sub(r"\'s", " ", text)
+        text = re.sub(r"([a-zA-Z]+)([/!?.])([a-zA-Z]+)", r"\1 \2 \3", text)
+        text = re.sub(r"([*!?\'])\1\1{2,}", r"\1\1\1", text)
+        text = re.sub(r"([*!?\']+)", r" \1 ", text)
+        text = re.sub(r"([a-zA-Z])\1{2,}\b", r"\1\1", text)
+        text = re.sub(r"([a-zA-Z])\1\1{2,}\B", r"\1\1\1", text)
 
         text = re.sub(r"can\'t've", " can not have", text)
         text = re.sub(r"ma\'am", " madam", text)
@@ -590,9 +598,80 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             logging.info("Finished spacy POS tagging loop.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def tfidf_pca(
-        self, df, text_cols, mode="fit", pca_pos_tags=True, ngram_range=(1, 2)
-    ):
+    def create_tokenizer_embedding(self, dataframe: pd.DataFrame, mode="fit"):
+        from datasets import Dataset
+        from tokenizers import Tokenizer, models, normalizers, pre_tokenizers, trainers
+
+        text_columns = []
+        text_columns.append(self.nlp_transformer_columns)
+
+        if mode == "fit":
+            raw_tokenizer = Tokenizer(models.WordPiece(unk_token="[UNK]"))
+            raw_tokenizer.normalizer = normalizers.BertNormalizer(lowercase=True)
+            raw_tokenizer.pre_tokenizer = pre_tokenizers.BertPreTokenizer()
+            special_tokens = ["[UNK]", "[PAD]", "[CLS]", "[SEP]", "[MASK]"]
+            trainer = trainers.WordPieceTrainer(
+                vocab_size=25000, special_tokens=special_tokens
+            )
+
+            dataset = Dataset.from_pandas(dataframe[[self.nlp_transformer_columns]])
+
+            def get_training_corpus():
+                for i in range(0, len(dataset), 1000):
+                    yield dataset[i : i + 1000]["comment_text"]
+
+            raw_tokenizer.train_from_iterator(get_training_corpus(), trainer=trainer)
+
+            tokenizer = PreTrainedTokenizerFast(
+                tokenizer_object=raw_tokenizer,
+                unk_token="[UNK]",
+                pad_token="[PAD]",
+                cls_token="[CLS]",
+                sep_token="[SEP]",
+                mask_token="[MASK]",
+            )
+
+            def dummy_fun(doc):
+                return doc
+
+            comments = dataframe[self.nlp_transformer_columns]
+            tokenized_comments = tokenizer(comments.to_list())["input_ids"]
+
+            vectorizer = TfidfVectorizer(
+                analyzer="word",
+                tokenizer=dummy_fun,
+                preprocessor=dummy_fun,
+                token_pattern=None,
+            )
+
+            df_train = vectorizer.fit_transform(tokenized_comments)
+            self.preprocess_decisions["vectorizer"] = vectorizer
+            self.preprocess_decisions["tokenizer"] = tokenizer
+            return df_train
+        else:
+            tokenizer = self.preprocess_decisions["tokenizer"]
+            comments = dataframe[self.nlp_transformer_columns]
+            tokenized_comments = tokenizer(comments.to_list())["input_ids"]
+            vectorizer = self.preprocess_decisions["vectorizer"]
+            df_train = vectorizer.transform(tokenized_comments)
+            return df_train
+
+    def trained_tokenizer_embedding(self):
+        self.get_current_timestamp(task="Start Tokenizer embedding")
+        logging.info("Start Tokenizer embedding.")
+        if self.prediction_mode:
+            self.dataframe = self.create_tokenizer_embedding(
+                self.dataframe, mode="transform"
+            )
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train = self.create_tokenizer_embedding(X_train, mode="fit")
+            X_test = self.create_tokenizer_embedding(X_test, mode="transform")
+
+            logging.info("Finished Tokenizer embedding.")
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def tfidf_pca(self, df, text_cols, mode="fit", pca_pos_tags=True):
         if self.nlp_columns:
             text_cols = self.nlp_columns
         else:
@@ -650,9 +729,9 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                     if df[f"nof_words_{text_col}"].max() >= 3:
                         df[text_col].fillna("None", inplace=True)
                         tfids = TfidfVectorizer(
-                            ngram_range=ngram_range,
+                            ngram_range=self.tfidf_ngrams,
                             strip_accents="unicode",
-                            max_features=25000,
+                            max_features=self.max_tfidf_features,
                             max_df=0.85,
                             min_df=3,
                             norm="l2",
@@ -712,7 +791,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             pass
         return df
 
-    def tfidf_vectorizer_to_pca(self, pca_pos_tags=True, ngram_range=(1, 3)):
+    def tfidf_vectorizer_to_pca(self, pca_pos_tags=True):
         self.get_current_timestamp(task="Start TFIDF to PCA loop")
         logging.info("Start TFIDF to PCA loop.")
         if self.prediction_mode:
@@ -722,7 +801,6 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                 text_columns,
                 mode="transform",
                 pca_pos_tags=pca_pos_tags,
-                ngram_range=ngram_range,
             )
             logging.info("Finished TFIDF to PCA loop.")
         else:
@@ -736,18 +814,10 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             else:
                 text_columns = self.nlp_columns
             X_train = self.tfidf_pca(
-                X_train,
-                text_columns,
-                mode="fit",
-                pca_pos_tags=pca_pos_tags,
-                ngram_range=ngram_range,
+                X_train, text_columns, mode="fit", pca_pos_tags=pca_pos_tags
             )
             X_test = self.tfidf_pca(
-                X_test,
-                text_columns,
-                mode="transform",
-                pca_pos_tags=pca_pos_tags,
-                ngram_range=ngram_range,
+                X_test, text_columns, mode="transform", pca_pos_tags=pca_pos_tags
             )
             logging.info("Finished TFIDF to PCA loop.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -759,7 +829,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             tfids = TfidfVectorizer(
                 strip_accents="unicode",
-                max_features=25000,
+                max_features=self.max_tfidf_features,
                 max_df=0.85,
                 min_df=3,
                 norm="l2",

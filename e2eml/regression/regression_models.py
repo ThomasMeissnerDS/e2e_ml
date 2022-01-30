@@ -691,7 +691,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=1
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -848,7 +848,7 @@ class RegressionModels(postprocessing.FullPipeline):
 
     def catboost_regression_train(self):
         """
-        Trains a Ridge regression model.
+        Trains a Catboost regression model.
         :return: Trained model.
         """
         self.get_current_timestamp(task="Train catboost regression model")
@@ -1562,7 +1562,7 @@ class RegressionModels(postprocessing.FullPipeline):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             x_train, y_train = self.get_hyperparameter_tuning_sample_df()
-            dtrain = lgb.Dataset(x_train, label=Y_train)
+            dtrain = lgb.Dataset(x_train, label=y_train)
 
             def objective(trial):
                 param = {
