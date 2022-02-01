@@ -310,8 +310,8 @@ class PreProcessing:
             "synthetic_data_augmentation": False,
             "final_pca_dimensionality_reduction": False,
             "final_kernel_pca_dimensionality_reduction": False,
-            "delete_low_variance_features": True,
-            "shap_based_feature_selection": True,
+            "delete_low_variance_features": False,
+            "shap_based_feature_selection": False,
             "delete_unpredictable_training_rows": False,
             "trained_tokenizer_embedding": False,
             "sort_columns_alphabetically": True,
@@ -1954,9 +1954,14 @@ class PreProcessing:
                     :, dataframe.columns.isin(self.num_columns)
                 ].copy()
                 dataframe_red = cudf.from_pandas(dataframe_red)
-                db = RapidsDBSCAN(eps=eps, min_samples=min_samples).fit(dataframe_red)
+                db = RapidsDBSCAN(
+                    eps=eps, min_samples=min_samples, output_type="numpy"
+                ).fit(dataframe_red)
                 labels = db.labels_
-                dataframe[f"dbscan_cluster_{eps}"] = labels
+                try:
+                    dataframe[f"dbscan_cluster_{eps}"] = labels.to_numpy()
+                except AttributeError:
+                    dataframe[f"dbscan_cluster_{eps}"] = labels
                 del db
                 del labels
                 _ = gc.collect()
@@ -1966,11 +1971,20 @@ class PreProcessing:
             def add_gaussian_mixture_clusters(dataframe, n_components=nb_clusters):
                 dataframe = cudf.from_pandas(dataframe)
                 kmeans = RapidsKMeans(
-                    n_clusters=n_components, random_state=42, n_init=20, max_iter=500
+                    n_clusters=n_components,
+                    random_state=42,
+                    n_init=20,
+                    max_iter=500,
+                    output_type="numpy",
                 )
                 kmeans.fit(dataframe)
                 kmeans_clusters = kmeans.predict(dataframe)
-                dataframe[f"gaussian_clusters_{n_components}"] = kmeans_clusters
+                try:
+                    dataframe[
+                        f"gaussian_clusters_{n_components}"
+                    ] = kmeans_clusters.to_numpy()
+                except AttributeError:
+                    dataframe[f"dbscan_cluster_{eps}"] = kmeans_clusters
                 del kmeans
                 del kmeans_clusters
                 _ = gc.collect()
@@ -1980,11 +1994,20 @@ class PreProcessing:
             def add_kmeans_clusters(dataframe, n_components=nb_clusters):
                 dataframe = cudf.from_pandas(dataframe)
                 kmeans = RapidsKMeans(
-                    n_clusters=n_components, random_state=42, n_init=20, max_iter=500
+                    n_clusters=n_components,
+                    random_state=42,
+                    n_init=20,
+                    max_iter=500,
+                    output_type="numpy",
                 )
                 kmeans.fit(dataframe)
                 kmeans_clusters = kmeans.predict(dataframe)
-                dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
+                try:
+                    dataframe[
+                        f"kmeans_clusters_{n_components}"
+                    ] = kmeans_clusters.to_numpy()
+                except AttributeError:
+                    dataframe[f"dbscan_cluster_{eps}"] = kmeans_clusters
                 del kmeans
                 del kmeans_clusters
                 _ = gc.collect()

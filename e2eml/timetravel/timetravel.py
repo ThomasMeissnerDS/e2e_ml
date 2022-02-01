@@ -630,14 +630,14 @@ def timewalk_auto_exploration(  # noqa: C901
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "shap_based_feature_selection"
-                    ] = False
+                    ] = True
                     class_instance.blueprint_step_selection_non_nlp[
                         "autotuned_clustering"
                     ] = False
                 elif checkpoint == "autotuned_clustering":
                     class_instance.blueprint_step_selection_non_nlp[
                         "shap_based_feature_selection"
-                    ] = True
+                    ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "autotuned_clustering"
                     ] = False
@@ -706,6 +706,9 @@ def timewalk_auto_exploration(  # noqa: C901
                     ] = True
                     class_instance.blueprint_step_selection_non_nlp[
                         "automated_feature_transformation"
+                    ] = True
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "shap_based_feature_selection"
                     ] = True
                 elif checkpoint == "fill_infinite_values":
                     class_instance.blueprint_step_selection_non_nlp[

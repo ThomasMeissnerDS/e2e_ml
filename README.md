@@ -51,11 +51,12 @@ pip install e2eml[rapids]
 ```
 
 This will additionally install cupy and cython to prevent issues. Additionally
-it is needed to run:
+it is needed to follow Pytorch [installation instructions](https://pytorch.org/get-started/locally/).
+When installing RAPIDs, Pytorch & Spacy for GPU, it is recommended to look
+for supported Cuda versions in
+all three.
 
 ```sh
-pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html
-
 # also spacy supports GPU acceleration
 pip install -U spacy[cuda112] #cuda112 depends on your actual cuda version, see: https://spacy.io/usage
 ```
@@ -378,6 +379,7 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
   * Fixed loading of BERT weights from manual path
   * DEESC parameters can be controlled via class attributes now
   * Fixed a bug with LGBM on regression tasks
+  * Adjusted RAPIDS based clustering for use with RAPIDS version 21.12
 * 2.10.04
   * Adjusted dependency for SHAP
   * Fixed a bug where early numeric feature selection failed due to
