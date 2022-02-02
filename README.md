@@ -380,6 +380,7 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
   * DEESC parameters can be controlled via class attributes now
   * Fixed a bug with LGBM on regression tasks
   * Adjusted RAPIDS based clustering for use with RAPIDS version 21.12
+  * Performance optimization for clustering & numerical binarizer
 * 2.10.04
   * Adjusted dependency for SHAP
   * Fixed a bug where early numeric feature selection failed due to

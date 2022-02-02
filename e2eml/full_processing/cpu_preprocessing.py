@@ -1874,9 +1874,11 @@ class PreProcessing:
             kmeans.fit(X_train[chosen_cols])
             y_kmeans = kmeans.predict(X_train[chosen_cols])
             X_train[algorithm] = y_kmeans
-            kmeans.fit(X_test[chosen_cols])
+            kmeans.predict(X_test[chosen_cols])
             y_kmeans = kmeans.predict(X_test[chosen_cols])
             X_test[algorithm] = y_kmeans
+
+            self.preprocess_decisions["autotuned_cluster_model"] = kmeans
 
             logging.info("Finished adding autotuned clusters as additional features.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
@@ -1968,16 +1970,27 @@ class PreProcessing:
                 dataframe = dataframe_red.to_pandas()
                 return dataframe
 
-            def add_gaussian_mixture_clusters(dataframe, n_components=nb_clusters):
+            def add_gaussian_mixture_clusters(
+                dataframe, n_components=nb_clusters, mode="fit"
+            ):
                 dataframe = cudf.from_pandas(dataframe)
-                kmeans = RapidsKMeans(
-                    n_clusters=n_components,
-                    random_state=42,
-                    n_init=20,
-                    max_iter=500,
-                    output_type="numpy",
-                )
-                kmeans.fit(dataframe)
+                if mode == "fit":
+                    kmeans = RapidsKMeans(
+                        n_clusters=n_components,
+                        random_state=42,
+                        n_init=20,
+                        max_iter=500,
+                        output_type="numpy",
+                    )
+                    kmeans.fit(dataframe)
+                    self.preprocess_decisions[
+                        "clustering_gaussian_mixture_model"
+                    ] = kmeans
+                else:
+                    kmeans = self.preprocess_decisions[
+                        "clustering_gaussian_mixture_model"
+                    ]
+
                 kmeans_clusters = kmeans.predict(dataframe)
                 try:
                     dataframe[
@@ -1991,16 +2004,21 @@ class PreProcessing:
                 dataframe = dataframe.to_pandas()
                 return dataframe
 
-            def add_kmeans_clusters(dataframe, n_components=nb_clusters):
+            def add_kmeans_clusters(dataframe, n_components=nb_clusters, mode="fit"):
                 dataframe = cudf.from_pandas(dataframe)
-                kmeans = RapidsKMeans(
-                    n_clusters=n_components,
-                    random_state=42,
-                    n_init=20,
-                    max_iter=500,
-                    output_type="numpy",
-                )
-                kmeans.fit(dataframe)
+                if mode == "fit":
+                    kmeans = RapidsKMeans(
+                        n_clusters=n_components,
+                        random_state=42,
+                        n_init=20,
+                        max_iter=500,
+                        output_type="numpy",
+                    )
+                    kmeans.fit(dataframe)
+                    self.preprocess_decisions["clustering_kmeans_model"] = kmeans
+                else:
+                    kmeans = self.preprocess_decisions["clustering_kmeans_model"]
+
                 kmeans_clusters = kmeans.predict(dataframe)
                 try:
                     dataframe[
@@ -2030,9 +2048,20 @@ class PreProcessing:
                 _ = gc.collect()
                 return dataframe
 
-            def add_gaussian_mixture_clusters(dataframe, n_components=nb_clusters):
-                gaussian = GaussianMixture(n_components=n_components)
-                gaussian.fit(dataframe)
+            def add_gaussian_mixture_clusters(
+                dataframe, n_components=nb_clusters, mode="fit"
+            ):
+                if mode == "fit":
+                    gaussian = GaussianMixture(n_components=n_components)
+                    gaussian.fit(dataframe)
+                    self.preprocess_decisions[
+                        "clustering_gaussian_mixture_model"
+                    ] = gaussian
+                else:
+                    gaussian = self.preprocess_decisions[
+                        "clustering_gaussian_mixture_model"
+                    ]
+
                 gaussian_clusters = gaussian.predict(dataframe)
                 dataframe[f"gaussian_clusters_{n_components}"] = gaussian_clusters
                 del gaussian
@@ -2040,11 +2069,19 @@ class PreProcessing:
                 _ = gc.collect()
                 return dataframe
 
-            def add_kmeans_clusters(dataframe, n_components=nb_clusters):
-                kmeans = KMeans(
-                    n_clusters=n_components, random_state=42, n_init=20, max_iter=500
-                )
-                kmeans.fit(dataframe)
+            def add_kmeans_clusters(dataframe, n_components=nb_clusters, mode="fit"):
+                if mode == "fit":
+                    kmeans = KMeans(
+                        n_clusters=n_components,
+                        random_state=42,
+                        n_init=20,
+                        max_iter=500,
+                    )
+                    kmeans.fit(dataframe)
+                    self.preprocess_decisions["clustering_kmeans_model"] = kmeans
+                else:
+                    kmeans = self.preprocess_decisions["clustering_kmeans_model"]
+
                 kmeans_clusters = kmeans.predict(dataframe)
                 dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
                 del kmeans
@@ -2079,7 +2116,9 @@ class PreProcessing:
         elif algorithm == "gaussian":
             if self.prediction_mode:
                 try:
-                    self.dataframe = add_gaussian_mixture_clusters(self.dataframe)
+                    self.dataframe = add_gaussian_mixture_clusters(
+                        self.dataframe, mode="predict"
+                    )
                 except ValueError:
                     self.dataframe[f"gaussian_clusters_{nb_clusters}"] = 0
                 logging.info("Finished adding clusters as additional features.")
@@ -2088,8 +2127,8 @@ class PreProcessing:
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 try:
-                    X_train = add_gaussian_mixture_clusters(X_train)
-                    X_test = add_gaussian_mixture_clusters(X_test)
+                    X_train = add_gaussian_mixture_clusters(X_train, mode="fit")
+                    X_test = add_gaussian_mixture_clusters(X_test, mode="predict")
                 except ValueError:
                     X_train[f"gaussian_clusters_{nb_clusters}"] = 0
                     X_test[f"gaussian_clusters_{nb_clusters}"] = 0
@@ -2099,7 +2138,7 @@ class PreProcessing:
         elif algorithm == "kmeans":
             if self.prediction_mode:
                 try:
-                    self.dataframe = add_kmeans_clusters(self.dataframe)
+                    self.dataframe = add_kmeans_clusters(self.dataframe, mode="predict")
                 except ValueError:
                     self.dataframe[f"kmeans_clusters_{nb_clusters}"] = 0
                 logging.info("Finished adding clusters as additional features.")
@@ -2108,8 +2147,8 @@ class PreProcessing:
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 try:
-                    X_train = add_kmeans_clusters(X_train)
-                    X_test = add_kmeans_clusters(X_test)
+                    X_train = add_kmeans_clusters(X_train, mode="fit")
+                    X_test = add_kmeans_clusters(X_test, mode="predict")
                 except ValueError:
                     X_train[f"kmeans_clusters_{nb_clusters}"] = 0
                     X_test[f"kmeans_clusters_{nb_clusters}"] = 0
@@ -2963,9 +3002,9 @@ class PreProcessing:
                         num_col
                     ].apply(lambda x: 1 if x > 0 else 0)
                     num_cols_binarized_created.append(num_col + "_binarized")
-                pca = PCA(n_components=2)
+                pca = self.preprocess_decisions["numeric_binarizer_pca"]["pca_model"]
                 df_branch = self.dataframe.copy()
-                pred_comps = pca.fit_transform(df_branch[num_cols_binarized_created])
+                pred_comps = pca.transform(df_branch[num_cols_binarized_created])
                 df_branch = pd.DataFrame(pred_comps, columns=["Num_PC-1", "Num_PC-2"])
                 for col in df_branch.columns:
                     self.dataframe[f"{col}_num_pca"] = df_branch[col]
@@ -2984,75 +3023,75 @@ class PreProcessing:
             self.preprocess_decisions["numeric_binarizer_pca"] = {}
 
             encoded_num_cols = []
+            all_filtered_columns = []
             for vartype in self.num_dtypes:
-                try:
-                    filtered_columns = X_train.select_dtypes(
-                        include=[vartype]
-                    ).columns.to_list()
-                    for _pcas in filtered_columns:
-                        try:
-                            filtered_columns.remove("Num_PC-1_num_pca")
-                            filtered_columns.remove("Num_PC-2_num_pca")
-                        except Exception:
-                            pass
-                    for i in filtered_columns:
-                        try:
-                            encoded_num_cols.remove(i)
-                        except Exception:
-                            pass
-
-                    filtered_columns = [
-                        x for x in filtered_columns if "tfids_" not in x
-                    ]
-                    # filtered_columns = [ x for x in filtered_columns if "POS PC-" not in x]
-                    # filtered_columns = [ x for x in filtered_columns if "textblob_sentiment_score" not in x]
-                    # filtered_columns = [ x for x in filtered_columns if "TFIDF PC" not in x]
-                    # filtered_columns = [ x for x in filtered_columns if "tfid_bayes_" not in x]
-
-                    if len(filtered_columns) > 0:
-                        num_cols_binarized_created = []
-                        for num_col in filtered_columns:
-                            X_train[num_col + "_binarized"] = X_train[num_col].apply(
-                                lambda x: 1 if x > 0 else 0
-                            )
-                            X_test[num_col + "_binarized"] = X_test[num_col].apply(
-                                lambda x: 1 if x > 0 else 0
-                            )
-                            num_cols_binarized_created.append(num_col + "_binarized")
-                            encoded_num_cols.append(num_col)
-                        pca = PCA(n_components=2)
-                        X_train_branch = X_train.copy()
-                        X_test_branch = X_test.copy()
-                        train_comps = pca.fit_transform(
-                            X_train_branch[num_cols_binarized_created]
-                        )
-                        test_comps = pca.fit_transform(
-                            X_test_branch[num_cols_binarized_created]
-                        )
-                        X_train_branch = pd.DataFrame(
-                            train_comps, columns=["Num_PC-1", "Num_PC-2"]
-                        )
-                        X_test_branch = pd.DataFrame(
-                            test_comps, columns=["Num_PC-1", "Num_PC-2"]
-                        )
-                        pca_cols = []
-                        for col in X_train_branch.columns:
-                            X_train[f"{col}_num_pca"] = X_train_branch[col]
-                            X_test[f"{col}_num_pca"] = X_test_branch[col]
-                            pca_cols.append(f"{col}_num_pca")
-                        self.preprocess_decisions["numeric_binarizer_pca"][
-                            f"pca_cols_{vartype}"
-                        ] = pca_cols
-                        del X_train_branch
-                        del X_test_branch
-                        del train_comps
-                        del test_comps
-                        del pca
-                        _ = gc.collect()
-                    else:
+                filtered_columns = X_train.select_dtypes(
+                    include=[vartype]
+                ).columns.to_list()
+                for _pcas in filtered_columns:
+                    try:
+                        filtered_columns.remove("Num_PC-1_num_pca")
+                        filtered_columns.remove("Num_PC-2_num_pca")
+                    except Exception:
                         pass
-                except ValueError:
+                for i in filtered_columns:
+                    try:
+                        encoded_num_cols.remove(i)
+                    except Exception:
+                        pass
+
+                filtered_columns = [x for x in filtered_columns if "tfids_" not in x]
+                for col in filtered_columns:
+                    all_filtered_columns.append(col)
+                # filtered_columns = [ x for x in filtered_columns if "POS PC-" not in x]
+                # filtered_columns = [ x for x in filtered_columns if "textblob_sentiment_score" not in x]
+                # filtered_columns = [ x for x in filtered_columns if "TFIDF PC" not in x]
+                # filtered_columns = [ x for x in filtered_columns if "tfid_bayes_" not in x]
+            try:
+                if len(all_filtered_columns) > 0:
+                    num_cols_binarized_created = []
+                    for num_col in all_filtered_columns:
+                        X_train[num_col + "_binarized"] = X_train[num_col].apply(
+                            lambda x: 1 if x > 0 else 0
+                        )
+                        X_test[num_col + "_binarized"] = X_test[num_col].apply(
+                            lambda x: 1 if x > 0 else 0
+                        )
+                        num_cols_binarized_created.append(num_col + "_binarized")
+                        encoded_num_cols.append(num_col)
+                    pca = PCA(n_components=2)
+                    X_train_branch = X_train.copy()
+                    X_test_branch = X_test.copy()
+                    train_comps = pca.fit_transform(
+                        X_train_branch[num_cols_binarized_created]
+                    )
+                    test_comps = pca.transform(
+                        X_test_branch[num_cols_binarized_created]
+                    )
+                    X_train_branch = pd.DataFrame(
+                        train_comps, columns=["Num_PC-1", "Num_PC-2"]
+                    )
+                    X_test_branch = pd.DataFrame(
+                        test_comps, columns=["Num_PC-1", "Num_PC-2"]
+                    )
+                    pca_cols = []
+                    for col in X_train_branch.columns:
+                        X_train[f"{col}_num_pca"] = X_train_branch[col]
+                        X_test[f"{col}_num_pca"] = X_test_branch[col]
+                        pca_cols.append(f"{col}_num_pca")
+                    self.preprocess_decisions["numeric_binarizer_pca"][
+                        "pca_model"
+                    ] = pca
+                    del X_train_branch
+                    del X_test_branch
+                    del train_comps
+                    del test_comps
+                    del pca
+                    _ = gc.collect()
+                else:
                     pass
+            except ValueError:
+                pass
             self.num_columns_encoded = encoded_num_cols
             logging.info(
                 "Finished to binarize numeric columns + PCA binarized features."
