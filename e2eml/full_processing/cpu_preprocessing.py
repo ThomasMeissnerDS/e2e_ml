@@ -1766,18 +1766,7 @@ class PreProcessing:
 
         if self.prediction_mode:
             chosen_cols = self.preprocess_decisions["autotuned_cluster_pcolumns"]
-            kmeans_parameters = self.preprocess_decisions[
-                "autotuned_cluster_hyperparameters"
-            ]
-
-            # cluster based on all data
-            kmeans = KMeans(
-                n_clusters=kmeans_parameters["clusters"],
-                n_init=kmeans_parameters["n_init"],
-                tol=kmeans_parameters["tol"],
-                max_iter=kmeans_parameters["max_iter"],
-            )
-            kmeans.fit(self.dataframe[chosen_cols])
+            kmeans = self.preprocess_decisions["autotuned_cluster_model"]
             y_kmeans = kmeans.predict(self.dataframe[chosen_cols])
             self.dataframe[algorithm] = y_kmeans
             return self.dataframe
