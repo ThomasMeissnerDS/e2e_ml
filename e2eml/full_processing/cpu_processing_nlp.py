@@ -744,7 +744,7 @@ class NlpPreprocessing(cpu_preprocessing.PreProcessing):
                             vector = list(tfids.fit_transform(df[text_col]).toarray())
                             self.get_current_timestamp(task="PCA TfIDF matrix")
                             logging.info("Start to PCA TfIDF matrix.")
-                            pca = PCA(n_components=2)
+                            pca = PCA(n_components=2, random_state=1000)
                             comps = pca.fit_transform(vector)
                             self.preprocess_decisions["tfidf_vectorizer"][
                                 f"tfidf_pca_{text_col}"

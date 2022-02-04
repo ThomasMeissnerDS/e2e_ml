@@ -54,7 +54,8 @@ This will additionally install cupy and cython to prevent issues. Additionally
 it is needed to follow Pytorch [installation instructions](https://pytorch.org/get-started/locally/).
 When installing RAPIDs, Pytorch & Spacy for GPU, it is recommended to look
 for supported Cuda versions in
-all three.
+all three. If Pytorch related parts fail on runtime, it is recommended to
+reinstall a new environment and install Pytorch using pip rather than conda.
 
 ```sh
 # also spacy supports GPU acceleration
@@ -380,7 +381,10 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
   * DEESC parameters can be controlled via class attributes now
   * Fixed a bug with LGBM on regression tasks
   * Adjusted RAPIDS based clustering for use with RAPIDS version 21.12
+  * Added RAPIDS as accelerator for feature transformation exploration
   * Performance optimization for clustering & numerical binarizer
+  * Added random states to clustering & PCA implementations
+  * Improved scaling
 * 2.10.04
   * Adjusted dependency for SHAP
   * Fixed a bug where early numeric feature selection failed due to

@@ -51,12 +51,7 @@ from sklearn.ensemble import IsolationForest, RandomTreesEmbedding
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer, SimpleImputer
 from sklearn.linear_model import BayesianRidge
-from sklearn.metrics import (
-    make_scorer,
-    matthews_corrcoef,
-    mean_squared_error,
-    silhouette_score,
-)
+from sklearn.metrics import make_scorer, matthews_corrcoef, mean_squared_error
 from sklearn.mixture import GaussianMixture
 from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
 from sklearn.preprocessing import (
@@ -1212,7 +1207,6 @@ class PreProcessing:
             dataframe_cols = self.dataframe.columns
             if scaling == "minmax":
                 scaler = self.preprocess_decisions["scaling"]
-                scaler.fit(self.dataframe)
                 scaler.transform(self.dataframe)
             self.dataframe = pd.DataFrame(self.dataframe, columns=dataframe_cols)
             self.data_scaled = True
@@ -1750,7 +1744,7 @@ class PreProcessing:
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def auto_tuned_clustering(self):
+    def auto_tuned_clustering(self):  # noqa: C901
         """
         Takes a dataframe and optimizes for best clustering hyperparameters and columns to be used.
         :return: Updates class attributes/dataframes.
@@ -1764,10 +1758,21 @@ class PreProcessing:
         if not self.data_scaled:
             self.data_scaling()
 
+        if self.rapids_acceleration:
+            import cudf
+            from cuml import KMeans as RapidsKMeans
+            from cuml.metrics.cluster import silhouette_score
+        else:
+            from sklearn.metrics import silhouette_score
+
         if self.prediction_mode:
             chosen_cols = self.preprocess_decisions["autotuned_cluster_pcolumns"]
             kmeans = self.preprocess_decisions["autotuned_cluster_model"]
-            y_kmeans = kmeans.predict(self.dataframe[chosen_cols])
+            if self.rapids_acceleration:
+                datafarme_cudf = cudf.from_pandas(self.dataframe[chosen_cols])
+                y_kmeans = kmeans.predict(datafarme_cudf)
+            else:
+                y_kmeans = kmeans.predict(self.dataframe[chosen_cols])
             self.dataframe[algorithm] = y_kmeans
             return self.dataframe
         else:
@@ -1789,6 +1794,10 @@ class PreProcessing:
             )
             X_train_eval_sample = X_train.sample(eval_sample_size, random_state=42)
 
+            if self.rapids_acceleration:
+                X_train_cluster_sample = cudf.from_pandas(X_train_cluster_sample)
+                X_train_eval_sample = cudf.from_pandas(X_train_eval_sample)
+
             try:
                 del X_train[self.target_variable]
             except KeyError:
@@ -1808,12 +1817,23 @@ class PreProcessing:
                 param["max_iter"] = (trial.suggest_int("max_iter", 10, 20),)
                 param["n_init"] = (trial.suggest_int("n_init", 10, 500),)
                 param["tol"] = trial.suggest_loguniform("tol", 1e-5, 1e-1)
-                kmeans = KMeans(
-                    n_clusters=param["clusters"][0],
-                    n_init=param["n_init"][0],
-                    tol=param["tol"],
-                    max_iter=param["max_iter"][0],
-                )
+
+                if self.rapids_acceleration:
+                    kmeans = RapidsKMeans(
+                        n_clusters=param["clusters"][0],
+                        random_state=42,
+                        n_init=param["n_init"][0],
+                        max_iter=param["max_iter"][0],
+                        output_type="numpy",
+                    )
+                else:
+                    kmeans = KMeans(
+                        n_clusters=param["clusters"][0],
+                        random_state=42,
+                        n_init=param["n_init"][0],
+                        tol=param["tol"],
+                        max_iter=param["max_iter"][0],
+                    )
                 try:
                     kmeans.fit(X_train_cluster_sample[temp_features])
                     y_kmeans = kmeans.predict(X_train_eval_sample[temp_features])
@@ -1854,18 +1874,37 @@ class PreProcessing:
             ] = kmeans_parameters
 
             # cluster based on all data
-            kmeans = KMeans(
-                n_clusters=kmeans_parameters["clusters"],
-                n_init=kmeans_parameters["n_init"],
-                tol=kmeans_parameters["tol"],
-                max_iter=kmeans_parameters["max_iter"],
-            )
-            kmeans.fit(X_train[chosen_cols])
-            y_kmeans = kmeans.predict(X_train[chosen_cols])
-            X_train[algorithm] = y_kmeans
-            kmeans.predict(X_test[chosen_cols])
-            y_kmeans = kmeans.predict(X_test[chosen_cols])
-            X_test[algorithm] = y_kmeans
+            if self.rapids_acceleration:
+                X_train_cudf = cudf.from_pandas(X_train)
+                X_test_cudf = cudf.from_pandas(X_test)
+                kmeans = RapidsKMeans(
+                    n_clusters=kmeans_parameters["clusters"],
+                    random_state=42,
+                    n_init=kmeans_parameters["n_init"],
+                    tol=kmeans_parameters["tol"],
+                    max_iter=kmeans_parameters["max_iter"],
+                    output_type="numpy",
+                )
+                kmeans.fit(X_train_cudf[chosen_cols])
+                y_kmeans = kmeans.predict(X_train_cudf[chosen_cols])
+                X_train[algorithm] = y_kmeans
+                kmeans.predict(X_test_cudf[chosen_cols])
+                y_kmeans = kmeans.predict(X_test_cudf[chosen_cols])
+                X_test[algorithm] = y_kmeans
+            else:
+                kmeans = KMeans(
+                    n_clusters=kmeans_parameters["clusters"],
+                    random_state=42,
+                    n_init=kmeans_parameters["n_init"],
+                    tol=kmeans_parameters["tol"],
+                    max_iter=kmeans_parameters["max_iter"],
+                )
+                kmeans.fit(X_train[chosen_cols])
+                y_kmeans = kmeans.predict(X_train[chosen_cols])
+                X_train[algorithm] = y_kmeans
+                kmeans.predict(X_test[chosen_cols])
+                y_kmeans = kmeans.predict(X_test[chosen_cols])
+                X_test[algorithm] = y_kmeans
 
             self.preprocess_decisions["autotuned_cluster_model"] = kmeans
 
@@ -1952,7 +1991,10 @@ class PreProcessing:
                 try:
                     dataframe[f"dbscan_cluster_{eps}"] = labels.to_numpy()
                 except AttributeError:
-                    dataframe[f"dbscan_cluster_{eps}"] = labels
+                    try:
+                        dataframe[f"dbscan_cluster_{eps}"] = labels
+                    except Exception:
+                        dataframe[f"dbscan_cluster_{eps}"] = 1
                 del db
                 del labels
                 _ = gc.collect()
@@ -2031,7 +2073,10 @@ class PreProcessing:
                 ].copy()
                 db = DBSCAN(eps=eps, min_samples=min_samples).fit(dataframe_red)
                 labels = db.labels_
-                dataframe[f"dbscan_cluster_{eps}"] = labels
+                try:
+                    dataframe[f"dbscan_cluster_{eps}"] = labels
+                except AttributeError:
+                    dataframe[f"dbscan_cluster_{eps}"] = 1
                 del db
                 del labels
                 _ = gc.collect()
@@ -2041,7 +2086,9 @@ class PreProcessing:
                 dataframe, n_components=nb_clusters, mode="fit"
             ):
                 if mode == "fit":
-                    gaussian = GaussianMixture(n_components=n_components)
+                    gaussian = GaussianMixture(
+                        n_components=n_components, random_state=35
+                    )
                     gaussian.fit(dataframe)
                     self.preprocess_decisions[
                         "clustering_gaussian_mixture_model"
@@ -2087,7 +2134,7 @@ class PreProcessing:
                 try:
                     self.dataframe = add_dbscan_clusters(self.dataframe)
                 except ValueError:
-                    self.dataframe[f"dbscan_clusters_{nb_clusters}"] = 0
+                    self.dataframe[f"dbscan_clusters_{eps}"] = 1
                 logging.info("Finished adding clusters as additional features.")
                 logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.dataframe
@@ -2097,8 +2144,8 @@ class PreProcessing:
                     X_train = add_dbscan_clusters(X_train)
                     X_test = add_dbscan_clusters(X_test)
                 except ValueError:
-                    X_train[f"dbscan_clusters_{nb_clusters}"] = 0
-                    X_test[f"dbscan_clusters_{nb_clusters}"] = 0
+                    X_train[f"dbscan_clusters_{eps}"] = 1
+                    X_test[f"dbscan_clusters_{eps}"] = 1
                 logging.info("Finished adding clusters as additional features.")
                 logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -2170,7 +2217,7 @@ class PreProcessing:
             all_cols = df.columns
             cluster_columns = [x for x in all_cols if "cluster" not in x]
             cluster_df = df[cluster_columns].copy()
-            pca = PCA(n_components=2)
+            pca = PCA(n_components=2, random_state=1000)
             comps = pca.fit_transform(cluster_df.values)
             self.preprocess_decisions["cluster_pca"] = pca
             cluster_pca_cols = ["Cluster PC-1", "Cluster PC-2"]
@@ -2920,7 +2967,7 @@ class PreProcessing:
                 df_branch.fillna(0, inplace=True)
                 onehot_cols = df_branch.columns
                 # pca = self.preprocess_decisions["onehot_pca"]["pca_encoder"]
-                pca = PCA(n_components=2)
+                pca = PCA(n_components=2, random_state=1000)
                 pred_comps = pca.fit_transform(df_branch[onehot_cols])
                 df_branch = pd.DataFrame(pred_comps, columns=["PC-1", "PC-2"])
                 for col in df_branch.columns:
@@ -2954,7 +3001,7 @@ class PreProcessing:
                 onehot_cols = X_train_branch.columns
                 X_train_branch.fillna(0, inplace=True)
                 X_test_branch.fillna(0, inplace=True)
-                pca = PCA(n_components=2)
+                pca = PCA(n_components=2, random_state=1000)
                 train_comps = pca.fit_transform(X_train_branch[onehot_cols])
                 X_train_branch = pd.DataFrame(train_comps, columns=["PC-1", "PC-2"])
                 test_comps = pca.transform(X_test_branch[onehot_cols])
@@ -3048,7 +3095,7 @@ class PreProcessing:
                         )
                         num_cols_binarized_created.append(num_col + "_binarized")
                         encoded_num_cols.append(num_col)
-                    pca = PCA(n_components=2)
+                    pca = PCA(n_components=2, random_state=1000)
                     X_train_branch = X_train.copy()
                     X_test_branch = X_test.copy()
                     train_comps = pca.fit_transform(
@@ -3356,7 +3403,7 @@ class PreProcessing:
 
                 model_2 = RandomForestClassifier(
                     max_features=1.0,
-                    max_depth=8,
+                    max_depth=3,
                     output_type="numpy",
                     random_state=self.preprocess_decisions["random_state_counter"],
                 )
@@ -3371,7 +3418,7 @@ class PreProcessing:
 
                 model_2 = RandomForestRegressor(
                     max_features=1.0,
-                    max_depth=8,
+                    max_depth=3,
                     output_type="numpy",
                     random_state=self.preprocess_decisions["random_state_counter"],
                 )
@@ -5735,7 +5782,7 @@ class PreProcessing:
             else:
                 columns = self.dataframe.columns
                 self.dataframe = pd.DataFrame(
-                    scaler.fit_transform(self.dataframe), columns=columns
+                    scaler.transform(self.dataframe), columns=columns
                 )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -5823,7 +5870,7 @@ class PreProcessing:
                 pass
             else:
                 X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=columns)
-                X_test = pd.DataFrame(scaler.fit_transform(X_test), columns=columns)
+                X_test = pd.DataFrame(scaler.transform(X_test), columns=columns)
                 self.data_scaled = True
             self.preprocess_decisions["scaler_param"] = best_parameters
             logging.info("Finished automated feature transformation.")
