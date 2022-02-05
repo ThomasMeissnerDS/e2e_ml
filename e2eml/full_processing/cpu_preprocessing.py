@@ -1990,7 +1990,7 @@ class PreProcessing:
                 labels = db.labels_
                 try:
                     dataframe[f"dbscan_cluster_{eps}"] = labels.to_numpy()
-                except AttributeError:
+                except Exception:
                     try:
                         dataframe[f"dbscan_cluster_{eps}"] = labels
                     except Exception:
@@ -2028,7 +2028,7 @@ class PreProcessing:
                         f"gaussian_clusters_{n_components}"
                     ] = kmeans_clusters.to_numpy()
                 except AttributeError:
-                    dataframe[f"dbscan_cluster_{eps}"] = kmeans_clusters
+                    dataframe[f"gaussian_clusters_{n_components}"] = kmeans_clusters
                 del kmeans
                 del kmeans_clusters
                 _ = gc.collect()
@@ -2056,7 +2056,7 @@ class PreProcessing:
                         f"kmeans_clusters_{n_components}"
                     ] = kmeans_clusters.to_numpy()
                 except AttributeError:
-                    dataframe[f"dbscan_cluster_{eps}"] = kmeans_clusters
+                    dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
                 del kmeans
                 del kmeans_clusters
                 _ = gc.collect()
@@ -2117,7 +2117,6 @@ class PreProcessing:
                     self.preprocess_decisions["clustering_kmeans_model"] = kmeans
                 else:
                     kmeans = self.preprocess_decisions["clustering_kmeans_model"]
-
                 kmeans_clusters = kmeans.predict(dataframe)
                 dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
                 del kmeans
@@ -5776,10 +5775,10 @@ class PreProcessing:
 
         if self.prediction_mode:
             best_parameters = self.preprocess_decisions["scaler_param"]
-            scaler = get_scaler(best_parameters)
             if best_parameters["transformer"] == "no_scaling":
                 pass
             else:
+                scaler = self.preprocess_decisions["automated_scaler"]
                 columns = self.dataframe.columns
                 self.dataframe = pd.DataFrame(
                     scaler.transform(self.dataframe), columns=columns
@@ -5873,6 +5872,10 @@ class PreProcessing:
                 X_test = pd.DataFrame(scaler.transform(X_test), columns=columns)
                 self.data_scaled = True
             self.preprocess_decisions["scaler_param"] = best_parameters
+            if best_parameters["transformer"] == "no_scaling":
+                pass
+            else:
+                self.preprocess_decisions["automated_scaler"] = scaler
             logging.info("Finished automated feature transformation.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
