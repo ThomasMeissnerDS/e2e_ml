@@ -996,7 +996,35 @@ class RegressionModels(postprocessing.FullPipeline):
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train_sample, Y_train_sample = self.get_hyperparameter_tuning_sample_df()
+            x_train_sample, y_train_sample = self.get_hyperparameter_tuning_sample_df()
+
+            X_train[X_train.columns.to_list()] = X_train[
+                X_train.columns.to_list()
+            ].astype(float)
+            X_test[X_test.columns.to_list()] = X_test[X_test.columns.to_list()].astype(
+                float
+            )
+            x_train_sample[x_train_sample.columns.to_list()] = x_train_sample[
+                x_train_sample.columns.to_list()
+            ].astype(float)
+
+            y_train_sample = y_train_sample.astype(int)
+
+            if len(x_train_sample.index) < len(X_train.index):
+                rec_batch_size = (len(x_train_sample.index) * 0.8) / 20
+                if int(rec_batch_size) % 2 == 0:
+                    rec_batch_size = int(rec_batch_size)
+                else:
+                    rec_batch_size = int(rec_batch_size) + 1
+                if rec_batch_size > 16384:
+                    rec_batch_size = 16384
+                    virtual_batch_size = 4096
+                else:
+                    virtual_batch_size = int(rec_batch_size / 4)
+
+                # update batch sizes in case hyperparameter tuning happens on samples
+                self.tabnet_settings["batch_size"] = rec_batch_size
+                self.tabnet_settings["virtual_batch_size"] = virtual_batch_size
 
             # load settings
             batch_size = self.tabnet_settings["batch_size"]
@@ -1041,14 +1069,14 @@ class RegressionModels(postprocessing.FullPipeline):
                 mean_abs_errors = []
                 skf = KFold(n_splits=10, random_state=42, shuffle=True)
 
-                for train_index, test_index in skf.split(X_train_sample):
+                for train_index, test_index in skf.split(x_train_sample):
                     x_train, x_test = (
-                        X_train_sample.iloc[train_index],
-                        X_train_sample.iloc[test_index],
+                        x_train_sample.iloc[train_index],
+                        x_train_sample.iloc[test_index],
                     )
                     y_train, y_test = (
-                        Y_train_sample.iloc[train_index],
-                        Y_train_sample.iloc[test_index],
+                        y_train_sample.iloc[train_index],
+                        y_train_sample.iloc[test_index],
                     )
                     # numpy conversion
                     y_train = y_train.values.reshape(-1, 1)
@@ -1056,9 +1084,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     x_train = x_train.to_numpy()
                     x_test = x_test.to_numpy()
 
-                    Y_train_num = Y_train_sample.values.reshape(-1, 1)  # noqa: F841
+                    Y_train_num = y_train_sample.values.reshape(-1, 1)  # noqa: F841
                     Y_test_num = Y_test.values.reshape(-1, 1)
-                    X_train_num = X_train_sample.to_numpy()  # noqa: F841
+                    X_train_num = x_train_sample.to_numpy()  # noqa: F841
                     X_test_num = X_test.to_numpy()
 
                     pretrainer = TabNetPretrainer(**param)
@@ -2095,6 +2123,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 Dist=dist_choice,
                 Base=base_learner_choice,
                 learning_rate=param["learning_rate"],
+                random_state=1000,
             ).fit(
                 X_train, Y_train, X_val=X_test, Y_val=Y_test, early_stopping_rounds=10
             )

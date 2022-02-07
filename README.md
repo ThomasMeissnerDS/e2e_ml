@@ -385,6 +385,7 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
   * Performance optimization for clustering & numerical binarizer
   * Added random states to clustering & PCA implementations
   * Improved scaling
+  * Stabilized TabNet for regression
 * 2.10.04
   * Adjusted dependency for SHAP
   * Fixed a bug where early numeric feature selection failed due to
