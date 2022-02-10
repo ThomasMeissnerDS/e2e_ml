@@ -1426,6 +1426,7 @@ class ClassificationModels(
                     loss_function="MultiClass",
                     # eval_metric=["MultiClass"],
                     auto_class_weights=class_weighting,
+                    task_type=self.preprocess_decisions["gpu_support"][f"{algorithm}"],
                     verbose=500,
                     random_state=42,
                 )  # .fit(x_train, y_train,
@@ -1479,6 +1480,7 @@ class ClassificationModels(
                 loss_function="MultiClass",
                 # eval_metric=["MultiClass"],
                 auto_class_weights=best_parameters["class_weighting"],
+                task_type=self.preprocess_decisions["gpu_support"][f"{algorithm}"],
                 verbose=500,
                 random_state=42,
             ).fit(

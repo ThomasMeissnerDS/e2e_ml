@@ -5732,11 +5732,11 @@ class PreProcessing:
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
             random_trees = self.preprocess_decisions["random_tres_embedder"]
-            X_sparse_embedding = random_trees.transform(self.dataframe.toarray())
+            X_sparse_embedding = random_trees.transform(self.dataframe)
             new_cols = [
                 f"Forest_embedding_{i}" for i in range(X_sparse_embedding.shape[1])
             ]
-            pred_df = pd.DataFrame(X_sparse_embedding, columns=new_cols)
+            pred_df = pd.DataFrame(X_sparse_embedding.toarray(), columns=new_cols)
             self.dataframe = self.dataframe.merge(
                 pred_df, left_index=True, right_index=True
             )

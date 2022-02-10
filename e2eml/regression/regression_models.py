@@ -878,6 +878,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     early_stopping_rounds=10,
                     verbose=500,
                     random_state=42,
+                    task_type=self.preprocess_decisions["gpu_support"][f"{algorithm}"],
                 )  # .fit(X_train, Y_train,
                 #     eval_set=eval_dataset,
                 #     early_stopping_rounds=10)
@@ -921,6 +922,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 l2_leaf_reg=best_parameters["l2_leaf_reg"],
                 max_depth=best_parameters["max_depth"],
                 early_stopping_rounds=10,
+                task_type=self.preprocess_decisions["gpu_support"][f"{algorithm}"],
                 verbose=500,
                 random_state=42,
             ).fit(X_train, Y_train, eval_set=eval_dataset, early_stopping_rounds=10)
