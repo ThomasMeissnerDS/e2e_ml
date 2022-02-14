@@ -33,7 +33,7 @@ from sklearn.linear_model import (
 )
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import KFold, cross_val_score
-from sklearn.svm import SVR, LinearSVR
+from sklearn.svm import LinearSVR
 from sklearn.tree import DecisionTreeRegressor
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from vowpalwabbit.sklearn_vw import VWRegressor
@@ -166,12 +166,25 @@ class RegressionModels(postprocessing.FullPipeline):
                     "tol": trial.suggest_loguniform("tol", 1e-5, 1e-1),
                     "gamma": trial.suggest_categorical("gamma", ["scale", "auto"]),
                 }
-                model = SVR(
-                    C=param["C"],
-                    max_iter=param["max_iter"],
-                    tol=param["tol"],
-                    gamma=param["gamma"],
-                )  # .fit(x_train, y_train)
+                if self.rapids_acceleration:
+                    from cuml.svm import SVR
+
+                    model = SVR(
+                        C=param["C"],
+                        max_iter=param["max_iter"],
+                        tol=param["tol"],
+                        gamma=param["gamma"],
+                        output_type="numpy",
+                    )
+                else:
+                    from sklearn.svm import SVR
+
+                    model = SVR(
+                        C=param["C"],
+                        max_iter=param["max_iter"],
+                        tol=param["tol"],
+                        gamma=param["gamma"],
+                    )  # .fit(x_train, y_train)
                 try:
                     scores = cross_val_score(
                         model, x_train, y_train, cv=10, scoring="neg_mean_squared_error"
@@ -206,12 +219,25 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
 
             best_parameters = study.best_trial.params
-            model = SVR(
-                C=best_parameters["C"],
-                max_iter=best_parameters["max_iter"],
-                tol=best_parameters["tol"],
-                gamma=best_parameters["gamma"],
-            ).fit(X_train, Y_train)
+            if self.rapids_acceleration:
+                from cuml.svm import SVR
+
+                model = SVR(
+                    C=best_parameters["C"],
+                    max_iter=best_parameters["max_iter"],
+                    tol=best_parameters["tol"],
+                    gamma=best_parameters["gamma"],
+                    output_type="numpy",
+                ).fit(X_train, Y_train)
+            else:
+                from sklearn.svm import SVR
+
+                model = SVR(
+                    C=best_parameters["C"],
+                    max_iter=best_parameters["max_iter"],
+                    tol=best_parameters["tol"],
+                    gamma=best_parameters["gamma"],
+                ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
@@ -1350,7 +1376,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 def objective(trial):
                     param = {
                         "objective": "reg:squarederror",  # OR  'binary:logistic' #the loss function being used
-                        "eval_metric": "gamma-nloglik",
+                        "eval_metric": "mae",
                         "verbose": 0,
                         "tree_method": train_on,  # use GPU for training
                         "max_depth": trial.suggest_int("max_depth", 2, 10),
@@ -1378,7 +1404,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         ),
                     }
                     pruning_callback = optuna.integration.XGBoostPruningCallback(
-                        trial, "test-gamma-nloglik"
+                        trial, "test-mae"
                     )
                     if tune_mode == "simple":
                         eval_set = [(d_train, "train"), (D_test, "test")]
@@ -1404,7 +1430,7 @@ class RegressionModels(postprocessing.FullPipeline):
                             callbacks=[pruning_callback],
                             nfold=10,
                         )
-                        return result["test-gamma-nloglik-mean"].mean()
+                        return result["test-mae-mean"].mean()
 
                 algorithm = "xgboost"
                 sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
@@ -1446,7 +1472,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 lgbm_best_param = study.best_trial.params
                 param = {
                     "objective": "reg:squarederror",  # OR  'binary:logistic' #the loss function being used
-                    "eval_metric": "gamma-nloglik",
+                    "eval_metric": "mae",
                     "verbose": 0,
                     "tree_method": train_on,  # use GPU for training
                     "max_depth": lgbm_best_param[
@@ -1500,7 +1526,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         # L2 regularization term on weights. Increasing this value will make model more conservative. (default = 1)
                         "subsample": 0.8,
                         "objective": "reg:squarederror",  # OR  'binary:logistic' #the loss function being used
-                        "eval_metric": "gamma-nloglik",
+                        "eval_metric": "rmse",
                         # 'colsample_bytree': 0.3,
                         "max_depth": 2,  # maximum depth of the decision trees being trained
                         "tree_method": "gpu_hist",  # use GPU for training

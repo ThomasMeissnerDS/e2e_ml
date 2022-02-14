@@ -143,9 +143,12 @@ There are regression blueprints as well (in regression module):
 - ml_bp15_regression_full_processing_vowpal_wabbit_reg()
 - ml_bp16_regressions_full_processing_bert_transformer()
 - ml_bp17_regression_full_processing_tabnet_reg()
-- ml_bp18_regression_full_processing_ridge_reg
+- ml_bp18_regression_full_processing_ridge_reg()
+- ml_bp19_regression_full_processing_elasticnet_reg()
 - ml_bp20_regression_full_processing_catboost()
 - ml_bp20_regression_full_processing_sgd()
+- ml_bp21_regression_full_processing_ransac()
+- ml_bp22_regression_full_processing_svm()
 - ml_special_regression_full_processing_multimodel_avg_blender()
 - ml_special_regression_auto_model_exploration()
 
@@ -372,6 +375,10 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
+* 2.12
+  * Added RAPIDS support for SVM regression
+  * Updated Xgboost loss function for regression
+  * Fixed a bug in cardinality removal
 * 2.11
   * Added datasets library to dependencies
   * Calculation of feature importance can be controlled via class instance now.

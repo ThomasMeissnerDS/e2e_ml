@@ -1578,49 +1578,57 @@ class PreProcessing:
         """
         self.get_current_timestamp(task="Remove cardinality")
 
-        def remove_high_cardinality(df, threshold=threshold, cols_to_delete=None):
-            if not cols_to_delete:
+        def remove_high_cardinality(
+            df, threshold=threshold, cols_to_delete=None, mode="fit"
+        ):
+            to_check = df.copy()
+            if mode == "fit":
                 deleted_columns = []
-                cat_columns = df.select_dtypes(include=["object"]).columns
+                cat_columns = to_check.select_dtypes(include=["object"]).columns
                 for col in cat_columns:
-                    cardinality = df[col].nunique()
+                    cardinality = to_check[col].nunique()
                     if cardinality >= threshold:
-                        df = df.drop([col], axis=1)
+                        to_check = to_check.drop(col, axis=1)
+                        try:
+                            del to_check[col]
+                        except Exception:
+                            pass
                         deleted_columns.append(col)
                     else:
                         pass
+                self.preprocess_decisions[
+                    "cardinality_deleted_columns"
+                ] = deleted_columns
             else:
-                deleted_columns = cols_to_delete
+                deleted_columns = self.preprocess_decisions[
+                    "cardinality_deleted_columns"
+                ]
+                to_check = to_check.drop(deleted_columns, axis=1)
                 for col in deleted_columns:
-                    df = df.drop([col], axis=1)
-            return df, deleted_columns
+                    try:
+                        del to_check[col]
+                    except Exception:
+                        pass
+            return to_check
 
         logging.info("Start cardinality removal.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            threshold = self.preprocess_decisions["cardinality_threshold"]
-            (
-                self.dataframe,
-                self.preprocess_decisions["cardinality_deleted_columns"],
-            ) = remove_high_cardinality(
+            self.dataframe = remove_high_cardinality(
                 self.dataframe,
                 cols_to_delete=self.preprocess_decisions["cardinality_deleted_columns"],
+                mode="predict",
             )
             logging.info("Finished cardinality removal.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            (
-                X_train,
-                self.preprocess_decisions["cardinality_deleted_columns"],
-            ) = remove_high_cardinality(X_train, threshold=threshold)
-            (
-                X_test,
-                self.preprocess_decisions["cardinality_deleted_columns"],
-            ) = remove_high_cardinality(
+            X_train = remove_high_cardinality(X_train, threshold=threshold, mode="fit")
+            X_test = remove_high_cardinality(
                 df=X_test,
                 cols_to_delete=self.preprocess_decisions["cardinality_deleted_columns"],
+                mode="predict",
             )
             self.preprocess_decisions["cardinality_threshold"] = threshold
             logging.info("Finished cardinality removal.")
@@ -2966,8 +2974,8 @@ class PreProcessing:
                 df_branch.fillna(0, inplace=True)
                 onehot_cols = df_branch.columns
                 # pca = self.preprocess_decisions["onehot_pca"]["pca_encoder"]
-                pca = PCA(n_components=2, random_state=1000)
-                pred_comps = pca.fit_transform(df_branch[onehot_cols])
+                pca = self.preprocess_decisions["onehot_pca"]["pca_encoder"]
+                pred_comps = pca.transform(df_branch[onehot_cols])
                 df_branch = pd.DataFrame(pred_comps, columns=["PC-1", "PC-2"])
                 for col in df_branch.columns:
                     self.dataframe[f"{col}_pca"] = df_branch[col]
