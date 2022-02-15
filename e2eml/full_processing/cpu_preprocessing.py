@@ -147,6 +147,9 @@ class PreProcessing:
         transformer_model_load_from_path=None,
         transformer_model_save_states_path=None,
         transformer_epochs=25,
+        tabular_nn_model_load_from_path=None,
+        tabular_nn_model_save_states_path=None,
+        tabular_nn_epochs=200,
         max_tfidf_features=25000,
         tfidf_ngrams=(1, 3),
         prediction_mode=False,
@@ -252,6 +255,7 @@ class PreProcessing:
         self.nlp_transformers = {}
         self.transformer_chosen = transformer_chosen
         self.transformer_epochs = transformer_epochs
+        self.tabular_nn_epochs = tabular_nn_epochs
         self.max_tfidf_features = max_tfidf_features
         self.tfidf_ngrams = tfidf_ngrams
         self.cat_columns_encoded = None
@@ -358,7 +362,7 @@ class PreProcessing:
             "autoencoder_based_oversampling": True,
             "final_kernel_pca_dimensionality_reduction": False,
             "final_pca_dimensionality_reduction": False,
-            "delete_low_variance_features": False,
+            "delete_low_variance_features": True,
             "shap_based_feature_selection": True,
             "delete_unpredictable_training_rows": True,
             "trained_tokenizer_embedding": True,
@@ -459,9 +463,22 @@ class PreProcessing:
             "test_batch_size": 32,
             "pred_batch_size": 32,
             "num_workers": 4,
-            "epochs": self.transformer_epochs,  # TODO: Change to 20 again
+            "epochs": self.transformer_epochs,
             "transformer_model_path": self.transformer_model_load_from_path,
             "model_save_states_path": {self.transformer_model_save_states_path},
+            "keep_best_model_only": False,
+        }
+        self.tabular_nn_model_load_from_path = tabular_nn_model_load_from_path
+        self.tabular_nn_model_save_states_path = tabular_nn_model_save_states_path
+        self.autotuned_nn_settings = {
+            "train_batch_size": 512,
+            "test_batch_size": 512,
+            "pred_batch_size": 512,
+            "num_workers": 4,
+            "architecture": "ann",
+            "epochs": self.tabular_nn_epochs,
+            "transformer_model_path": self.tabular_nn_model_load_from_path,
+            "model_save_states_path": {self.tabular_nn_model_save_states_path},
             "keep_best_model_only": False,
         }
         self.deesc_settings = {
@@ -1361,6 +1378,10 @@ class PreProcessing:
                     data.loc[v_, "kfold"] = f
                 # drop the bins column
                 data = data.drop("bins", axis=1)
+                try:
+                    del data["bins"]
+                except Exception:
+                    pass
                 # return dataframe with folds
             return data
 
@@ -1378,11 +1399,11 @@ class PreProcessing:
             X_test = all_data[all_data["kfold"] == 0].reset_index(drop=True)
             Y_train = X_train[self.target_variable]
             Y_test = X_test[self.target_variable]
-            X_train.drop("kfold", axis=1)
-            X_test.drop("kfold", axis=1)
+            X_train = X_train.drop("kfold", axis=1)
+            X_test = X_test.drop("kfold", axis=1)
             if drop_target:
-                X_train.drop(self.target_variable, axis=1)
-                X_test.drop(self.target_variable, axis=1)
+                X_train = X_train.drop(self.target_variable, axis=1)
+                X_test = X_test.drop(self.target_variable, axis=1)
             else:
                 pass
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)

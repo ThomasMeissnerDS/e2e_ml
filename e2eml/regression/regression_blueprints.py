@@ -1,11 +1,14 @@
 import logging
 
 from e2eml.full_processing.preprocessing_blueprints import PreprocessingBluePrint
+from e2eml.regression.autotuned_nn_regression import RegressionNNModel
 from e2eml.regression.nlp_regression import NlpModel
 from e2eml.regression.regression_models import RegressionModels
 
 
-class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
+class RegressionBluePrint(
+    RegressionModels, PreprocessingBluePrint, NlpModel, RegressionNNModel
+):
     """
     Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
     if the predict_mode attribute is True.
@@ -445,6 +448,25 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint, NlpModel):
             feat_importance=self.get_feature_importance[algorithm]
         )
         self.regression_eval(algorithm=algorithm)
+        self.prediction_mode = True
+        logging.info("Finished blueprint.")
+
+    def ml_bp23_regressions_full_processing_neural_network(self, df=None):
+        """
+        Runs an NLP transformer blue print specifically for text regression. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_nlp_10" or "bp_nlp_11")
+        :return: Updates class attributes by its predictions.
+        """
+        self.std_preprocessing_pipeline(df=df)
+        if self.prediction_mode:
+            pass
+        else:
+            self.neural_network_train()
+        self.neural_network_predict()
+        algorithm = "neural_network"
+        self.regression_eval(algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")
 
