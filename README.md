@@ -375,6 +375,8 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
+* 2.13
+  * Added neural networks (ANN & soft ordered 1d-CNN) for tabular data
 * 2.12
   * Added RAPIDS support for SVM regression
   * Updated Xgboost loss function for regression

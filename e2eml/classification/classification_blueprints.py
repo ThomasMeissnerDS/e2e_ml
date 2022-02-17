@@ -1,11 +1,14 @@
 import logging
 
+from e2eml.classification.autotuned_nn_classification import ClassificationNNModel
 from e2eml.classification.classification_models import ClassificationModels
 from e2eml.classification.nlp_classification import NlpModel
 from e2eml.full_processing.preprocessing_blueprints import PreprocessingBluePrint
 
 
-class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpModel):
+class ClassificationBluePrint(
+    ClassificationModels, PreprocessingBluePrint, NlpModel, ClassificationNNModel
+):
     """
     Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
     if the predict_mode attribute is True.
@@ -644,6 +647,27 @@ class ClassificationBluePrint(ClassificationModels, PreprocessingBluePrint, NlpM
             self.deesc_train()
         algorithm = "deesc"
         self.deesc_predict()
+        self.classification_eval(algorithm=algorithm)
+        self.prediction_mode = True
+        logging.info("Finished blueprint.")
+
+    def ml_bp16_multiclass_full_processing_neural_network(self, df=None):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
+        :return: Updates class attributes by its predictions.
+        """
+        self.std_preprocessing_pipeline(df=df)
+        if self.prediction_mode:
+            pass
+        else:
+            self.neural_network_train()
+        algorithm = "neural_network"
+        self.neural_network_predict()
         self.classification_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")

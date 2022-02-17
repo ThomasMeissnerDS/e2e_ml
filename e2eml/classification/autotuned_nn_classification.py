@@ -6,10 +6,10 @@ import numpy as np
 import psutil
 import torch
 import torch.nn as nn
-from sklearn.metrics import mean_squared_error, median_absolute_error
+from sklearn.metrics import matthews_corrcoef
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup
 
 from e2eml.full_processing import cpu_preprocessing, postprocessing
 
@@ -18,7 +18,7 @@ scaler = torch.cuda.amp.GradScaler()  # GPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class RegressionDataset(Dataset):
+class ClassificationDataset(Dataset):
     def __init__(self, X_data, y_data):
         self.X_data = X_data
         self.y_data = y_data
@@ -30,8 +30,8 @@ class RegressionDataset(Dataset):
         return len(self.X_data)
 
 
-class RegressionNNModel(
-    postprocessing.FullPipeline, cpu_preprocessing.PreProcessing, RegressionDataset
+class ClassificationNNModel(
+    postprocessing.FullPipeline, cpu_preprocessing.PreProcessing, ClassificationDataset
 ):
     """
     This class stores all model training and prediction methods for classification tasks.
@@ -64,7 +64,7 @@ class RegressionNNModel(
         logging.info("Create NLP train dataset.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        train_dataset = RegressionDataset(
+        train_dataset = ClassificationDataset(
             torch.from_numpy(X_train.to_numpy()).float(),
             torch.from_numpy(Y_train.to_numpy()).float(),
         )
@@ -74,7 +74,7 @@ class RegressionNNModel(
         logging.info("Create NLP test dataset.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        test_dataset = RegressionDataset(
+        test_dataset = ClassificationDataset(
             torch.from_numpy(X_test.to_numpy()).float(),
             torch.from_numpy(Y_test.to_numpy()).float(),
         )
@@ -87,13 +87,13 @@ class RegressionNNModel(
             self.dataframe[self.target_variable] = 999  # creating dummy column
             dummy_target = self.dataframe[self.target_variable]
             self.dataframe = self.dataframe.drop(self.target_variable, axis=1)
-            pred_dataset = RegressionDataset(
+            pred_dataset = ClassificationDataset(
                 torch.from_numpy(self.dataframe.to_numpy()).float(),
                 torch.from_numpy(dummy_target.to_numpy()).float(),
             )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            pred_dataset = RegressionDataset(
+            pred_dataset = ClassificationDataset(
                 torch.from_numpy(X_test.to_numpy()).float(),
                 torch.from_numpy(Y_test.to_numpy()).float(),
             )
@@ -166,7 +166,7 @@ class RegressionNNModel(
         return pred_dataloader
 
     def loss_fn(self, output, target):
-        return torch.sqrt(nn.MSELoss()(output, target))
+        return torch.nn.CrossEntropyLoss()(output, target)
 
     def get_num_features(self):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -174,17 +174,17 @@ class RegressionNNModel(
         self.preprocess_decisions["num_features"] = D
         return D
 
-    def get_nn_architecture(self, type="ann", num_features=1):
+    def get_nn_architecture(self, type="ann", num_features=1, num_classes=2):
         if type == "ann":
 
-            class MultipleRegression(nn.Module):
-                def __init__(self, num_features):
-                    super(MultipleRegression, self).__init__()
+            class MultipleClassification(nn.Module):
+                def __init__(self, num_features, num_classes):
+                    super(MultipleClassification, self).__init__()
 
                     self.layer_1 = nn.Linear(num_features, 64)
                     self.layer_2 = nn.Linear(64, 128)
                     self.layer_3 = nn.Linear(128, 64)
-                    self.layer_out = nn.Linear(64, 1)
+                    self.layer_out = nn.Linear(64, num_classes)
 
                     self.relu = nn.ReLU()
 
@@ -202,8 +202,11 @@ class RegressionNNModel(
                     x = self.layer_out(x)
                     return x
 
-            model = MultipleRegression(num_features=num_features)
+            model = MultipleClassification(
+                num_features=num_features, num_classes=num_classes
+            )
             return model
+
         elif type == "1d-cnn":
 
             class SoftOrdering1DCNN(nn.Module):
@@ -379,19 +382,19 @@ class RegressionNNModel(
 
                     return x
 
-            model = SoftOrdering1DCNN(input_dim=num_features)
+            model = SoftOrdering1DCNN(input_dim=num_features, output_dim=num_classes)
             return model
 
         else:
 
             class MultipleRegression(nn.Module):
-                def __init__(self, num_features):
+                def __init__(self, num_features, num_classes):
                     super(MultipleRegression, self).__init__()
 
                     self.layer_1 = nn.Linear(num_features, 64)
                     self.layer_2 = nn.Linear(64, 128)
                     self.layer_3 = nn.Linear(128, 64)
-                    self.layer_out = nn.Linear(64, 1)
+                    self.layer_out = nn.Linear(64, num_classes)
 
                     self.relu = nn.ReLU()
 
@@ -409,7 +412,9 @@ class RegressionNNModel(
                     x = self.layer_out(x)
                     return x
 
-            model = MultipleRegression(num_features=num_features)
+            model = MultipleRegression(
+                num_features=num_features, num_classes=num_classes
+            )
             return model
 
     # nn.MultiMarginLoss, #CrossEntropyLoss, #MSELoss
@@ -425,6 +430,7 @@ class RegressionNNModel(
             model = self.get_nn_architecture(
                 type=self.autotuned_nn_settings["architecture"],
                 num_features=self.preprocess_decisions["num_features"],
+                num_classes=self.num_classes,
             )
             model.to(device)
             model.train()
@@ -458,6 +464,7 @@ class RegressionNNModel(
         self.reset_test_train_index(drop_target=True)
 
         for X_train_batch, y_train_batch in train_dataloader:
+            y_train_batch = y_train_batch.type(torch.LongTensor)
             losses = []
             optimizer.zero_grad()
 
@@ -467,7 +474,7 @@ class RegressionNNModel(
                 ), y_train_batch.to(device)
 
                 y_train_pred = model(X_train_batch)
-                y_train_batch = y_train_batch.unsqueeze(1)
+                y_train_batch = y_train_batch.squeeze(-1)
                 loss = self.loss_fn(y_train_pred, y_train_batch)
 
                 # For scoring
@@ -482,13 +489,14 @@ class RegressionNNModel(
 
             # Combine dataloader minutes
 
-        allpreds = np.concatenate(allpreds)
-        alltargets = np.concatenate(alltargets)
+        allpreds = np.concatenate(allpreds, axis=0)
+        allpreds = np.asarray([np.argmax(line) for line in allpreds])
+        alltargets = np.concatenate(alltargets, axis=0)
 
         # I don't use loss, but I collect it
         losses = np.mean(losses)
         # Score with rmse
-        train_rme_loss = np.sqrt(mean_squared_error(alltargets, allpreds))
+        train_rme_loss = matthews_corrcoef(alltargets, allpreds)
 
         return losses, train_rme_loss
 
@@ -500,6 +508,7 @@ class RegressionNNModel(
         alltargets = []
 
         for X_test_batch, y_test_batch in valid_dataloader:
+            y_test_batch = y_test_batch.type(torch.LongTensor)
             losses = []
 
             with torch.no_grad():
@@ -508,7 +517,7 @@ class RegressionNNModel(
                 )
 
                 y_train_pred = model(X_test_batch)
-                y_test_batch = y_test_batch.unsqueeze(1)
+                y_test_batch = y_test_batch.squeeze(-1)
                 loss = self.loss_fn(y_train_pred, y_test_batch)
 
                 # For scoring
@@ -517,13 +526,14 @@ class RegressionNNModel(
                 alltargets.append(y_test_batch.detach().squeeze(-1).cpu().numpy())
                 # Combine dataloader minutes
 
-        allpreds = np.concatenate(allpreds)
-        alltargets = np.concatenate(alltargets)
+        allpreds = np.concatenate(allpreds, axis=0)
+        allpreds = np.asarray([np.argmax(line) for line in allpreds])
+        alltargets = np.concatenate(alltargets, axis=0)
 
         # I don't use loss, but I collect it
         losses = np.mean(losses)
         # Score with rmse
-        valid_rme_loss = np.sqrt(mean_squared_error(alltargets, allpreds))
+        valid_rme_loss = matthews_corrcoef(alltargets, allpreds)
 
         return allpreds, losses, valid_rme_loss
 
@@ -533,6 +543,7 @@ class RegressionNNModel(
         allpreds = []
         model_no = 0
         mode_cols = []
+        algorithm = "neural_network"
         for m_path in pathes:
             state = torch.load(m_path)
             model.load_state_dict(state["state_dict"])
@@ -550,13 +561,18 @@ class RegressionNNModel(
                     preds.append(y_pred_pred.detach().cpu().numpy())
 
                 preds = np.concatenate(preds)
+                pred_classes = np.asarray([np.argmax(line) for line in preds])
+
+                if self.class_problem in ["binary", "multiclass"]:
+                    pred_probas = np.asarray([line[1] for line in preds])
 
                 if self.prediction_mode:
-                    self.dataframe[f"preds_model{model_no}"] = preds
+                    self.dataframe[f"preds_model{model_no}"] = pred_classes
                 else:
                     X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-                    X_test[f"preds_model{model_no}"] = preds
+                    X_test[f"preds_model{model_no}"] = pred_classes
                 mode_cols.append(f"preds_model{model_no}")
+                self.predicted_probs[f"{algorithm}_{model_no}"] = pred_probas
 
                 allpreds.append(preds)
                 model_no += 1
@@ -598,9 +614,6 @@ class RegressionNNModel(
             train_dataloader = self.create_nn_train_dataloader()
             test_dataloader = self.create_nn_test_dataloader()
             model, optimizer, train_steps, num_steps, scheduler = self.nn_model_setup()
-            scheduler = get_linear_schedule_with_warmup(
-                optimizer, num_steps, train_steps
-            )
 
             trainlosses = []
             vallosses = []
@@ -621,6 +634,7 @@ class RegressionNNModel(
                 validscores.append(valscore)
 
                 print("valscore is " + str(valscore))
+
                 if bestscore is None:
                     bestscore = valscore
                     print("Save first model")
@@ -631,7 +645,7 @@ class RegressionNNModel(
                     }
                     torch.save(state, "model0.pth")
 
-                elif bestscore > valscore:
+                elif bestscore < valscore:
                     bestscore = valscore
                     print("found better point")
                     state = {
@@ -658,11 +672,14 @@ class RegressionNNModel(
                 model = self.get_nn_architecture(
                     type=self.autotuned_nn_settings["architecture"],
                     num_features=self.preprocess_decisions["num_features"],
+                    num_classes=self.num_classes,
                 )
                 model.to(device)
-                LR = 2e-5  # 1e-3
-                optimizer = AdamW(
-                    model.parameters(), LR, betas=(0.99, 0.999), weight_decay=1e-2
+                LR = self.autotuned_nn_settings["learning_rate"]
+                optimizer = torch.optim.Adam(
+                    model.parameters(),
+                    lr=LR,
+                    weight_decay=self.autotuned_nn_settings["weight_decay"],
                 )
                 train_steps = int(
                     len(X_train)
@@ -706,7 +723,7 @@ class RegressionNNModel(
                             "bestscore": bestscore,
                         }
                         torch.save(state, "model" + str(fold) + ".pth")
-                    elif bestscore > valscore:
+                    elif bestscore < valscore:
                         bestscore = valscore
                         print("found better point")
                         state = {
@@ -722,12 +739,12 @@ class RegressionNNModel(
             del model, optimizer, scheduler
             _ = gc.collect()
 
-    def median_abs_error_eval(self, true_y, predicted):
+    def matthews_eval(self, true_y, predicted):
         try:
-            median_absolute_error_score = median_absolute_error(true_y, predicted)
+            matthews = matthews_corrcoef(true_y, predicted)
         except Exception:
-            median_absolute_error_score = 0
-        return median_absolute_error_score
+            matthews = 0
+        return matthews
 
     def neural_network_predict(self):
         logging.info("Start NLP transformer prediction.")
@@ -736,6 +753,7 @@ class RegressionNNModel(
         model = self.get_nn_architecture(
             type=self.autotuned_nn_settings["architecture"],
             num_features=self.preprocess_decisions["num_features"],
+            num_classes=self.num_classes,
         )
         pthes = self.load_model_states(path=self.tabular_nn_model_save_states_path)
         print(pthes)
@@ -743,32 +761,25 @@ class RegressionNNModel(
         allpreds, mode_cols = self.nn_predicting(pred_dataloader, model, pthes)
 
         if self.prediction_mode:
-            self.dataframe["neural_network_median"] = self.dataframe[mode_cols].median(
-                axis=1
-            )
-            self.dataframe["neural_network_mean"] = self.dataframe[mode_cols].mean(
-                axis=1
-            )
-            self.predicted_values["neural_network"] = self.dataframe[
-                "neural_network_mean"
-            ]
+            self.dataframe["majority_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
+            self.predicted_classes["neural_network"] = self.dataframe["majority_class"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
-            if self.autotuned_nn_settings["keep_best_model_only"]:
+            if self.transformer_settings["keep_best_model_only"]:
                 # we check, if one savestate underperforms and delete him out
                 scorings = []
                 states = []
                 for state in mode_cols:
-                    state_score = self.median_abs_error_eval(Y_test, X_test[state])
-                    # print(state_score)
+                    state_score = self.matthews_eval(Y_test, X_test[state])
+                    # print(f"{state} score: {state_score}")
                     scorings.append(state_score)
                     states.append(state)
                 scorings_arr = np.array(scorings)
                 scorings_mean = np.mean(scorings_arr)
                 scorings_std = np.std(scorings_arr)
-                # print(scorings_std)
-                keep_state = scorings_arr < scorings_mean + scorings_std
+                keep_state = scorings_arr > scorings_mean - scorings_std
+                # print(f"keep {keep_state}")
                 for index, state in enumerate(states):
                     os_string = state[-6:]
                     if keep_state.tolist()[index]:
@@ -777,9 +788,10 @@ class RegressionNNModel(
                         states.remove(state)
                         X_test.drop(state, axis=1)
                         os.remove(f"{os_string}.pth")
+
+                # print(f"states left:  {states}")
             else:
                 pass
 
-            X_test["neural_network_median"] = X_test[mode_cols].median(axis=1)
-            X_test["neural_network_mean"] = X_test[mode_cols].mean(axis=1)
-            self.predicted_values["neural_network"] = X_test["neural_network_median"]
+            X_test["majority_class"] = X_test[mode_cols].mode(axis=1)[0]
+            self.predicted_classes["neural_network"] = X_test["majority_class"]
