@@ -178,27 +178,85 @@ class RegressionNNModel(
         if type == "ann":
 
             class MultipleRegression(nn.Module):
-                def __init__(self, num_features):
+                def __init__(self, num_features, dropout=0.3):
                     super(MultipleRegression, self).__init__()
 
-                    self.layer_1 = nn.Linear(num_features, 64)
+                    self.dropout = dropout
+
+                    self.layer_0 = nn.Linear(num_features, 4096)
+                    self.batch_norm_0 = nn.BatchNorm1d(4096)
+                    self.dropout_0 = nn.Dropout(dropout)
+
+                    self.layer_1 = nn.Linear(4096, 64)
+                    self.batch_norm_1 = nn.BatchNorm1d(64)
+                    self.dropout_1 = nn.Dropout(dropout)
+
                     self.layer_2 = nn.Linear(64, 128)
-                    self.layer_3 = nn.Linear(128, 64)
-                    self.layer_out = nn.Linear(64, 1)
+                    self.batch_norm_2 = nn.BatchNorm1d(128)
+
+                    self.layer_3 = nn.Linear(128, 256)
+                    self.batch_norm_3 = nn.BatchNorm1d(256)
+
+                    self.layer_4 = nn.Linear(256, 512)
+                    self.batch_norm_4 = nn.BatchNorm1d(512)
+
+                    self.layer_5 = nn.Linear(512, 256)
+                    self.dropout_5 = nn.Dropout(dropout)
+                    self.batch_norm_5 = nn.BatchNorm1d(256)
+
+                    self.layer_6 = nn.Linear(256, 128)
+                    self.batch_norm_6 = nn.BatchNorm1d(128)
+
+                    self.layer_7 = nn.Linear(128, 16)
+                    self.batch_norm_7 = nn.BatchNorm1d(16)
+
+                    self.layer_out = nn.Linear(16, 1)
 
                     self.relu = nn.ReLU()
 
                 def forward(self, inputs):
-                    x = self.relu(self.layer_1(inputs))
+                    x = self.relu(self.layer_0(inputs))
+                    x = self.batch_norm_0(x)
+                    x = self.dropout_0(x)
+                    x = self.relu(self.layer_1(x))
+                    x = self.batch_norm_1(x)
+                    x = self.dropout_1(x)
                     x = self.relu(self.layer_2(x))
+                    x = self.batch_norm_2(x)
                     x = self.relu(self.layer_3(x))
+                    x = self.batch_norm_3(x)
+                    x = self.relu(self.layer_4(x))
+                    x = self.batch_norm_4(x)
+                    x = self.relu(self.layer_5(x))
+                    x = self.dropout_5(x)
+                    x = self.batch_norm_5(x)
+                    x = self.relu(self.layer_6(x))
+                    x = self.batch_norm_6(x)
+                    x = self.relu(self.layer_7(x))
+                    x = self.batch_norm_7(x)
                     x = self.layer_out(x)
                     return x
 
                 def predict(self, test_inputs):
-                    x = self.relu(self.layer_1(test_inputs))
+                    x = self.relu(self.layer_0(test_inputs))
+                    x = self.batch_norm_0(x)
+                    x = self.dropout_0(x)
+                    x = self.relu(self.layer_1(x))
+                    x = self.batch_norm_1(x)
+                    x = self.dropout_1(x)
                     x = self.relu(self.layer_2(x))
+                    x = self.batch_norm_2(x)
                     x = self.relu(self.layer_3(x))
+                    x = self.batch_norm_3(x)
+                    x = self.relu(self.layer_4(x))
+                    x = self.batch_norm_4(x)
+                    x = self.relu(self.layer_5(x))
+                    x = self.dropout_5(x)
+                    x = self.batch_norm_5(x)
+                    x = self.relu(self.layer_6(x))
+                    x = self.batch_norm_6(x)
+                    x = self.relu(self.layer_7(x))
+                    x = self.batch_norm_7(x)
                     x = self.layer_out(x)
                     return x
 

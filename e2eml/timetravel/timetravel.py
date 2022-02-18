@@ -232,6 +232,7 @@ class TimeTravel:
             "svm": class_instance.ml_bp12_multiclass_full_processing_svm,
             "multinomial_nb": class_instance.ml_bp13_multiclass_full_processing_multinomial_nb,
             "deesc": class_instance.ml_bp15_multiclass_full_processing_deesc,
+            "neural_network": class_instance.ml_bp16_multiclass_full_processing_neural_network,
         }
 
     def call_regression_algorithm_mapping(self, class_instance):
@@ -247,7 +248,8 @@ class TimeTravel:
             "vowpal_wabbit": class_instance.ml_bp15_regression_full_processing_vowpal_wabbit_reg,
             "sklearn_ensemble": class_instance.ml_bp13_regression_full_processing_sklearn_stacking_ensemble,
             "sgd": class_instance.ml_bp20_regression_full_processing_sgd,
-            "svm_regression": class_instance.ml_bp22_regression_full_processing_svm
+            "svm_regression": class_instance.ml_bp22_regression_full_processing_svm,
+            "neural_network": class_instance.ml_bp23_regressions_full_processing_neural_network
             # "ransac": class_instance.ml_bp21_regression_full_processing_ransac
         }
 
@@ -447,6 +449,7 @@ def timewalk_auto_exploration(  # noqa: C901
             "quadratic_discriminant_analysis",
             "svm",
             "svm_regression",
+            "neural_network",
         ]
 
         if len(class_instance.dataframe.index) > 10000:

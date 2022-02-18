@@ -477,7 +477,7 @@ class PreProcessing:
             "num_workers": 4,
             "learning_rate": 1e-3,
             "weight_decay": 1e-5,
-            "architecture": "ann",
+            "architecture": "1d-cnn",
             "epochs": self.tabular_nn_epochs,
             "transformer_model_path": self.tabular_nn_model_load_from_path,
             "model_save_states_path": {self.tabular_nn_model_save_states_path},
