@@ -377,6 +377,9 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 * 2.13
   * Added neural networks (ANN & soft ordered 1d-CNN) for tabular data
+  * Added attribute global_random_state to set state for all instances
+  * Added attribute shuffle_during_training to be able to disable shuffling
+    during model training (does not apply to all models)
 * 2.12
   * Added RAPIDS support for SVM regression
   * Updated Xgboost loss function for regression

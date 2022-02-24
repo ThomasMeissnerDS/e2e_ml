@@ -113,13 +113,18 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
 
             if feat_importance and importance_alg == "SHAP":
                 self.runtime_warnings(warn_about="shap_cpu")
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -128,7 +133,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -166,25 +176,14 @@ class RegressionModels(postprocessing.FullPipeline):
                     "tol": trial.suggest_loguniform("tol", 1e-5, 1e-1),
                     "gamma": trial.suggest_categorical("gamma", ["scale", "auto"]),
                 }
-                if self.rapids_acceleration:
-                    from cuml.svm import SVR
+                from sklearn.svm import SVR
 
-                    model = SVR(
-                        C=param["C"],
-                        max_iter=param["max_iter"],
-                        tol=param["tol"],
-                        gamma=param["gamma"],
-                        output_type="numpy",
-                    )
-                else:
-                    from sklearn.svm import SVR
-
-                    model = SVR(
-                        C=param["C"],
-                        max_iter=param["max_iter"],
-                        tol=param["tol"],
-                        gamma=param["gamma"],
-                    )  # .fit(x_train, y_train)
+                model = SVR(
+                    C=param["C"],
+                    max_iter=param["max_iter"],
+                    tol=param["tol"],
+                    gamma=param["gamma"],
+                )  # .fit(x_train, y_train)
                 try:
                     scores = cross_val_score(
                         model, x_train, y_train, cv=10, scoring="neg_mean_squared_error"
@@ -194,7 +193,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
             )
@@ -219,25 +220,14 @@ class RegressionModels(postprocessing.FullPipeline):
                 pass
 
             best_parameters = study.best_trial.params
-            if self.rapids_acceleration:
-                from cuml.svm import SVR
+            from sklearn.svm import SVR
 
-                model = SVR(
-                    C=best_parameters["C"],
-                    max_iter=best_parameters["max_iter"],
-                    tol=best_parameters["tol"],
-                    gamma=best_parameters["gamma"],
-                    output_type="numpy",
-                ).fit(X_train, Y_train)
-            else:
-                from sklearn.svm import SVR
-
-                model = SVR(
-                    C=best_parameters["C"],
-                    max_iter=best_parameters["max_iter"],
-                    tol=best_parameters["tol"],
-                    gamma=best_parameters["gamma"],
-                ).fit(X_train, Y_train)
+            model = SVR(
+                C=best_parameters["C"],
+                max_iter=best_parameters["max_iter"],
+                tol=best_parameters["tol"],
+                gamma=best_parameters["gamma"],
+            ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
@@ -266,13 +256,18 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
 
             if feat_importance and importance_alg == "SHAP":
                 self.runtime_warnings(warn_about="shap_cpu")
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -281,7 +276,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -329,7 +329,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     tol=param["tol"],
                     normalize=param["normalize"],
                     solver=solver,
-                    random_state=42,
+                    random_state=self.global_random_state,
                 )
                 try:
                     scores = cross_val_score(
@@ -340,7 +340,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
             )
@@ -371,7 +373,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 normalize=best_parameters["normalize"],
                 tol=best_parameters["tol"],
                 solver=best_parameters["solver"],
-                random_state=42,
+                random_state=self.global_random_state,
             ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -401,13 +403,18 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
 
             if feat_importance and importance_alg == "SHAP":
                 self.runtime_warnings(warn_about="shap_cpu")
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -416,7 +423,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -478,7 +490,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     estimator = None
 
                 model = RANSACRegressor(
-                    base_estimator=estimator, max_trials=100, random_state=42
+                    base_estimator=estimator,
+                    max_trials=100,
+                    random_state=self.global_random_state,
                 )
                 try:
                     scores = cross_val_score(
@@ -489,7 +503,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
             )
@@ -532,7 +548,9 @@ class RegressionModels(postprocessing.FullPipeline):
                 estimator = None
 
             model = RANSACRegressor(
-                base_estimator=estimator, max_trials=100, random_state=42
+                base_estimator=estimator,
+                max_trials=100,
+                random_state=self.global_random_state,
             ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -562,13 +580,18 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
 
             if feat_importance and importance_alg == "SHAP":
                 self.runtime_warnings(warn_about="shap_cpu")
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -577,7 +600,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -627,7 +655,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     penalty="elasticnet",
                     loss=loss,
                     early_stopping=True,
-                    random_state=42,
+                    random_state=self.global_random_state,
                 )  # .fit(X_train, Y_train)
                 try:
                     scores = cross_val_score(
@@ -638,7 +666,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
             )
@@ -672,7 +702,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 penalty="elasticnet",
                 loss=best_parameters["loss"],
                 early_stopping=True,
-                random_state=42,
+                random_state=self.global_random_state,
             ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -702,13 +732,18 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
 
             if feat_importance and importance_alg == "SHAP":
                 self.runtime_warnings(warn_about="shap_cpu")
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -717,7 +752,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -766,7 +806,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     tol=param["tol"],
                     normalize=param["normalize"],
                     warm_start=param["warm_start"],
-                    random_state=42,
+                    random_state=self.global_random_state,
                 ).fit(X_train, Y_train)
                 try:
                     scores = cross_val_score(
@@ -777,7 +817,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
             )
@@ -809,7 +851,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 warm_start=best_parameters["warm_start"],
                 tol=best_parameters["tol"],
                 l1_ratio=best_parameters["l1_ratio"],
-                random_state=42,
+                random_state=self.global_random_state,
             ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -839,13 +881,18 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
 
             if feat_importance and importance_alg == "SHAP":
                 self.runtime_warnings(warn_about="shap_cpu")
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -854,7 +901,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -903,7 +955,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     max_depth=param["max_depth"],
                     early_stopping_rounds=10,
                     verbose=500,
-                    random_state=42,
+                    random_state=self.global_random_state,
                     task_type=self.preprocess_decisions["gpu_support"][f"{algorithm}"],
                 )  # .fit(X_train, Y_train,
                 #     eval_set=eval_dataset,
@@ -917,7 +969,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
             )
@@ -950,7 +1004,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 early_stopping_rounds=10,
                 task_type=self.preprocess_decisions["gpu_support"][f"{algorithm}"],
                 verbose=500,
-                random_state=42,
+                random_state=self.global_random_state,
             ).fit(X_train, Y_train, eval_set=eval_dataset, early_stopping_rounds=10)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -980,13 +1034,18 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
 
             if feat_importance and importance_alg == "SHAP":
                 self.runtime_warnings(warn_about="shap_cpu")
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -995,7 +1054,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -1091,11 +1155,15 @@ class RegressionModels(postprocessing.FullPipeline):
                         mode=mode, patience=50, min_lr=1e-5, factor=factor
                     ),
                     scheduler_fn=ReduceLROnPlateau,
-                    seed=42,
+                    seed=self.global_random_state,
                     verbose=1,
                 )
                 mean_abs_errors = []
-                skf = KFold(n_splits=10, random_state=42, shuffle=True)
+                skf = KFold(
+                    n_splits=10,
+                    random_state=self.booster_random_state,
+                    shuffle=self.shuffle_during_training,
+                )
 
                 for train_index, test_index in skf.split(x_train_sample):
                     x_train, x_test = (
@@ -1201,7 +1269,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     factor=tabnet_best_param["factor"],
                 ),
                 scheduler_fn=ReduceLROnPlateau,
-                seed=42,
+                seed=self.global_random_state,
                 verbose=1,
             )
             pretrainer = TabNetPretrainer(**param)
@@ -1266,6 +1334,9 @@ class RegressionModels(postprocessing.FullPipeline):
             X_test = X_test.to_numpy()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
 
         self.predicted_values[f"{algorithm}"] = {}
         self.predicted_values[f"{algorithm}"] = predicted_probs
@@ -1312,13 +1383,18 @@ class RegressionModels(postprocessing.FullPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
 
             if feat_importance and importance_alg == "SHAP":
                 self.runtime_warnings(warn_about="shap_cpu")
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -1327,7 +1403,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -1426,14 +1507,17 @@ class RegressionModels(postprocessing.FullPipeline):
                             num_boost_round=param["steps"],
                             early_stopping_rounds=10,
                             as_pandas=True,
-                            seed=42,
+                            seed=self.booster_random_state,
                             callbacks=[pruning_callback],
                             nfold=10,
+                            shuffle=self.shuffle_during_training,
                         )
                         return result["test-mae-mean"].mean()
 
                 algorithm = "xgboost"
-                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+                sampler = optuna.samplers.TPESampler(
+                    multivariate=True, seed=self.global_random_state
+                )
 
                 if tune_mode == "simple":
                     study = optuna.create_study(
@@ -1570,12 +1654,16 @@ class RegressionModels(postprocessing.FullPipeline):
             D_test = xgb.DMatrix(X_test, label=Y_test)
             try:
                 D_test_sample = xgb.DMatrix(
-                    X_test.sample(10000, random_state=42), label=Y_test
+                    X_test.sample(10000, random_state=self.global_random_state),
+                    label=Y_test,
                 )
             except Exception:
                 D_test_sample = xgb.DMatrix(X_test, label=Y_test)
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(D_test)
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted_probs
 
@@ -1668,14 +1756,17 @@ class RegressionModels(postprocessing.FullPipeline):
                         stratified=False,
                         callbacks=[pruning_callback],
                         early_stopping_rounds=10,
-                        seed=42,
+                        seed=self.booster_random_state,
                         verbose_eval=False,
+                        shuffle=self.shuffle_during_training,
                     )
                     avg_result = result["l2-mean"][-1]
                     return avg_result
 
             algorithm = "lgbm"
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="minimize", sampler=sampler, study_name=f"{algorithm} tuning"
             )
@@ -1759,6 +1850,9 @@ class RegressionModels(postprocessing.FullPipeline):
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             predicted_probs = model.predict(X_test)
+            predicted_probs = self.target_skewness_handling(
+                preds_to_reconvert=predicted_probs, mode="revert"
+            )
 
             if feat_importance and importance_alg == "auto":
                 if self.preprocess_decisions["gpu_support"]["lgbm"] == "gpu":
@@ -1936,9 +2030,6 @@ class RegressionModels(postprocessing.FullPipeline):
         if self.prediction_mode:
             X_test = self.dataframe
             predicted = model.predict(X_test)
-            predicted = self.target_skewness_handling(
-                preds_to_reconvert=predicted, mode="revert"
-            )
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted
         else:
@@ -1950,7 +2041,9 @@ class RegressionModels(postprocessing.FullPipeline):
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -1959,7 +2052,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -2014,14 +2112,14 @@ class RegressionModels(postprocessing.FullPipeline):
                         max_depth=2,
                         n_estimators=1000,
                         n_iter_no_change=10,
-                        random_state=42,
+                        random_state=self.global_random_state,
                     )
                 elif base_learner_choice == "GradientBoost_depth5":
                     base_learner_choice = GradientBoostingRegressor(
                         max_depth=5,
                         n_estimators=10000,
                         n_iter_no_change=10,
-                        random_state=42,
+                        random_state=self.global_random_state,
                     )
 
                 dist_choice = trial.suggest_categorical(
@@ -2065,7 +2163,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         Dist=dist_choice,
                         Base=base_learner_choice,
                         learning_rate=param["learning_rate"],
-                        random_state=42,
+                        random_state=self.global_random_state,
                     )
                     scores = cross_val_score(
                         model,
@@ -2083,7 +2181,9 @@ class RegressionModels(postprocessing.FullPipeline):
                     return mae
 
             algorithm = "ngboost"
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm} tuning"
             )
@@ -2117,14 +2217,17 @@ class RegressionModels(postprocessing.FullPipeline):
                 base_learner_choice = DecisionTreeRegressor(max_depth=None)
             elif lgbm_best_param["base_learner"] == "GradientBoost_depth2":
                 base_learner_choice = GradientBoostingRegressor(
-                    max_depth=2, n_estimators=1000, n_iter_no_change=10, random_state=42
+                    max_depth=2,
+                    n_estimators=1000,
+                    n_iter_no_change=10,
+                    random_state=self.global_random_state,
                 )
             elif lgbm_best_param["base_learner"] == "GradientBoost_depth5":
                 base_learner_choice = GradientBoostingRegressor(
                     max_depth=5,
                     n_estimators=10000,
                     n_iter_no_change=10,
-                    random_state=42,
+                    random_state=self.global_random_state,
                 )
 
             if lgbm_best_param["Dist"] == "Normal":
@@ -2139,7 +2242,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 "n_estimators": lgbm_best_param["n_estimators"],
                 "minibatch_frac": lgbm_best_param["minibatch_frac"],
                 "learning_rate": lgbm_best_param["learning_rate"],
-                "random_state": 42,
+                "random_state": self.global_random_state,
             }
             try:
                 X_train = X_train.drop(self.target_variable, axis=1)
@@ -2151,7 +2254,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 Dist=dist_choice,
                 Base=base_learner_choice,
                 learning_rate=param["learning_rate"],
-                random_state=1000,
+                random_state=self.global_random_state,
             ).fit(
                 X_train, Y_train, X_val=X_test, Y_val=Y_test, early_stopping_rounds=10
             )
@@ -2175,9 +2278,6 @@ class RegressionModels(postprocessing.FullPipeline):
         if self.prediction_mode:
             X_test = self.dataframe
             predicted = model.predict(X_test)
-            predicted = self.target_skewness_handling(
-                preds_to_reconvert=predicted, mode="revert"
-            )
             self.predicted_values[f"{algorithm}"] = {}
             self.predicted_values[f"{algorithm}"] = predicted
         else:
@@ -2189,7 +2289,9 @@ class RegressionModels(postprocessing.FullPipeline):
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                         explainer="kernel",
                     )
@@ -2202,7 +2304,12 @@ class RegressionModels(postprocessing.FullPipeline):
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns

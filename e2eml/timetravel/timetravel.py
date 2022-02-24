@@ -449,7 +449,6 @@ def timewalk_auto_exploration(  # noqa: C901
             "quadratic_discriminant_analysis",
             "svm",
             "svm_regression",
-            "neural_network",
         ]
 
         if len(class_instance.dataframe.index) > 10000:

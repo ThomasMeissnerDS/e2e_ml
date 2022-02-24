@@ -310,11 +310,13 @@ class ClassificationModels(
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             try:
-                model = LogisticRegression(random_state=0).fit(X_train, Y_train)
-            except AttributeError:
-                model = LogisticRegression(random_state=0, solver="liblinear").fit(
+                model = LogisticRegression(random_state=self.global_random_state).fit(
                     X_train, Y_train
                 )
+            except AttributeError:
+                model = LogisticRegression(
+                    random_state=self.global_random_state, solver="liblinear"
+                ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
             del model
@@ -373,7 +375,9 @@ class ClassificationModels(
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -386,7 +390,7 @@ class ClassificationModels(
                     X_test,
                     Y_test.astype(int),
                     n_repeats=10,
-                    random_state=42,
+                    random_state=self.global_random_state,
                     n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
@@ -453,7 +457,7 @@ class ClassificationModels(
                         nfold=10,
                         num_boost_round=param["num_boost_round"],
                         early_stopping_rounds=10,
-                        seed=42,
+                        seed=self.global_random_state,
                         fobj=fl.lgb_obj,
                         feval=fl.lgb_eval,
                         verbose_eval=False,
@@ -495,7 +499,9 @@ class ClassificationModels(
                     final_cv_score = np.mean(np.array(scores))
                     return final_cv_score
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             if self.class_problem == "binary":
 
                 study = optuna.create_study(
@@ -699,7 +705,9 @@ class ClassificationModels(
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -712,7 +720,7 @@ class ClassificationModels(
                     X_test,
                     Y_test.astype(int),
                     n_repeats=10,
-                    random_state=42,
+                    random_state=self.global_random_state,
                     n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
@@ -764,7 +772,7 @@ class ClassificationModels(
                     tol=param["tol"],
                     normalize=param["normalize"],
                     solver=solver,
-                    random_state=42,
+                    random_state=self.global_random_state,
                 )  # .fit(x_train, y_train)
                 try:
                     scores = cross_val_score(
@@ -775,7 +783,9 @@ class ClassificationModels(
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
             )
@@ -812,7 +822,7 @@ class ClassificationModels(
                 tol=best_parameters["tol"],
                 normalize=best_parameters["normalize"],
                 solver=best_parameters["solver"],
-                random_state=42,
+                random_state=self.global_random_state,
             ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -871,7 +881,9 @@ class ClassificationModels(
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -880,7 +892,12 @@ class ClassificationModels(
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -929,7 +946,7 @@ class ClassificationModels(
                     tol=param["tol"],
                     gamma=param["gamma"],
                     class_weight=param["class_weight"],
-                    random_state=42,
+                    random_state=self.global_random_state,
                 )  # .fit(x_train, y_train)
                 try:
                     scores = cross_val_score(
@@ -940,7 +957,9 @@ class ClassificationModels(
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
             )
@@ -978,7 +997,7 @@ class ClassificationModels(
                 tol=best_parameters["tol"],
                 gamma=best_parameters["gamma"],
                 class_weight=best_parameters["class_weight"],
-                random_state=42,
+                random_state=self.global_random_state,
             ).fit(X_train, Y_train)
             self.trained_models[f"{algorithm}"] = {}
             self.trained_models[f"{algorithm}"] = model
@@ -1037,7 +1056,9 @@ class ClassificationModels(
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -1046,7 +1067,12 @@ class ClassificationModels(
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -1092,7 +1118,9 @@ class ClassificationModels(
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
             )
@@ -1183,7 +1211,9 @@ class ClassificationModels(
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -1192,7 +1222,12 @@ class ClassificationModels(
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -1247,7 +1282,7 @@ class ClassificationModels(
                     early_stopping=True,
                     validation_fraction=0.2,
                     class_weight="balanced",
-                    random_state=42,
+                    random_state=self.global_random_state,
                 )  # .fit(X_train, Y_train)
                 try:
                     scores = cross_val_score(
@@ -1258,7 +1293,9 @@ class ClassificationModels(
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
             )
@@ -1301,7 +1338,7 @@ class ClassificationModels(
                 early_stopping=True,
                 validation_fraction=0.2,
                 class_weight="balanced",
-                random_state=42,
+                random_state=self.global_random_state,
             ).fit(X_train, Y_train)
 
             self.trained_models[f"{algorithm}"] = {}
@@ -1361,7 +1398,9 @@ class ClassificationModels(
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -1370,7 +1409,12 @@ class ClassificationModels(
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -1428,7 +1472,7 @@ class ClassificationModels(
                     auto_class_weights=class_weighting,
                     task_type=self.preprocess_decisions["gpu_support"][f"{algorithm}"],
                     verbose=500,
-                    random_state=42,
+                    random_state=self.global_random_state,
                 )  # .fit(x_train, y_train,
                 #     eval_set=eval_dataset,
                 #     early_stopping_rounds=10)
@@ -1441,7 +1485,9 @@ class ClassificationModels(
                     mae = 0
                 return mae
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
             )
@@ -1482,7 +1528,7 @@ class ClassificationModels(
                 auto_class_weights=best_parameters["class_weighting"],
                 task_type=self.preprocess_decisions["gpu_support"][f"{algorithm}"],
                 verbose=500,
-                random_state=42,
+                random_state=self.global_random_state,
             ).fit(
                 X_train,
                 Y_train,
@@ -1544,7 +1590,9 @@ class ClassificationModels(
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -1553,7 +1601,12 @@ class ClassificationModels(
                     )
             elif feat_importance and importance_alg == "permutation":
                 result = permutation_importance(
-                    model, X_test, Y_test, n_repeats=10, random_state=42, n_jobs=-1
+                    model,
+                    X_test,
+                    Y_test,
+                    n_repeats=10,
+                    random_state=self.global_random_state,
+                    n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
                     result.importances_mean, index=X_test.columns
@@ -1667,14 +1720,18 @@ class ClassificationModels(
                         mode=mode, patience=30, min_lr=1e-5, factor=factor
                     ),
                     scheduler_fn=ReduceLROnPlateau,
-                    seed=42,
+                    seed=self.global_random_state,
                     verbose=0,
                     # device_name='gpu'
                 )
                 mean_matthew_corr = []
                 from sklearn.model_selection import StratifiedKFold
 
-                skf = StratifiedKFold(n_splits=10, random_state=42, shuffle=True)
+                skf = StratifiedKFold(
+                    n_splits=10,
+                    random_state=self.booster_random_state,
+                    shuffle=self.shuffle_during_training,
+                )
 
                 for train_index, test_index in skf.split(
                     x_train_sample, y_train_sample
@@ -1815,7 +1872,7 @@ class ClassificationModels(
                     factor=tabnet_best_param["factor"],
                 ),
                 scheduler_fn=ReduceLROnPlateau,
-                seed=42,
+                seed=self.global_random_state,
                 verbose=1,
             )
 
@@ -1975,7 +2032,9 @@ class ClassificationModels(
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                     )
                 except Exception:
@@ -1988,7 +2047,7 @@ class ClassificationModels(
                     X_test,
                     Y_test.astype(int),
                     n_repeats=10,
-                    random_state=42,
+                    random_state=self.global_random_state,
                     n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
@@ -2121,14 +2180,17 @@ class ClassificationModels(
                                 early_stopping_rounds=10,
                                 nfold=10,
                                 as_pandas=True,
-                                seed=42,
+                                seed=self.booster_random_state,
                                 callbacks=[pruning_callback],
+                                shuffle=self.shuffle_during_training,
                             )
                             # avg_result = (result['train-mlogloss-mean'].mean() + result['test-mlogloss-mean'].mean())/2
                             return result["test-mlogloss-mean"].mean()
 
                     algorithm = "xgboost"
-                    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+                    sampler = optuna.samplers.TPESampler(
+                        multivariate=True, seed=self.global_random_state
+                    )
                     if tune_mode == "simple":
                         study = optuna.create_study(
                             direction="maximize",
@@ -2285,14 +2347,17 @@ class ClassificationModels(
                                 early_stopping_rounds=10,
                                 nfold=10,
                                 as_pandas=True,
-                                seed=42,
+                                seed=self.booster_random_state,
                                 callbacks=[pruning_callback],
+                                shuffle=self.shuffle_during_training,
                             )
                             # avg_result = (result['train-mlogloss-mean'].mean() + result['test-mlogloss-mean'].mean())/2
                             return result["test-mlogloss-mean"].mean()
 
                     algorithm = "xgboost"
-                    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+                    sampler = optuna.samplers.TPESampler(
+                        multivariate=True, seed=self.global_random_state
+                    )
                     if tune_mode == "simple":
                         logging.info("Start Xgboost simple validation.")
                         study = optuna.create_study(
@@ -2474,7 +2539,8 @@ class ClassificationModels(
             D_test = xgb.DMatrix(X_test, label=Y_test)
             try:
                 D_test_sample = xgb.DMatrix(
-                    X_test.sample(10000, random_state=42), label=Y_test
+                    X_test.sample(10000, random_state=self.global_random_state),
+                    label=Y_test,
                 )
             except Exception:
                 D_test_sample = xgb.DMatrix(X_test, label=Y_test)
@@ -2616,14 +2682,17 @@ class ClassificationModels(
                             num_boost_round=param["num_boost_round"],
                             early_stopping_rounds=10,
                             callbacks=[pruning_callback],
-                            seed=42,
+                            seed=self.booster_random_state,
                             verbose_eval=False,
+                            shuffle=self.shuffle_during_training,
                         )
                         avg_result = np.mean(np.array(result["binary_logloss-mean"]))
                         return avg_result
 
                 algorithm = "lgbm"
-                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+                sampler = optuna.samplers.TPESampler(
+                    multivariate=True, seed=self.global_random_state
+                )
                 if tune_mode == "simple":
                     study = optuna.create_study(
                         direction="maximize",
@@ -2752,8 +2821,9 @@ class ClassificationModels(
                                 num_boost_round=param["num_boost_round"],
                                 early_stopping_rounds=10,
                                 callbacks=[pruning_callback],
-                                seed=42,
+                                seed=self.booster_random_state,
                                 verbose_eval=False,
+                                shuffle=self.shuffle_during_training,
                             )
                             avg_result = np.mean(np.array(result["multi_logloss-mean"]))
                             # avg_result = self.meissner_cv_score(result["multi_logloss-mean"], penality_is_deducted=False)
@@ -2763,7 +2833,9 @@ class ClassificationModels(
                         return avg_result
 
                 algorithm = "lgbm"
-                sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+                sampler = optuna.samplers.TPESampler(
+                    multivariate=True, seed=self.global_random_state
+                )
                 if tune_mode == "simple":
                     study = optuna.create_study(
                         direction="maximize",
@@ -3077,7 +3149,9 @@ class ClassificationModels(
                 matthews = matthews_corrcoef(Y_test, predicted_classes)
                 return matthews
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm} tuning"
             )
@@ -3259,7 +3333,9 @@ class ClassificationModels(
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                         explainer="kernel",
                     )
@@ -3276,7 +3352,7 @@ class ClassificationModels(
                     X_test,
                     Y_test.astype(int),
                     n_repeats=10,
-                    random_state=42,
+                    random_state=self.global_random_state,
                     n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
@@ -3347,14 +3423,14 @@ class ClassificationModels(
                         max_depth=2,
                         n_estimators=1000,
                         n_iter_no_change=10,
-                        random_state=42,
+                        random_state=self.global_random_state,
                     )
                 elif base_learner_choice == "GradientBoost_depth5":
                     base_learner_choice = GradientBoostingRegressor(
                         max_depth=5,
                         n_estimators=10000,
                         n_iter_no_change=10,
-                        random_state=42,
+                        random_state=self.global_random_state,
                     )
 
                 param = {
@@ -3392,7 +3468,7 @@ class ClassificationModels(
                         Dist=nb_classes,
                         Base=base_learner_choice,
                         learning_rate=param["learning_rate"],
-                        random_state=42,
+                        random_state=self.global_random_state,
                     )
                     try:
                         scores = cross_val_score(
@@ -3452,14 +3528,17 @@ class ClassificationModels(
                 base_learner_choice = DecisionTreeRegressor(max_depth=None)
             elif lgbm_best_param["base_learner"] == "GradientBoost_depth2":
                 base_learner_choice = GradientBoostingRegressor(
-                    max_depth=2, n_estimators=1000, n_iter_no_change=10, random_state=42
+                    max_depth=2,
+                    n_estimators=1000,
+                    n_iter_no_change=10,
+                    random_state=self.global_random_state,
                 )
             elif lgbm_best_param["base_learner"] == "GradientBoost_depth5":
                 base_learner_choice = GradientBoostingRegressor(
                     max_depth=5,
                     n_estimators=10000,
                     n_iter_no_change=10,
-                    random_state=42,
+                    random_state=self.global_random_state,
                 )
             param = {
                 "Dist": nb_classes,
@@ -3477,7 +3556,7 @@ class ClassificationModels(
                 Dist=nb_classes,
                 Base=base_learner_choice,
                 learning_rate=param["learning_rate"],
-                random_state=42,
+                random_state=self.global_random_state,
             ).fit(
                 X_train,
                 Y_train,
@@ -3538,7 +3617,9 @@ class ClassificationModels(
                 try:
                     self.shap_explanations(
                         model=model,
-                        test_df=X_test.sample(10000, random_state=42),
+                        test_df=X_test.sample(
+                            10000, random_state=self.global_random_state
+                        ),
                         cols=X_test.columns,
                         explainer="kernel",
                     )
@@ -3555,7 +3636,7 @@ class ClassificationModels(
                     X_test,
                     Y_test.astype(int),
                     n_repeats=10,
-                    random_state=42,
+                    random_state=self.global_random_state,
                     n_jobs=-1,
                 )
                 permutation_importances = pd.Series(
@@ -3596,7 +3677,7 @@ class ClassificationModels(
                 Y_train,
                 Y_test,
                 learning_rate=self.deesc_settings["learning_rate"],
-                random_state=self.deesc_settings["random_state"],
+                random_state=self.global_random_state,
                 use_long_warmup=self.deesc_settings["use_long_warmup"],
                 auto_select_features=self.deesc_settings["auto_select_features"],
                 no_stacking=self.deesc_settings["no_stacking"],

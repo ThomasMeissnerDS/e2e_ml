@@ -166,7 +166,12 @@ class RegressionNNModel(
         return pred_dataloader
 
     def loss_fn(self, output, target):
-        return torch.sqrt(nn.MSELoss()(output, target))
+        if self.autotuned_nn_settings["regression_loss"] == "mse":
+            return torch.sqrt(nn.MSELoss()(output, target))
+        elif self.autotuned_nn_settings["regression_loss"] == "smoothl1":
+            return torch.sqrt(nn.SmoothL1Loss()(output, target))
+        elif self.autotuned_nn_settings["regression_loss"] == "l1":
+            return torch.sqrt(nn.L1Loss()(output, target))
 
     def get_num_features(self):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -199,64 +204,81 @@ class RegressionNNModel(
 
                     self.layer_4 = nn.Linear(256, 512)
                     self.batch_norm_4 = nn.BatchNorm1d(512)
+                    self.dropout_4 = nn.Dropout(dropout)
 
-                    self.layer_5 = nn.Linear(512, 256)
-                    self.dropout_5 = nn.Dropout(dropout)
-                    self.batch_norm_5 = nn.BatchNorm1d(256)
+                    self.layer_5 = nn.Linear(512, 16)
+                    self.batch_norm_5 = nn.BatchNorm1d(16)
 
-                    self.layer_6 = nn.Linear(256, 128)
-                    self.batch_norm_6 = nn.BatchNorm1d(128)
+                    self.layer_6 = nn.Linear(16, 512)
+                    self.batch_norm_6 = nn.BatchNorm1d(512)
 
-                    self.layer_7 = nn.Linear(128, 16)
-                    self.batch_norm_7 = nn.BatchNorm1d(16)
+                    self.layer_7 = nn.Linear(512, 256)
+                    self.dropout_7 = nn.Dropout(dropout)
+                    self.batch_norm_7 = nn.BatchNorm1d(256)
+
+                    self.layer_8 = nn.Linear(256, 128)
+                    self.batch_norm_8 = nn.BatchNorm1d(128)
+
+                    self.layer_9 = nn.Linear(128, 16)
+                    self.batch_norm_9 = nn.BatchNorm1d(16)
 
                     self.layer_out = nn.Linear(16, 1)
 
-                    self.relu = nn.ReLU()
+                    self.silu = nn.SiLU()
 
                 def forward(self, inputs):
-                    x = self.relu(self.layer_0(inputs))
+                    x = self.silu(self.layer_0(inputs))
                     x = self.batch_norm_0(x)
                     x = self.dropout_0(x)
-                    x = self.relu(self.layer_1(x))
+                    x = self.silu(self.layer_1(x))
                     x = self.batch_norm_1(x)
                     x = self.dropout_1(x)
-                    x = self.relu(self.layer_2(x))
+                    x = self.silu(self.layer_2(x))
                     x = self.batch_norm_2(x)
-                    x = self.relu(self.layer_3(x))
+                    x = self.silu(self.layer_3(x))
                     x = self.batch_norm_3(x)
-                    x = self.relu(self.layer_4(x))
+                    x = self.silu(self.layer_4(x))
                     x = self.batch_norm_4(x)
-                    x = self.relu(self.layer_5(x))
-                    x = self.dropout_5(x)
+                    x = self.dropout_4(x)
+                    x = self.silu(self.layer_5(x))
                     x = self.batch_norm_5(x)
-                    x = self.relu(self.layer_6(x))
+                    x = self.silu(self.layer_6(x))
                     x = self.batch_norm_6(x)
-                    x = self.relu(self.layer_7(x))
+                    x = self.silu(self.layer_7(x))
+                    x = self.dropout_7(x)
                     x = self.batch_norm_7(x)
+                    x = self.silu(self.layer_8(x))
+                    x = self.batch_norm_8(x)
+                    x = self.silu(self.layer_9(x))
+                    x = self.batch_norm_9(x)
                     x = self.layer_out(x)
                     return x
 
-                def predict(self, test_inputs):
-                    x = self.relu(self.layer_0(test_inputs))
+                def predict(self, inputs):
+                    x = self.silu(self.layer_0(inputs))
                     x = self.batch_norm_0(x)
                     x = self.dropout_0(x)
-                    x = self.relu(self.layer_1(x))
+                    x = self.silu(self.layer_1(x))
                     x = self.batch_norm_1(x)
                     x = self.dropout_1(x)
-                    x = self.relu(self.layer_2(x))
+                    x = self.silu(self.layer_2(x))
                     x = self.batch_norm_2(x)
-                    x = self.relu(self.layer_3(x))
+                    x = self.silu(self.layer_3(x))
                     x = self.batch_norm_3(x)
-                    x = self.relu(self.layer_4(x))
+                    x = self.silu(self.layer_4(x))
                     x = self.batch_norm_4(x)
-                    x = self.relu(self.layer_5(x))
-                    x = self.dropout_5(x)
+                    x = self.dropout_4(x)
+                    x = self.silu(self.layer_5(x))
                     x = self.batch_norm_5(x)
-                    x = self.relu(self.layer_6(x))
+                    x = self.silu(self.layer_6(x))
                     x = self.batch_norm_6(x)
-                    x = self.relu(self.layer_7(x))
+                    x = self.silu(self.layer_7(x))
+                    x = self.dropout_7(x)
                     x = self.batch_norm_7(x)
+                    x = self.silu(self.layer_8(x))
+                    x = self.batch_norm_8(x)
+                    x = self.silu(self.layer_9(x))
+                    x = self.batch_norm_9(x)
                     x = self.layer_out(x)
                     return x
 

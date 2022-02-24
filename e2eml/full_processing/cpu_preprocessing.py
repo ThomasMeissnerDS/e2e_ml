@@ -163,6 +163,8 @@ class PreProcessing:
         save_models_path=None,
         train_split_type="cross",
         rapids_acceleration=False,
+        shuffle_during_training=True,
+        global_random_state=1000,
     ):
 
         self.dataframe = datasource
@@ -242,6 +244,12 @@ class PreProcessing:
         self.tune_mode = tune_mode
         self.train_split_type = train_split_type
         self.rapids_acceleration = rapids_acceleration
+        self.shuffle_during_training = shuffle_during_training
+        if self.shuffle_during_training:
+            self.booster_random_state = None
+        else:
+            self.booster_random_state = global_random_state
+        self.global_random_state = global_random_state
         self.date_columns = date_columns
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
@@ -478,6 +486,7 @@ class PreProcessing:
             "learning_rate": 1e-3,
             "weight_decay": 1e-5,
             "architecture": "1d-cnn",
+            "regression_loss": "mse",
             "epochs": self.tabular_nn_epochs,
             "transformer_model_path": self.tabular_nn_model_load_from_path,
             "model_save_states_path": {self.tabular_nn_model_save_states_path},
@@ -485,7 +494,7 @@ class PreProcessing:
         }
         self.deesc_settings = {
             "learning_rate": 0.3,
-            "random_state": 1000,
+            "random_state": self.global_random_state,
             "use_long_warmup": False,
             "auto_select_features": False,
             "no_stacking": False,
@@ -1316,20 +1325,16 @@ class PreProcessing:
         self.get_current_timestamp(task="Target skewness handling")
         logging.info("Started target skewness handling.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
-        if self.prediction_mode:
+        if self.prediction_mode and mode != "fit":
             if (
                 self.target_is_skewed
                 and self.blueprint_step_selection_non_nlp["handle_target_skewness"]
             ):
-                if mode == "fit":
-                    pass
-                else:
-                    preds_to_reconvert_reverted = np.expm1(preds_to_reconvert)
-                    return preds_to_reconvert_reverted
+                preds_to_reconvert_reverted = np.expm1(preds_to_reconvert.astype(float))
+                return preds_to_reconvert_reverted
             else:
-                pass
-            return preds_to_reconvert
-        else:
+                return preds_to_reconvert
+        elif not self.prediction_mode:
             if (
                 self.target_is_skewed
                 and self.blueprint_step_selection_non_nlp["handle_target_skewness"]
@@ -1342,14 +1347,26 @@ class PreProcessing:
                         Y_train[np.isfinite(Y_train) == False] = 0  # noqa: E712
                         Y_test = np.log1p(Y_test)
                         Y_test[np.isfinite(Y_test) == False] = 0  # noqa: E712
+                        logging.info("Finished target skewness handling.")
+                        logging.info(
+                            f"RAM memory {psutil.virtual_memory()[2]} percent used."
+                        )
+                        return self.wrap_test_train_to_dict(
+                            X_train, X_test, Y_train, Y_test
+                        )
                 else:
-                    Y_train = np.expm1(Y_train)
-                    Y_test = np.expm1(Y_test)
-                logging.info("Finished target skewness handling.")
-                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
-                return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+                    preds_to_reconvert_reverted = np.expm1(
+                        preds_to_reconvert.astype(float)
+                    )
+                    logging.info("Finished target skewness handling.")
+                    logging.info(
+                        f"RAM memory {psutil.virtual_memory()[2]} percent used."
+                    )
+                    return preds_to_reconvert_reverted
             else:
-                pass
+                return preds_to_reconvert
+        else:
+            pass
 
     def create_folds(self, data, target, num_splits=5, mode="advanced"):
         if self.prediction_mode:
@@ -1437,7 +1454,7 @@ class PreProcessing:
                     self.dataframe,
                     self.dataframe[self.target_variable],
                     train_size=train_size,
-                    random_state=42,
+                    random_state=self.global_random_state,
                     stratify=self.dataframe[self.target_variable],
                 )
             except Exception:
@@ -1445,7 +1462,7 @@ class PreProcessing:
                     self.dataframe,
                     self.dataframe[self.target_variable],
                     train_size=train_size,
-                    random_state=42,
+                    random_state=self.global_random_state,
                 )
             try:
                 Y_train = Y_train.astype(float)
@@ -1512,7 +1529,8 @@ class PreProcessing:
             else:
                 pass
 
-    def set_random_seed(self, seed=42):
+    def set_random_seed(self, random_state_starter=0):
+        seed = self.global_random_state + random_state_starter
         random.seed(seed)
         os.environ["PYTHONHASHSEED"] = str(seed)
         np.random.seed(seed)
@@ -1821,9 +1839,11 @@ class PreProcessing:
                 eval_sample_size = 2000
 
             X_train_cluster_sample = X_train.sample(
-                cluster_sample_size, random_state=42
+                cluster_sample_size, random_state=self.global_random_state
             )
-            X_train_eval_sample = X_train.sample(eval_sample_size, random_state=42)
+            X_train_eval_sample = X_train.sample(
+                eval_sample_size, random_state=self.global_random_state
+            )
 
             if self.rapids_acceleration:
                 X_train_cluster_sample = cudf.from_pandas(X_train_cluster_sample)
@@ -1852,7 +1872,7 @@ class PreProcessing:
                 if self.rapids_acceleration:
                     kmeans = RapidsKMeans(
                         n_clusters=param["clusters"][0],
-                        random_state=42,
+                        random_state=self.global_random_state,
                         n_init=param["n_init"][0],
                         max_iter=param["max_iter"][0],
                         output_type="numpy",
@@ -1860,7 +1880,7 @@ class PreProcessing:
                 else:
                     kmeans = KMeans(
                         n_clusters=param["clusters"][0],
-                        random_state=42,
+                        random_state=self.global_random_state,
                         n_init=param["n_init"][0],
                         tol=param["tol"],
                         max_iter=param["max_iter"][0],
@@ -1875,7 +1895,9 @@ class PreProcessing:
                     s_score = 0
                 return s_score
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name="autotuned kmeans"
             )
@@ -1910,7 +1932,7 @@ class PreProcessing:
                 X_test_cudf = cudf.from_pandas(X_test)
                 kmeans = RapidsKMeans(
                     n_clusters=kmeans_parameters["clusters"],
-                    random_state=42,
+                    random_state=self.global_random_state,
                     n_init=kmeans_parameters["n_init"],
                     tol=kmeans_parameters["tol"],
                     max_iter=kmeans_parameters["max_iter"],
@@ -1925,7 +1947,7 @@ class PreProcessing:
             else:
                 kmeans = KMeans(
                     n_clusters=kmeans_parameters["clusters"],
-                    random_state=42,
+                    random_state=self.global_random_state,
                     n_init=kmeans_parameters["n_init"],
                     tol=kmeans_parameters["tol"],
                     max_iter=kmeans_parameters["max_iter"],
@@ -2039,7 +2061,7 @@ class PreProcessing:
                 if mode == "fit":
                     kmeans = RapidsKMeans(
                         n_clusters=n_components,
-                        random_state=42,
+                        random_state=self.global_random_state,
                         n_init=20,
                         max_iter=500,
                         output_type="numpy",
@@ -2071,7 +2093,7 @@ class PreProcessing:
                 if mode == "fit":
                     kmeans = RapidsKMeans(
                         n_clusters=n_components,
-                        random_state=42,
+                        random_state=self.global_random_state,
                         n_init=20,
                         max_iter=500,
                         output_type="numpy",
@@ -2118,7 +2140,7 @@ class PreProcessing:
             ):
                 if mode == "fit":
                     gaussian = GaussianMixture(
-                        n_components=n_components, random_state=35
+                        n_components=n_components, random_state=self.global_random_state
                     )
                     gaussian.fit(dataframe)
                     self.preprocess_decisions[
@@ -2140,7 +2162,7 @@ class PreProcessing:
                 if mode == "fit":
                     kmeans = KMeans(
                         n_clusters=n_components,
-                        random_state=42,
+                        random_state=self.global_random_state,
                         n_init=20,
                         max_iter=500,
                     )
@@ -2247,7 +2269,7 @@ class PreProcessing:
             all_cols = df.columns
             cluster_columns = [x for x in all_cols if "cluster" not in x]
             cluster_df = df[cluster_columns].copy()
-            pca = PCA(n_components=2, random_state=1000)
+            pca = PCA(n_components=2, random_state=self.global_random_state)
             comps = pca.fit_transform(cluster_df.values)
             self.preprocess_decisions["cluster_pca"] = pca
             cluster_pca_cols = ["Cluster PC-1", "Cluster PC-2"]
@@ -2313,7 +2335,7 @@ class PreProcessing:
     def iterative_imputation(self, dataframe, imputer=None):
         dataframe_cols = dataframe.columns  # [dataframe.isna().any()].tolist()
         imp_mean = IterativeImputer(
-            random_state=0,
+            random_state=self.global_random_state,
             estimator=BayesianRidge(),
             imputation_order="ascending",
             max_iter=1000,
@@ -2573,7 +2595,7 @@ class PreProcessing:
                     :, ~X_train.columns.isin(cat_columns)
                 ].columns.to_list()
                 imp = IterativeImputer(
-                    random_state=0,
+                    random_state=self.global_random_state,
                     estimator=model,
                     imputation_order="ascending",
                     max_iter=1000,
@@ -3031,7 +3053,7 @@ class PreProcessing:
                 onehot_cols = X_train_branch.columns
                 X_train_branch.fillna(0, inplace=True)
                 X_test_branch.fillna(0, inplace=True)
-                pca = PCA(n_components=2, random_state=1000)
+                pca = PCA(n_components=2, random_state=self.global_random_state)
                 train_comps = pca.fit_transform(X_train_branch[onehot_cols])
                 X_train_branch = pd.DataFrame(train_comps, columns=["PC-1", "PC-2"])
                 test_comps = pca.transform(X_test_branch[onehot_cols])
@@ -3125,7 +3147,7 @@ class PreProcessing:
                         )
                         num_cols_binarized_created.append(num_col + "_binarized")
                         encoded_num_cols.append(num_col)
-                    pca = PCA(n_components=2, random_state=1000)
+                    pca = PCA(n_components=2, random_state=self.global_random_state)
                     X_train_branch = X_train.copy()
                     X_test_branch = X_test.copy()
                     train_comps = pca.fit_transform(
@@ -3257,7 +3279,7 @@ class PreProcessing:
                 ] = enc
             elif algorithm == "GLMM":
                 enc = GLMMEncoder(cols=cat_columns)
-                # enc = NestedCVWrapper(enc_enc, random_state=42)
+                # enc = NestedCVWrapper(enc_enc, random_state=self.global_random_state)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions["category_encoders"][
@@ -3272,7 +3294,7 @@ class PreProcessing:
                 ] = enc
             elif algorithm == "leaveoneout":
                 enc = LeaveOneOutEncoder(cols=cat_columns)
-                # enc = NestedCVWrapper(enc_enc, random_state=42)
+                # enc = NestedCVWrapper(enc_enc, random_state=self.global_random_state)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
                 self.preprocess_decisions["category_encoders"][
@@ -3374,7 +3396,9 @@ class PreProcessing:
         classes_sample = []
         for i in range(0, len(classes_list) - 1):
             classes_sample.append(
-                classes_list[i].sample(least_class_amount, random_state=50)
+                classes_list[i].sample(
+                    least_class_amount, random_state=self.global_random_state
+                )
             )
         df_maybe = pd.concat(classes_sample)
         final_df = pd.concat([df_maybe, classes_list[-1]], axis=0)
@@ -3390,7 +3414,9 @@ class PreProcessing:
         classes_sample = []
         for i in range(1, len(classes_list)):
             classes_sample.append(
-                classes_list[i].sample(most, replace=True, random_state=50)
+                classes_list[i].sample(
+                    most, replace=True, random_state=self.global_random_state
+                )
             )
         df_maybe = pd.concat(classes_sample)
         final_df = pd.concat([df_maybe, classes_list[0]], axis=0)
@@ -4232,7 +4258,7 @@ class PreProcessing:
             optuna.logging.set_verbosity(optuna.logging.INFO)
             # shuffle dataframe for Tabnet
             X_train[self.target_variable] = Y_train
-            X_train = X_train.sample(frac=1.0, random_state=42)
+            X_train = X_train.sample(frac=1.0, random_state=self.global_random_state)
             X_train = X_train.reset_index(drop=True)
             Y_train = X_train[self.target_variable].copy()
             X_train = X_train.drop(self.target_variable, axis=1)
@@ -4283,7 +4309,9 @@ class PreProcessing:
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
-            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            X_train_sample = X_train_sample.sample(
+                sample_size, random_state=self.global_random_state
+            )
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
@@ -4295,19 +4323,25 @@ class PreProcessing:
                 br = BoostARoota(clf=model)
             elif self.class_problem == "binary":
                 if self.feature_selection_backend == "lgbm":
-                    model = lgb.LGBMClassifier(random_state=42, objective="binary")
+                    model = lgb.LGBMClassifier(
+                        random_state=self.global_random_state, objective="binary"
+                    )
                     br = BoostARoota(clf=model)
                 elif self.feature_selection_backend == "xgboost":
                     br = BoostARoota(metric="logloss")
             elif self.class_problem == "multiclass":
                 if self.feature_selection_backend == "lgbm":
-                    model = lgb.LGBMClassifier(random_state=42, objective="multiclass")
+                    model = lgb.LGBMClassifier(
+                        random_state=self.global_random_state, objective="multiclass"
+                    )
                     br = BoostARoota(clf=model)
                 elif self.feature_selection_backend == "xgboost":
                     br = BoostARoota(metric="mlogloss")
             elif self.class_problem == "regression":
                 if self.feature_selection_backend == "lgbm":
-                    model = lgb.LGBMRegressor(random_state=42, objective="regression")
+                    model = lgb.LGBMRegressor(
+                        random_state=self.global_random_state, objective="regression"
+                    )
                     br = BoostARoota(clf=model)
                 elif self.feature_selection_backend == "xgboost":
                     br = BoostARoota(metric="mae")
@@ -4406,7 +4440,9 @@ class PreProcessing:
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
-            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            X_train_sample = X_train_sample.sample(
+                sample_size, random_state=self.global_random_state
+            )
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
@@ -4430,9 +4466,11 @@ class PreProcessing:
 
                 if base_learner == "lgbm":
                     if problem == "binary" or problem == "multiclass":
-                        model = lgb.LGBMClassifier(random_state=1000)
+                        model = lgb.LGBMClassifier(
+                            random_state=self.global_random_state
+                        )
                     else:
-                        model = lgb.LGBMRegressor(random_state=1000)
+                        model = lgb.LGBMRegressor(random_state=self.global_random_state)
                 elif base_learner == "vowal_wobbit":
                     if problem == "binary" or problem == "multiclass":
                         model = VWClassifier()
@@ -4441,10 +4479,14 @@ class PreProcessing:
                 elif brute_force_selection_base_learner == "double":
                     if problem == "binary" or problem == "multiclass":
                         model_1 = VWClassifier()
-                        model_2 = lgb.LGBMClassifier(random_state=1000)
+                        model_2 = lgb.LGBMClassifier(
+                            random_state=self.global_random_state
+                        )
                     else:
                         model_1 = VWRegressor()
-                        model_2 = lgb.LGBMRegressor(random_state=1000)
+                        model_2 = lgb.LGBMRegressor(
+                            random_state=self.global_random_state
+                        )
                 else:
                     if problem == "binary" or problem == "multiclass":
                         model = VWClassifier()
@@ -4497,7 +4539,9 @@ class PreProcessing:
             algorithm = "bruteforce_random"
 
             sampler = optuna.samplers.TPESampler(
-                multivariate=True, seed=42, consider_endpoints=True
+                multivariate=True,
+                seed=self.global_random_state,
+                consider_endpoints=True,
             )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
@@ -4583,7 +4627,7 @@ class PreProcessing:
                 model = lgb.LGBMRegressor()
                 # model_3 = Ridge()
 
-            total_rounds = 300
+            total_rounds = 1000
             fold_cols_created = []
             for sample in range(total_rounds):
                 temp_results = []
@@ -4637,7 +4681,9 @@ class PreProcessing:
                         f"Class {one_class} reduced from {original_len} to {new_len} samples."
                     )
                 X_train = pd.concat(temp_dfs)
-                X_train = X_train.sample(frac=1.0, random_state=42)
+                X_train = X_train.sample(
+                    frac=1.0, random_state=self.global_random_state
+                )
                 X_train = X_train.reset_index(drop=True)
                 Y_train = X_train[self.target_variable].copy()
                 X_train = X_train.drop(self.target_variable, axis=1)
@@ -4689,7 +4735,9 @@ class PreProcessing:
                     sample_size = self.hyperparameter_tuning_sample_size
 
                 X_train[self.target_variable] = Y_train
-                X_train_sample = X_train.sample(sample_size, random_state=42).copy()
+                X_train_sample = X_train.sample(
+                    sample_size, random_state=self.global_random_state
+                ).copy()
                 X_train_sample = X_train_sample.reset_index(drop=True)
                 Y_train_sample = X_train_sample[self.target_variable]  # .copy()
 
@@ -5129,7 +5177,9 @@ class PreProcessing:
                     algorithm = "autoencoder_based_oversampling"
 
                     sampler = optuna.samplers.TPESampler(
-                        multivariate=True, seed=42, consider_endpoints=True
+                        multivariate=True,
+                        seed=self.global_random_state,
+                        consider_endpoints=True,
                     )
                     study = optuna.create_study(
                         direction="minimize", sampler=sampler, study_name=f"{algorithm}"
@@ -5293,7 +5343,9 @@ class PreProcessing:
                     Y_train = pd.Series(Y_train)
 
                     X_train[self.target_variable] = Y_train
-                    X_train = X_train.sample(frac=1.0, random_state=42)
+                    X_train = X_train.sample(
+                        frac=1.0, random_state=self.global_random_state
+                    )
                     X_train = X_train.reset_index(drop=True)
                     Y_train = X_train[self.target_variable].copy()
                     X_train = X_train.drop(self.target_variable, axis=1)
@@ -5330,7 +5382,9 @@ class PreProcessing:
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
-            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            X_train_sample = X_train_sample.sample(
+                sample_size, random_state=self.global_random_state
+            )
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
@@ -5353,7 +5407,7 @@ class PreProcessing:
                     coef0=param["coef0"],
                     degree=param["degree"],
                     kernel=param["kernel"],
-                    random_state=1000,
+                    random_state=self.global_random_state,
                 )
                 try:
                     train_comps = pca.fit_transform(X_train_sample)
@@ -5366,9 +5420,9 @@ class PreProcessing:
                     X_test_branch = X_test
 
                 if self.class_problem == "binary" or self.class_problem == "multiclass":
-                    model = lgb.LGBMClassifier(random_state=42)
+                    model = lgb.LGBMClassifier(random_state=self.global_random_state)
                 else:
-                    model = lgb.LGBMRegressor(random_state=42)
+                    model = lgb.LGBMRegressor(random_state=self.global_random_state)
 
                 try:
                     scores = cross_val_score(
@@ -5407,7 +5461,9 @@ class PreProcessing:
             algorithm = "final_kernel_pca_dimensionality_reduction"
 
             sampler = optuna.samplers.TPESampler(
-                multivariate=True, seed=42, consider_endpoints=True
+                multivariate=True,
+                seed=self.global_random_state,
+                consider_endpoints=True,
             )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
@@ -5434,7 +5490,7 @@ class PreProcessing:
                 coef0=best_parameters["coef0"],
                 degree=best_parameters["degree"],
                 kernel=best_parameters["kernel"],
-                random_state=1000,
+                random_state=self.global_random_state,
             )
             train_comps = pca.fit_transform(X_train)
             test_comps = pca.transform(X_test)
@@ -5491,7 +5547,9 @@ class PreProcessing:
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
-            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            X_train_sample = X_train_sample.sample(
+                sample_size, random_state=self.global_random_state
+            )
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
@@ -5512,7 +5570,7 @@ class PreProcessing:
                 pca = PCA(
                     n_components=param["n_components"],
                     whiten=param["whiten"],
-                    random_state=1000,
+                    random_state=self.global_random_state,
                 )
                 train_comps = pca.fit_transform(X_train_sample)
                 test_comps = pca.transform(X_test)
@@ -5521,9 +5579,9 @@ class PreProcessing:
                 X_test_branch = pd.DataFrame(test_comps, columns=new_cols)
 
                 if self.class_problem == "binary" or self.class_problem == "multiclass":
-                    model = lgb.LGBMClassifier(random_state=42)
+                    model = lgb.LGBMClassifier(random_state=self.global_random_state)
                 else:
-                    model = lgb.LGBMRegressor(random_state=42)
+                    model = lgb.LGBMRegressor(random_state=self.global_random_state)
 
                 try:
                     scores = cross_val_score(
@@ -5562,7 +5620,9 @@ class PreProcessing:
             algorithm = "final_pca_dimensionality_reduction"
 
             sampler = optuna.samplers.TPESampler(
-                multivariate=True, seed=42, consider_endpoints=True
+                multivariate=True,
+                seed=self.global_random_state,
+                consider_endpoints=True,
             )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
@@ -5588,7 +5648,7 @@ class PreProcessing:
             pca = PCA(
                 n_components=best_parameters["n_components"],
                 whiten=best_parameters["whiten"],
-                random_state=1000,
+                random_state=self.global_random_state,
             )
             train_comps = pca.fit_transform(X_train)
             test_comps = pca.transform(X_test)
@@ -5682,12 +5742,18 @@ class PreProcessing:
 
                 if self.class_problem in ["binary", "multiclass"]:
                     skf = StratifiedKFold(
-                        n_splits=n_folds, random_state=42, shuffle=True
+                        n_splits=n_folds,
+                        random_state=self.global_random_state,
+                        shuffle=True,
                     )
-                    model = lgb.LGBMClassifier(random_state=42)
+                    model = lgb.LGBMClassifier(random_state=self.global_random_state)
                 else:
-                    skf = KFold(n_splits=n_folds, random_state=42, shuffle=True)
-                    model = lgb.LGBMRegressor(random_state=42)
+                    skf = KFold(
+                        n_splits=n_folds,
+                        random_state=self.global_random_state,
+                        shuffle=True,
+                    )
+                    model = lgb.LGBMRegressor(random_state=self.global_random_state)
 
                 for train_index, test_index in skf.split(X_train, Y_train):
                     x_train, x_test = (
@@ -5777,7 +5843,10 @@ class PreProcessing:
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             random_trees = RandomTreesEmbedding(
-                n_estimators=100, random_state=5, max_depth=1, n_jobs=-1
+                n_estimators=100,
+                random_state=self.global_random_state,
+                max_depth=1,
+                n_jobs=-1,
             ).fit(X_train)
             X_sparse_embedding = random_trees.transform(X_train)
             new_cols = [
@@ -5853,9 +5922,9 @@ class PreProcessing:
                     )
 
                 if self.class_problem == "binary" or self.class_problem == "multiclass":
-                    model = lgb.LGBMClassifier(random_state=42)
+                    model = lgb.LGBMClassifier(random_state=self.global_random_state)
                 else:
-                    model = lgb.LGBMRegressor(random_state=42)
+                    model = lgb.LGBMRegressor(random_state=self.global_random_state)
 
                 try:
                     scores = cross_val_score(
@@ -5872,7 +5941,9 @@ class PreProcessing:
             algorithm = "automated_feature_transformation"
 
             sampler = optuna.samplers.TPESampler(
-                multivariate=True, seed=42, consider_endpoints=True
+                multivariate=True,
+                seed=self.global_random_state,
+                consider_endpoints=True,
             )
             study = optuna.create_study(
                 direction="maximize", sampler=sampler, study_name=f"{algorithm}"
