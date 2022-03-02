@@ -1,10 +1,10 @@
 import logging
 
 from e2eml.full_processing.cpu_processing_nlp import NlpPreprocessing
-from e2eml.full_processing.postprocessing import FullPipeline
+from e2eml.model_utils.tabular_gan_training import TabularGan
 
 
-class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
+class PreprocessingBluePrint(TabularGan, NlpPreprocessing):
     def check_prediction_mode(self, df):
         """
         Takes in the dataframe that has been passed to the blueprint pipeline. If no dataframe has been passed,
@@ -151,6 +151,7 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.category_encoding(algorithm="target")
         if self.blueprint_step_selection_non_nlp["fill_nulls_static"]:
             self.fill_nulls(how="static")  # can only be here when "static"
+
         if self.blueprint_step_selection_non_nlp["outlier_care"]:
             self.outlier_care(method="isolation", how="append")
         if self.blueprint_step_selection_non_nlp["delete_outliers"]:
@@ -234,6 +235,8 @@ class PreprocessingBluePrint(FullPipeline, NlpPreprocessing):
             self.random_trees_embedding()
         if self.blueprint_step_selection_non_nlp["sort_columns_alphabetically"]:
             self.sort_columns_alphabetically()
+        if self.blueprint_step_selection_non_nlp["use_tabular_gan"]:
+            self.train_tabular_gans()
 
     def nlp_transformer_preprocessing_pipeline(self, df):
         logging.info("Start blueprint.")

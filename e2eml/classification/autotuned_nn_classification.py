@@ -831,6 +831,12 @@ class ClassificationNNModel(
             num_classes=self.num_classes,
         )
         pthes = self.load_model_states(path=self.tabular_nn_model_save_states_path)
+        try:
+            for path in pthes:
+                if "generator_model.pth" in path:
+                    pthes.remove(path)
+        except Exception:
+            pass
         print(pthes)
         pred_dataloader = self.pred_nn_dataloader()
         allpreds, mode_cols = self.nn_predicting(pred_dataloader, model, pthes)

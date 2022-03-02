@@ -375,6 +375,9 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
+* 2.50
+  * Added tabular GAN (experimental)
+  * Minor bug fixes
 * 2.13
   * Added neural networks (ANN & soft ordered 1d-CNN) for tabular data
   * Added attribute global_random_state to set state for all instances

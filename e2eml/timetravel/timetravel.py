@@ -554,7 +554,7 @@ def timewalk_auto_exploration(  # noqa: C901
         pass
 
     # we adjust default preprocessing
-    class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = True
+    class_instance.blueprint_step_selection_non_nlp["autotuned_clustering"] = False
     class_instance.blueprint_step_selection_non_nlp["scale_data"] = True
 
     # we want to store our results
@@ -573,7 +573,7 @@ def timewalk_auto_exploration(  # noqa: C901
     else:
         checkpoints = [
             "default",
-            "delete_low_variance_features",
+            "scale_data",
             "automated_feature_selection",
             "autotuned_clustering",
             "cardinality_remover",
@@ -616,7 +616,7 @@ def timewalk_auto_exploration(  # noqa: C901
                 class_instance = automl_travel.load_checkpoint(
                     checkpoint_to_load=checkpoint
                 )
-                if checkpoint == "delete_low_variance_features":
+                if checkpoint == "scale_data":
                     class_instance.blueprint_step_selection_non_nlp[
                         "autoencoder_based_oversampling"
                     ] = True

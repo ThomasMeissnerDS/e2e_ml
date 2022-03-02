@@ -599,6 +599,12 @@ class NlpModel(
         self.reset_test_train_index()
         model = self.create_bert_classification_model(self.transformer_chosen)
         pthes = self.load_model_states(path=self.transformer_model_save_states_path)
+        try:
+            for path in pthes:
+                if "generator_model.pth" in path:
+                    pthes.remove(path)
+        except Exception:
+            pass
         print(pthes)
         pred_dataloader = self.pred_dataloader()
         allpreds, mode_cols = self.predicting(pred_dataloader, model, pthes)

@@ -50,7 +50,7 @@ from sklearn.decomposition import PCA, KernelPCA
 from sklearn.ensemble import IsolationForest, RandomTreesEmbedding
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer, SimpleImputer
-from sklearn.linear_model import BayesianRidge
+from sklearn.linear_model import BayesianRidge, LinearRegression, LogisticRegression
 from sklearn.metrics import make_scorer, matthews_corrcoef, mean_squared_error
 from sklearn.mixture import GaussianMixture
 from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
@@ -61,6 +61,7 @@ from sklearn.preprocessing import (
     PowerTransformer,
     QuantileTransformer,
     RobustScaler,
+    StandardScaler,
 )
 from sklearn.svm import OneClassSVM
 from torch import nn, optim
@@ -92,8 +93,8 @@ def get_scaler(param):
         scaler = PowerTransformer(method="yeo-johnson")
     elif param["transformer"] == "box_cox":
         scaler = PowerTransformer(method="box-cox")
-    elif param["transformer"] == "l1":
-        scaler = Normalizer(norm="l1")
+    elif param["transformer"] == "standard":
+        scaler = StandardScaler()
     elif param["transformer"] == "l2":
         scaler = Normalizer(norm="l2")
     else:
@@ -309,7 +310,7 @@ class PreProcessing:
             "svm_outlier_detection_loop": False,
             "autotuned_clustering": False,
             "reduce_memory_footprint": False,
-            "scale_data": False,
+            "scale_data": True,
             "smote": False,
             "automated_feature_selection": True,
             "bruteforce_random_feature_selection": False,  # slow
@@ -322,6 +323,7 @@ class PreProcessing:
             "delete_unpredictable_training_rows": False,
             "trained_tokenizer_embedding": False,
             "sort_columns_alphabetically": True,
+            "use_tabular_gan": False,
         }
 
         self.checkpoints = {
@@ -374,6 +376,7 @@ class PreProcessing:
             "shap_based_feature_selection": True,
             "delete_unpredictable_training_rows": True,
             "trained_tokenizer_embedding": True,
+            "use_tabular_gan": True,
         }
         self.checkpoint_reached = {}
         for key in self.checkpoints.keys():
@@ -726,7 +729,7 @@ class PreProcessing:
             train_data = lightgbm.Dataset(data, label=label)  # noqa: F841
             params = {"num_iterations": 1, "device": "gpu"}
             try:
-                # gbm = lightgbm.train(params, train_set=train_data)
+                lightgbm.train(params, train_set=train_data)
                 self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "gpu"
                 print("LGBM uses GPU.")
             except Exception:
@@ -737,7 +740,7 @@ class PreProcessing:
             D_train = xgb.DMatrix(data, label=label)
             params = {"tree_method": "gpu_hist", "steps": 2}
             try:
-                model = xgb.train(params, D_train)
+                xgb.train(params, D_train)
                 self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "gpu_hist"
                 print("Xgboost uses GPU.")
             except Exception:
@@ -1235,7 +1238,7 @@ class PreProcessing:
             dataframe_cols = self.dataframe.columns
             if scaling == "minmax":
                 scaler = self.preprocess_decisions["scaling"]
-                scaler.transform(self.dataframe)
+                self.dataframe = scaler.transform(self.dataframe)
             self.dataframe = pd.DataFrame(self.dataframe, columns=dataframe_cols)
             self.data_scaled = True
             logging.info("Finished data scaling.")
@@ -1249,8 +1252,8 @@ class PreProcessing:
             if scaling == "minmax":
                 scaler = MinMaxScaler()
                 scaler.fit(X_train)
-                scaler.transform(X_train)
-                scaler.transform(X_test)
+                X_train = scaler.transform(X_train)
+                X_test = scaler.transform(X_test)
                 self.preprocess_decisions["scaling"] = scaler
             X_train = pd.DataFrame(X_train, columns=X_train_cols)
             X_test = pd.DataFrame(X_test, columns=X_train_cols)
@@ -1259,6 +1262,7 @@ class PreProcessing:
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             del scaler
             _ = gc.collect()
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
             return (
                 self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test),
                 self.data_scaled,
@@ -5904,9 +5908,10 @@ class PreProcessing:
                             "minmax",
                             "yeo-johnson",
                             # "box_cox",
-                            "l1",
+                            # "l1",
                             "l2",
                             "no_scaling",
+                            "standard",
                         ],
                     ),
                     "n_quantiles": trial.suggest_uniform("n_quantiles", 10, 1000),
@@ -5922,9 +5927,9 @@ class PreProcessing:
                     )
 
                 if self.class_problem == "binary" or self.class_problem == "multiclass":
-                    model = lgb.LGBMClassifier(random_state=self.global_random_state)
+                    model = LogisticRegression(random_state=self.global_random_state)
                 else:
-                    model = lgb.LGBMRegressor(random_state=self.global_random_state)
+                    model = LinearRegression()
 
                 try:
                     scores = cross_val_score(
