@@ -1,6 +1,7 @@
 import gc
 import logging
 import os
+import re
 
 import numpy as np
 import psutil
@@ -830,13 +831,13 @@ class ClassificationNNModel(
             num_features=self.preprocess_decisions["num_features"],
             num_classes=self.num_classes,
         )
+        pathes = self.load_model_states(path=self.tabular_nn_model_save_states_path)
         pthes = self.load_model_states(path=self.tabular_nn_model_save_states_path)
-        try:
-            for path in pthes:
-                if "generator_model.pth" in path:
-                    pthes.remove(path)
-        except Exception:
-            pass
+
+        for path in pathes:
+            if re.search("class", path):
+                pthes.remove(path)
+
         print(pthes)
         pred_dataloader = self.pred_nn_dataloader()
         allpreds, mode_cols = self.nn_predicting(pred_dataloader, model, pthes)

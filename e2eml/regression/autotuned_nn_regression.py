@@ -1,6 +1,7 @@
 import gc
 import logging
 import os
+import re
 
 import numpy as np
 import psutil
@@ -817,10 +818,11 @@ class RegressionNNModel(
             type=self.autotuned_nn_settings["architecture"],
             num_features=self.preprocess_decisions["num_features"],
         )
+        pathes = self.load_model_states(path=self.tabular_nn_model_save_states_path)
         pthes = self.load_model_states(path=self.tabular_nn_model_save_states_path)
         try:
-            for path in pthes:
-                if "generator_model.pth" in path:
+            for path in pathes:
+                if re.search("generator_model.pth", path):
                     pthes.remove(path)
         except Exception:
             pass

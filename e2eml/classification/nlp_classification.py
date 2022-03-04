@@ -1,6 +1,7 @@
 import gc
 import logging
 import os
+import re
 
 import numpy as np
 import psutil
@@ -598,10 +599,11 @@ class NlpModel(
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         self.reset_test_train_index()
         model = self.create_bert_classification_model(self.transformer_chosen)
+        pathes = self.load_model_states(path=self.transformer_model_save_states_path)
         pthes = self.load_model_states(path=self.transformer_model_save_states_path)
         try:
-            for path in pthes:
-                if "generator_model.pth" in path:
+            for path in pathes:
+                if re.search("generator_model.pth", path):
                     pthes.remove(path)
         except Exception:
             pass

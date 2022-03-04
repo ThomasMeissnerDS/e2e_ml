@@ -150,6 +150,8 @@ class PreProcessing:
         transformer_epochs=25,
         tabular_nn_model_load_from_path=None,
         tabular_nn_model_save_states_path=None,
+        gan_model_load_from_path=None,
+        gan_model_save_states_path=None,
         tabular_nn_epochs=25,
         max_tfidf_features=25000,
         tfidf_ngrams=(1, 3),
@@ -481,6 +483,8 @@ class PreProcessing:
         }
         self.tabular_nn_model_load_from_path = tabular_nn_model_load_from_path
         self.tabular_nn_model_save_states_path = tabular_nn_model_save_states_path
+        self.gan_model_load_from_path = gan_model_load_from_path
+        self.gan_model_save_states_path = gan_model_save_states_path
         self.autotuned_nn_settings = {
             "train_batch_size": 512,
             "test_batch_size": 512,
@@ -494,6 +498,18 @@ class PreProcessing:
             "transformer_model_path": self.tabular_nn_model_load_from_path,
             "model_save_states_path": {self.tabular_nn_model_save_states_path},
             "keep_best_model_only": False,
+        }
+        self.gan_settings = {
+            "batch_size": 512,
+            "num_workers": 4,
+            "generator_learning_rate": 5e-5,
+            "discriminator_learning_rate": 5e-5,
+            "max_epochs": 10,
+            "nb_synthetic_rows_to_create": 1000000,
+            "discriminator_extra_training_rounds": 5,
+            "early_stopping_rounds": 3,
+            "transformer_model_path": self.gan_model_load_from_path,
+            "model_save_states_path": {self.gan_model_save_states_path},
         }
         self.deesc_settings = {
             "learning_rate": 0.3,
@@ -1418,8 +1434,12 @@ class PreProcessing:
             X_test[self.target_variable] = Y_test
             all_data = pd.concat([X_train, X_test])
             all_data = self.create_folds(all_data, self.target_variable)
-            X_train = all_data[all_data["kfold"] != 0].reset_index(drop=True)
-            X_test = all_data[all_data["kfold"] == 0].reset_index(drop=True)
+            X_train = all_data[all_data["kfold"] != 0].copy()
+            X_test = all_data[all_data["kfold"] == 0].copy()
+
+            X_train = X_train.reset_index(drop=True)
+            X_test = X_test.reset_index(drop=True)
+
             Y_train = X_train[self.target_variable]
             Y_test = X_test[self.target_variable]
             X_train = X_train.drop("kfold", axis=1)
@@ -1427,8 +1447,15 @@ class PreProcessing:
             if drop_target:
                 X_train = X_train.drop(self.target_variable, axis=1)
                 X_test = X_test.drop(self.target_variable, axis=1)
+
+                try:
+                    del X_test[self.target_variable]
+                    del X_train[self.target_variable]
+                except KeyError:
+                    pass
             else:
                 pass
+
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def get_training_df_length(self, df: pd.DataFrame, identifier: str = "X_train"):
@@ -2687,13 +2714,27 @@ class PreProcessing:
                 pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            try:
+                del X_train[self.target_variable]
+            except KeyError:
+                pass
+
+            try:
+                del X_test[self.target_variable]
+            except KeyError:
+                pass
+
             outlier_detector = IsolationForest(contamination="auto")
             if how == "append":
                 outlier_detector.fit(X_train)
                 outlier_predictions_train = outlier_detector.decision_function(X_train)
+
                 outlier_predictions_class_train = outlier_predictions_train * -1
                 X_train["isolation_probs"] = outlier_predictions_train
                 X_train["isolation_class"] = outlier_predictions_class_train
+                for col in X_test.columns.to_list():
+                    if col not in X_train.columns.to_list():
+                        print(col)
                 outlier_predictions_test = outlier_detector.decision_function(X_test)
                 outlier_predictions_class_test = outlier_predictions_test * -1
                 X_test["isolation_probs"] = outlier_predictions_test

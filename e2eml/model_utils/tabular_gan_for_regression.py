@@ -2,12 +2,14 @@ import gc
 import logging
 import os
 
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import psutil
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from sklearn.metrics import mean_squared_error
 
 # from IPython.display import clear_output
 # from sklearn.metrics import mean_squared_error, median_absolute_error
@@ -206,7 +208,7 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
                 x = self.silu(self.layer_9(x))
                 x = self.batch_norm_9(x)
                 x = self.layer_out(x)
-                x = self.sigmoid(x)
+                # x = self.sigmoid(x)
                 return x
 
             def predict(self, inputs):
@@ -235,7 +237,7 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
                 x = self.silu(self.layer_9(x))
                 x = self.batch_norm_9(x)
                 x = self.layer_out(x)
-                x = self.sigmoid(x)
+                # x = self.sigmoid(x)
                 return x
 
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -269,15 +271,36 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
 
         g_optim = optim.RMSprop(
             generator.parameters(),
-            lr=5e-5,
+            lr=self.gan_settings["generator_learning_rate"],
         )
         d_optim = optim.RMSprop(
             generator.parameters(),
-            lr=5e-5,
+            lr=self.gan_settings["discriminator_learning_rate"],
         )
 
         loss_fn = nn.BCELoss()
         return generator, discriminator, g_optim, d_optim, loss_fn
+
+    def meta_learner_regression(self, fake_data):
+        X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+        columns = X_train.columns
+        fake_cpu = fake_data.cpu().detach().numpy()
+
+        X_train = pd.DataFrame(fake_cpu, columns=columns)
+        Y_train = X_train[self.target_variable]
+        X_train = X_train.drop(self.target_variable, axis=1)
+
+        X_test[self.target_variable] = Y_test
+        samp_df = X_test.sample(frac=0.3)
+        samp_target = samp_df[self.target_variable]
+        samp_df = samp_df.drop(self.target_variable, axis=1)
+
+        model = lgb.LGBMRegressor(random_state=self.global_random_state)
+        model.fit(X_train, Y_train)
+
+        scores_2_test = model.predict(samp_df)
+        meta_loss = mean_squared_error(samp_target, scores_2_test, squared=False)
+        return meta_loss
 
     def train_discriminator_regression(
         self, optimizer, real_data, fake_data, discriminator, loss_fn
@@ -286,9 +309,7 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
         optimizer.zero_grad()
 
         prediction_real = discriminator(real_data)
-
         prediction_fake = discriminator(fake_data)
-
         D_loss = -(torch.mean(prediction_real) - torch.mean(prediction_fake))
 
         D_loss.backward()
@@ -299,12 +320,18 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
 
         return D_loss
 
-    def train_generator_regression(self, optimizer, fake_data, discriminator, loss_fn):
+    def train_generator_regression(
+        self, optimizer, fake_data, discriminator, loss_fn, include_meta_learner=False
+    ):
         optimizer.zero_grad()
 
         prediction = discriminator(fake_data)
 
         G_loss = -torch.mean(prediction)
+
+        if include_meta_learner:
+            test_mae = self.meta_learner_regression(fake_data)
+            G_loss = G_loss + (test_mae * -1)
 
         G_loss.backward()
         optimizer.step()
@@ -330,12 +357,12 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
         if train_batch_size:
             pass
         else:
-            train_batch_size = self.autotuned_nn_settings["train_batch_size"]
+            train_batch_size = self.gan_settings["batch_size"]
 
         if workers:
             pass
         else:
-            workers = self.autotuned_nn_settings["num_workers"]
+            workers = self.gan_settings["num_workers"]
         logging.info("Create Neural network train dataloader.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         train_dataset = self.create_gan_train_dataset_regression()
@@ -349,8 +376,8 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
         return train_dataloader
 
     def train_gan_regression(self):
-        epochs = 10
-        k = 5
+        epochs = self.gan_settings["max_epochs"]
+        k = self.gan_settings["discriminator_extra_training_rounds"]
         best_epoch = -1
         #  test_noise = self.noise()
         train_dataloader = self.create_gan_train_dataloader_regression()
@@ -385,11 +412,18 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
                         discriminator=discriminator,
                         loss_fn=loss_fn,
                     )
-                fake_data = generator(self.noise(n))
-                g_loss_it, optimizer = self.train_generator_regression(
-                    g_optim, fake_data, discriminator=discriminator, loss_fn=loss_fn
-                )
-                g_loss = g_loss + g_loss_it
+                g_loss_loop = 0
+                for mode in [False, True]:
+                    fake_data = generator(self.noise(n))
+                    g_loss_it, optimizer = self.train_generator_regression(
+                        g_optim,
+                        fake_data,
+                        discriminator=discriminator,
+                        loss_fn=loss_fn,
+                        include_meta_learner=mode,
+                    )
+                    g_loss_loop += g_loss_it
+                g_loss = g_loss + g_loss_loop
 
                 del fake_data
                 del real_data
@@ -399,10 +433,10 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
                 g_losses.append(g_loss / i)
                 d_losses.append(d_loss / i)
 
-            if epoch > best_epoch + 3:
+            if epoch > best_epoch + self.gan_settings["early_stopping_rounds"]:
                 break
 
-            if g_loss < best_loss:
+            if epoch == 0 or g_loss < best_loss:
                 print(
                     f"Found better model in epoch {epoch} with generator loss {g_loss}"
                     f" and discriminator loss {d_loss}."
@@ -425,7 +459,7 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
         self.train_gan_regression()
         self.get_current_timestamp(task="Finished training GANs.")
 
-    def load_generator_model_states(self, path=None):
+    def load_generator_model_states_regression(self, path=None):
         logging.info("Load model save states.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if path:
@@ -451,8 +485,10 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         columns = X_train.columns
 
+        rows_to_create = self.gan_settings["nb_synthetic_rows_to_create"]
+        batch_size = self.gan_settings["batch_size"]
+        nb_batches = int(rows_to_create / batch_size)
         new_data = []
-        train_dataloader = self.create_gan_train_dataloader_regression()
         (
             generator,
             discriminator,
@@ -460,8 +496,8 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
             d_optim,
             loss_fn,
         ) = self.gan_model_setup_regression()
-        pathes = self.load_generator_model_states(
-            path=self.transformer_model_save_states_path
+        pathes = self.load_generator_model_states_regression(
+            path=self.gan_model_save_states_path
         )
         print(pathes)
         for m_path in pathes:
@@ -471,17 +507,22 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
             generator.eval()
 
             with torch.no_grad():
-                for _i, data in enumerate(train_dataloader):
-                    imgs, _ = data
-                    n = len(imgs)
-                    synth_data = generator.predict(self.noise(n))
+                for _batch in range(nb_batches):
+                    synth_data = generator.predict(self.noise(batch_size))
                     synth_data = synth_data.cpu().detach()
                     new_data.append(synth_data)
 
         full_new_data = np.concatenate(new_data, axis=0)
         X_train = pd.DataFrame(full_new_data, columns=columns)
+        X_train = X_train.reset_index(drop=True)
+
         Y_train = X_train[self.target_variable]
         X_train = X_train.drop(self.target_variable, axis=1)
+
+        try:
+            X_test = X_test.drop(self.target_variable, axis=1)
+        except KeyError:
+            pass
 
         del generator
 

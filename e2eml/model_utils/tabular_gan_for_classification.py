@@ -1,6 +1,9 @@
 import gc
 import logging
+import os
+import re
 
+# import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import psutil
@@ -9,14 +12,11 @@ import torch.nn as nn
 import torch.optim as optim
 
 # from IPython.display import clear_output
-# from sklearn.metrics import mean_squared_error, median_absolute_error
+# from sklearn.metrics import matthews_corrcoef
 from torch.autograd.variable import Variable
 from torch.utils.data import DataLoader, Dataset
 
 from e2eml.full_processing.postprocessing import FullPipeline
-
-# import os
-
 
 # from tqdm import tqdm
 # from transformers import AdamW, get_linear_schedule_with_warmup
@@ -210,7 +210,7 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
                 x = self.batch_norm_9(x)
                 x = self.layer_out(x)
                 # x = self.silu(self.layer_out(x))
-                x = self.sigmoid(x)
+                # x = self.sigmoid(x)
                 return x
 
             def predict(self, inputs):
@@ -240,7 +240,7 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
                 x = self.batch_norm_9(x)
                 x = self.layer_out(x)
                 # x = self.silu(self.layer_out(x))
-                x = self.sigmoid(x)
+                # x = self.sigmoid(x)
                 return x
 
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -272,11 +272,11 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
 
         g_optim = optim.RMSprop(
             generator.parameters(),
-            lr=5e-5,
+            lr=self.gan_settings["generator_learning_rate"],
         )
         d_optim = optim.RMSprop(
             generator.parameters(),
-            lr=5e-5,
+            lr=self.gan_settings["discriminator_learning_rate"],
         )
 
         loss_fn = nn.BCELoss()
@@ -333,12 +333,12 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
         if train_batch_size:
             pass
         else:
-            train_batch_size = self.autotuned_nn_settings["train_batch_size"]
+            train_batch_size = self.gan_settings["batch_size"]
 
         if workers:
             pass
         else:
-            workers = self.autotuned_nn_settings["num_workers"]
+            workers = self.gan_settings["num_workers"]
         logging.info("Create Neural network train dataloader.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         train_dataset = self.create_gan_train_dataset(target_class=target_class)
@@ -352,9 +352,9 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
         return train_dataloader
 
     def train_gan(self, target_class):
-        epochs = 5000
+        epochs = self.gan_settings["max_epochs"]
+        k = self.gan_settings["discriminator_extra_training_rounds"]
         best_epoch = -1
-        k = 1
         # test_noise = self.noise()
         train_dataloader = self.create_gan_train_dataloader(target_class=target_class)
         generator, discriminator, g_optim, d_optim, loss_fn = self.gan_model_setup()
@@ -396,10 +396,10 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
                 g_losses.append(g_loss / i)
                 d_losses.append(d_loss / i)
 
-            if epoch > best_epoch + 50:
+            if epoch > best_epoch + self.gan_settings["early_stopping_rounds"]:
                 break
 
-            if g_loss < best_loss:
+            if epoch == 0 or g_loss < best_loss:
                 print(
                     f"Found better model in epoch {epoch} with generator loss {g_loss}"
                     f" and discriminator loss {d_loss}."
@@ -411,36 +411,76 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
                     "optimizer_dict": optimizer.state_dict(),
                     "bestscore": g_loss,
                 }
-                torch.save(state, "generator_model.pth")
+                torch.save(state, f"class_{target_class}_generator_model.pth")
                 # clear_output()
         del discriminator
         del generator
 
     def train_class_generators(self):
+        self.get_current_timestamp(task="Start training GANs.")
+
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         unique_classes = np.unique(Y_train.values)
         for clas in unique_classes:
             self.train_gan(target_class=clas)
+        self.get_current_timestamp(task="Finished training GANs.")
+
+    def load_generator_model_states(self, path=None, target_class=None):
+        logging.info("Load model save states.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        if path:
+            pass
+        else:
+            path = os.getcwd()
+        if self.prediction_mode:
+            pthes = [
+                os.path.join(f"{path}/", s)
+                for s in os.listdir(f"{path}/")
+                if re.search(f"class_{target_class}_generator_model.pth", s)
+            ]
+            return pthes
+        else:
+            pthes = [
+                os.path.join(f"{path}/", s)
+                for s in os.listdir(f"{path}/")
+                if re.search(f"class_{target_class}_generator_model.pth", s)
+            ]
+            return pthes
 
     def create_synthetic_data(self):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         columns = X_train.columns
         unique_classes = np.unique(Y_train.values)
 
+        rows_to_create = self.gan_settings["nb_synthetic_rows_to_create"]
+        batch_size = self.gan_settings["batch_size"]
+        nb_batches = int(rows_to_create / batch_size)
         new_class_data = []
         new_targets = []
 
         for clas in unique_classes:
             new_data = []
-            train_dataloader = self.create_gan_train_dataloader(target_class=clas)
-            generator = self.preprocess_decisions[f"gan_generator_for_class_{clas}"]
-            with torch.no_grad():
-                for _i, data in enumerate(train_dataloader):
-                    imgs, _ = data
-                    n = len(imgs)
-                    synth_data = generator.predict(self.noise(n))
-                    synth_data = synth_data.cpu().detach()
-                    new_data.append(synth_data)
+            (
+                generator,
+                discriminator,
+                g_optim,
+                d_optim,
+                loss_fn,
+            ) = self.gan_model_setup()
+            pathes = self.load_generator_model_states(
+                path=self.gan_model_save_states_path, target_class=clas
+            )
+            print(pathes)
+            for m_path in pathes:
+                state = torch.load(m_path)
+                generator.load_state_dict(state["state_dict"])
+                generator.to(device)
+                generator.eval()
+                with torch.no_grad():
+                    for _batch in range(nb_batches):
+                        synth_data = generator.predict(self.noise(batch_size))
+                        synth_data = synth_data.cpu().detach()
+                        new_data.append(synth_data)
 
             full_new_data = np.concatenate(new_data, axis=0)
             new_train = pd.DataFrame(full_new_data, columns=columns)
@@ -453,8 +493,18 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
             new_class_data.append(new_train)
 
             del generator
-            del self.preprocess_decisions[f"gan_generator_for_class_{clas}"]
 
         X_train = pd.concat(new_class_data)
         Y_train = pd.Series(np.concatenate(new_targets, axis=0))
+        X_train[self.target_variable] = Y_train.values
+
+        X_train = X_train.reset_index(drop=True)
+        Y_train = X_train[self.target_variable].copy()
+        X_train = X_train.drop(self.target_variable, axis=1)
+
+        try:
+            X_test = X_test.drop(self.target_variable, axis=1)
+        except KeyError:
+            pass
+
         self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
