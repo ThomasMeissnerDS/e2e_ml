@@ -9,6 +9,7 @@ class TabularGan(TabularGeneratorClassification, TabularGeneratorRegression):
         if self.prediction_mode:
             pass
         else:
+            self.set_random_seed()
             if self.class_problem in ("binary", "multiclass"):
                 self.train_class_generators()
                 self.create_synthetic_data()

@@ -2,17 +2,12 @@ import gc
 import logging
 import os
 
-import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import psutil
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.metrics import mean_squared_error
-
-# from IPython.display import clear_output
-# from sklearn.metrics import mean_squared_error, median_absolute_error
 from torch.autograd.variable import Variable
 from torch.utils.data import DataLoader, Dataset
 
@@ -40,14 +35,16 @@ class GanDataset(Dataset):
 
 
 class TabularGeneratorRegression(FullPipeline, GanDataset):
-    def get_generator_discriminator(self):
+    def get_generator_discriminator_regression(self):
         class GeneratorRegression(nn.Module):
             """
             Creates fake data trying to trick the Discriminator.
             """
 
-            def __init__(self, num_features, output_dim):
+            def __init__(self, num_features, output_dim, dropout=0.3):
                 super(GeneratorRegression, self).__init__()
+
+                self.dropout = dropout
 
                 self.layer_0 = nn.Linear(num_features, 4096)
                 self.batch_norm_0 = nn.BatchNorm1d(4096)
@@ -79,57 +76,56 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
                 self.layer_9 = nn.Linear(128, 16)
                 self.batch_norm_9 = nn.BatchNorm1d(16)
 
-                self.layer_out = nn.Linear(16, out_features=output_dim)
+                self.layer_out = nn.Linear(16, output_dim)
 
-                self.relu = nn.ReLU()
-                self.tanh = nn.Tanh()
+                self.silu = nn.SiLU()
 
             def forward(self, inputs):
-                x = self.ReLU(self.layer_0(inputs))
+                x = self.silu(self.layer_0(inputs))
                 x = self.batch_norm_0(x)
-                x = self.ReLU(self.layer_1(x))
+                x = self.silu(self.layer_1(x))
                 x = self.batch_norm_1(x)
-                x = self.ReLU(self.layer_2(x))
+                x = self.silu(self.layer_2(x))
                 x = self.batch_norm_2(x)
-                x = self.ReLU(self.layer_3(x))
+                x = self.silu(self.layer_3(x))
                 x = self.batch_norm_3(x)
-                x = self.ReLU(self.layer_4(x))
+                x = self.silu(self.layer_4(x))
                 x = self.batch_norm_4(x)
-                x = self.ReLU(self.layer_5(x))
+                x = self.silu(self.layer_5(x))
                 x = self.batch_norm_5(x)
-                x = self.ReLU(self.layer_6(x))
+                x = self.silu(self.layer_6(x))
                 x = self.batch_norm_6(x)
-                x = self.ReLU(self.layer_7(x))
+                x = self.silu(self.layer_7(x))
                 x = self.batch_norm_7(x)
-                x = self.ReLU(self.layer_8(x))
+                x = self.silu(self.layer_8(x))
                 x = self.batch_norm_8(x)
-                x = self.ReLU(self.layer_9(x))
+                x = self.silu(self.layer_9(x))
                 x = self.batch_norm_9(x)
-                x = self.tanh(self.layer_out(x))
+                x = self.layer_out(x)
                 return x
 
             def predict(self, inputs):
-                x = self.ReLU(self.layer_0(inputs))
+                x = self.silu(self.layer_0(inputs))
                 x = self.batch_norm_0(x)
-                x = self.ReLU(self.layer_1(x))
+                x = self.silu(self.layer_1(x))
                 x = self.batch_norm_1(x)
-                x = self.ReLU(self.layer_2(x))
+                x = self.silu(self.layer_2(x))
                 x = self.batch_norm_2(x)
-                x = self.ReLU(self.layer_3(x))
+                x = self.silu(self.layer_3(x))
                 x = self.batch_norm_3(x)
-                x = self.ReLU(self.layer_4(x))
+                x = self.silu(self.layer_4(x))
                 x = self.batch_norm_4(x)
-                x = self.ReLU(self.layer_5(x))
+                x = self.silu(self.layer_5(x))
                 x = self.batch_norm_5(x)
-                x = self.ReLU(self.layer_6(x))
+                x = self.silu(self.layer_6(x))
                 x = self.batch_norm_6(x)
-                x = self.ReLU(self.layer_7(x))
+                x = self.silu(self.layer_7(x))
                 x = self.batch_norm_7(x)
-                x = self.ReLU(self.layer_8(x))
+                x = self.silu(self.layer_8(x))
                 x = self.batch_norm_8(x)
-                x = self.ReLU(self.layer_9(x))
+                x = self.silu(self.layer_9(x))
                 x = self.batch_norm_9(x)
-                x = self.tanh(self.layer_out(x))
+                x = self.layer_out(x)
                 return x
 
         class DiscriminatorRegression(nn.Module):
@@ -267,49 +263,24 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
         return data.to(device)
 
     def gan_model_setup_regression(self):
-        generator, discriminator = self.get_generator_discriminator()
+        generator, discriminator = self.get_generator_discriminator_regression()
+        # Initialize weights
 
-        g_optim = optim.RMSprop(
-            generator.parameters(),
-            lr=self.gan_settings["generator_learning_rate"],
-        )
-        d_optim = optim.RMSprop(
-            generator.parameters(),
-            lr=self.gan_settings["discriminator_learning_rate"],
-        )
+        g_optim = optim.Adam(generator.parameters(), lr=0.0002, betas=(0.5, 0.999))
+        d_optim = optim.Adam(discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999))
 
         loss_fn = nn.BCELoss()
         return generator, discriminator, g_optim, d_optim, loss_fn
-
-    def meta_learner_regression(self, fake_data):
-        X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        columns = X_train.columns
-        fake_cpu = fake_data.cpu().detach().numpy()
-
-        X_train = pd.DataFrame(fake_cpu, columns=columns)
-        Y_train = X_train[self.target_variable]
-        X_train = X_train.drop(self.target_variable, axis=1)
-
-        X_test[self.target_variable] = Y_test
-        samp_df = X_test.sample(frac=0.3)
-        samp_target = samp_df[self.target_variable]
-        samp_df = samp_df.drop(self.target_variable, axis=1)
-
-        model = lgb.LGBMRegressor(random_state=self.global_random_state)
-        model.fit(X_train, Y_train)
-
-        scores_2_test = model.predict(samp_df)
-        meta_loss = mean_squared_error(samp_target, scores_2_test, squared=False)
-        return meta_loss
 
     def train_discriminator_regression(
         self, optimizer, real_data, fake_data, discriminator, loss_fn
     ):
         # n = real_data.size(0)
         optimizer.zero_grad()
-
         prediction_real = discriminator(real_data)
+
         prediction_fake = discriminator(fake_data)
+
         D_loss = -(torch.mean(prediction_real) - torch.mean(prediction_fake))
 
         D_loss.backward()
@@ -320,18 +291,12 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
 
         return D_loss
 
-    def train_generator_regression(
-        self, optimizer, fake_data, discriminator, loss_fn, include_meta_learner=False
-    ):
+    def train_generator_regression(self, optimizer, fake_data, discriminator, loss_fn):
         optimizer.zero_grad()
+        with torch.cuda.amp.autocast():
+            prediction = discriminator(fake_data)
 
-        prediction = discriminator(fake_data)
-
-        G_loss = -torch.mean(prediction)
-
-        if include_meta_learner:
-            test_mae = self.meta_learner_regression(fake_data)
-            G_loss = G_loss + (test_mae * -1)
+            G_loss = -torch.mean(prediction)
 
         G_loss.backward()
         optimizer.step()
@@ -375,11 +340,35 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
         )
         return train_dataloader
 
+    def create_gan_test_dataloader_regression(
+        self, train_batch_size=None, workers=None
+    ):
+        if train_batch_size:
+            pass
+        else:
+            train_batch_size = self.gan_settings["batch_size"]
+
+        if workers:
+            pass
+        else:
+            workers = self.gan_settings["num_workers"]
+        logging.info("Create Neural network train dataloader.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        train_dataset = self.create_gan_test_dataset_regression()
+        train_dataloader = DataLoader(
+            train_dataset,
+            batch_size=train_batch_size,
+            shuffle=True,
+            num_workers=workers,
+            pin_memory=True,
+        )
+        return train_dataloader
+
     def train_gan_regression(self):
         epochs = self.gan_settings["max_epochs"]
         k = self.gan_settings["discriminator_extra_training_rounds"]
         best_epoch = -1
-        #  test_noise = self.noise()
+        # test_noise = self.noise(64)
         train_dataloader = self.create_gan_train_dataloader_regression()
         (
             generator,
@@ -405,25 +394,18 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
                 for _j in range(k):
                     fake_data = generator(self.noise(n)).detach()
                     real_data = imgs.to(device)
-                    d_loss += self.train_discriminator(
+                    d_loss += self.train_discriminator_regression(
                         d_optim,
                         real_data,
                         fake_data,
                         discriminator=discriminator,
                         loss_fn=loss_fn,
                     )
-                g_loss_loop = 0
-                for mode in [False, True]:
-                    fake_data = generator(self.noise(n))
-                    g_loss_it, optimizer = self.train_generator_regression(
-                        g_optim,
-                        fake_data,
-                        discriminator=discriminator,
-                        loss_fn=loss_fn,
-                        include_meta_learner=mode,
-                    )
-                    g_loss_loop += g_loss_it
-                g_loss = g_loss + g_loss_loop
+                fake_data = generator(self.noise(n))
+                g_loss_it, g_optim = self.train_generator_regression(
+                    g_optim, fake_data, discriminator=discriminator, loss_fn=loss_fn
+                )
+                g_loss = g_loss + g_loss_it
 
                 del fake_data
                 del real_data
@@ -433,10 +415,7 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
                 g_losses.append(g_loss / i)
                 d_losses.append(d_loss / i)
 
-            if epoch > best_epoch + self.gan_settings["early_stopping_rounds"]:
-                break
-
-            if epoch == 0 or g_loss < best_loss:
+            if epoch == 0 or g_loss > best_loss:
                 print(
                     f"Found better model in epoch {epoch} with generator loss {g_loss}"
                     f" and discriminator loss {d_loss}."
@@ -445,14 +424,19 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
                 best_loss = g_loss
                 state = {
                     "state_dict": generator.state_dict(),
-                    "optimizer_dict": optimizer.state_dict(),
+                    "optimizer_dict": g_optim.state_dict(),
                     "bestscore": g_loss,
                 }
                 torch.save(state, "generator_model.pth")
 
+            if epoch > best_epoch + self.gan_settings["early_stopping_rounds"]:
+                break
+
                 # clear_output()
         del discriminator
         del generator
+        torch.cuda.empty_cache()
+        _ = gc.collect()
 
     def train_regression_generators(self):
         self.get_current_timestamp(task="Start training GANs.")
@@ -501,6 +485,7 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
         )
         print(pathes)
         for m_path in pathes:
+            print(f"Load {m_path}")
             state = torch.load(m_path)
             generator.load_state_dict(state["state_dict"])
             generator.to(device)
@@ -512,12 +497,29 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
                     synth_data = synth_data.cpu().detach()
                     new_data.append(synth_data)
 
-        full_new_data = np.concatenate(new_data, axis=0)
-        X_train = pd.DataFrame(full_new_data, columns=columns)
+            del state
+            torch.cuda.empty_cache()
+            _ = gc.collect()
+
+        if self.gan_settings["concat_to_original_data"]:
+            X_train[self.target_variable] = Y_train
+            X_train = X_train.sort_index(axis=1)
+            original_columns = X_train.columns
+            full_new_data = np.concatenate(new_data, axis=0)
+            X_train_synth = pd.DataFrame(full_new_data, columns=columns)
+            X_train_synth = X_train_synth.sort_index(axis=1)
+            X_train = pd.concat(
+                [X_train[original_columns], X_train_synth[original_columns]]
+            )
+        else:
+            full_new_data = np.concatenate(new_data, axis=0)
+            X_train = pd.DataFrame(full_new_data, columns=columns)
+
         X_train = X_train.reset_index(drop=True)
 
         Y_train = X_train[self.target_variable]
         X_train = X_train.drop(self.target_variable, axis=1)
+        print(f"Synthetic train df is of length {len(X_train.index)}")
 
         try:
             X_test = X_test.drop(self.target_variable, axis=1)

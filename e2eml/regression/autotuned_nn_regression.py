@@ -283,7 +283,10 @@ class RegressionNNModel(
                     x = self.layer_out(x)
                     return x
 
-            model = MultipleRegression(num_features=num_features)
+            model = MultipleRegression(
+                num_features=num_features,
+                dropout=self.autotuned_nn_settings["drop_out"],
+            )
             return model
         elif type == "1d-cnn":
 
@@ -460,7 +463,12 @@ class RegressionNNModel(
 
                     return x
 
-            model = SoftOrdering1DCNN(input_dim=num_features)
+            model = SoftOrdering1DCNN(
+                input_dim=num_features,
+                dropout_input=self.autotuned_nn_settings["drop_out"],
+                dropout_hidden=self.autotuned_nn_settings["drop_out"],
+                dropout_output=self.autotuned_nn_settings["drop_out"],
+            )
             return model
 
         else:

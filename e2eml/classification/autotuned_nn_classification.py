@@ -279,7 +279,9 @@ class ClassificationNNModel(
                     return x
 
             model = MultipleClassification(
-                num_features=num_features, num_classes=num_classes
+                num_features=num_features,
+                num_classes=num_classes,
+                dropout=self.autotuned_nn_settings["drop_out"],
             )
             return model
 
@@ -458,7 +460,13 @@ class ClassificationNNModel(
 
                     return x
 
-            model = SoftOrdering1DCNN(input_dim=num_features, output_dim=num_classes)
+            model = SoftOrdering1DCNN(
+                input_dim=num_features,
+                output_dim=num_classes,
+                dropout_input=self.autotuned_nn_settings["drop_out"],
+                dropout_hidden=self.autotuned_nn_settings["drop_out"],
+                dropout_output=self.autotuned_nn_settings["drop_out"],
+            )
             return model
 
         else:
