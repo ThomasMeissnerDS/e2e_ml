@@ -138,109 +138,51 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
 
                 self.dropout = dropout
 
-                self.layer_0 = nn.Linear(num_features, 4096)
-                self.batch_norm_0 = nn.BatchNorm1d(4096)
-                self.dropout_0 = nn.Dropout(dropout)
+                self.layer_0 = nn.Linear(num_features, 512)
+                self.batch_norm_0 = nn.BatchNorm1d(512)
 
-                self.layer_1 = nn.Linear(4096, 64)
-                self.batch_norm_1 = nn.BatchNorm1d(64)
-                self.dropout_1 = nn.Dropout(dropout)
+                self.layer_2 = nn.Linear(512, 16)
+                self.batch_norm_2 = nn.BatchNorm1d(16)
 
-                self.layer_2 = nn.Linear(64, 128)
-                self.batch_norm_2 = nn.BatchNorm1d(128)
+                self.layer_3 = nn.Linear(16, 512)
+                self.batch_norm_3 = nn.BatchNorm1d(512)
 
-                self.layer_3 = nn.Linear(128, 256)
-                self.batch_norm_3 = nn.BatchNorm1d(256)
-
-                self.layer_4 = nn.Linear(256, 512)
-                self.batch_norm_4 = nn.BatchNorm1d(512)
-                self.dropout_4 = nn.Dropout(dropout)
-
-                self.layer_5 = nn.Linear(512, 16)
-                self.batch_norm_5 = nn.BatchNorm1d(16)
-
-                self.layer_6 = nn.Linear(16, 512)
-                self.batch_norm_6 = nn.BatchNorm1d(512)
-
-                self.layer_7 = nn.Linear(512, 256)
-                self.dropout_7 = nn.Dropout(dropout)
-                self.batch_norm_7 = nn.BatchNorm1d(256)
-
-                self.layer_8 = nn.Linear(256, 128)
-                self.batch_norm_8 = nn.BatchNorm1d(128)
-
-                self.layer_9 = nn.Linear(128, 16)
-                self.batch_norm_9 = nn.BatchNorm1d(16)
-
-                self.layer_out = nn.Linear(16, 1)
+                self.layer_out = nn.Linear(512, 1)
 
                 self.silu = nn.SiLU()
-
-                self.sigmoid = nn.Sigmoid()
 
             def forward(self, inputs):
                 x = self.silu(self.layer_0(inputs))
                 x = self.batch_norm_0(x)
-                x = self.dropout_0(x)
-                x = self.silu(self.layer_1(x))
-                x = self.batch_norm_1(x)
-                x = self.dropout_1(x)
                 x = self.silu(self.layer_2(x))
                 x = self.batch_norm_2(x)
                 x = self.silu(self.layer_3(x))
                 x = self.batch_norm_3(x)
-                x = self.silu(self.layer_4(x))
-                x = self.batch_norm_4(x)
-                x = self.dropout_4(x)
-                x = self.silu(self.layer_5(x))
-                x = self.batch_norm_5(x)
-                x = self.silu(self.layer_6(x))
-                x = self.batch_norm_6(x)
-                x = self.silu(self.layer_7(x))
-                x = self.dropout_7(x)
-                x = self.batch_norm_7(x)
-                x = self.silu(self.layer_8(x))
-                x = self.batch_norm_8(x)
-                x = self.silu(self.layer_9(x))
-                x = self.batch_norm_9(x)
                 x = self.layer_out(x)
-                # x = self.sigmoid(x)
                 return x
 
             def predict(self, inputs):
                 x = self.silu(self.layer_0(inputs))
                 x = self.batch_norm_0(x)
-                x = self.dropout_0(x)
-                x = self.silu(self.layer_1(x))
-                x = self.batch_norm_1(x)
-                x = self.dropout_1(x)
                 x = self.silu(self.layer_2(x))
                 x = self.batch_norm_2(x)
                 x = self.silu(self.layer_3(x))
                 x = self.batch_norm_3(x)
-                x = self.silu(self.layer_4(x))
-                x = self.batch_norm_4(x)
-                x = self.dropout_4(x)
-                x = self.silu(self.layer_5(x))
-                x = self.batch_norm_5(x)
-                x = self.silu(self.layer_6(x))
-                x = self.batch_norm_6(x)
-                x = self.silu(self.layer_7(x))
-                x = self.dropout_7(x)
-                x = self.batch_norm_7(x)
-                x = self.silu(self.layer_8(x))
-                x = self.batch_norm_8(x)
-                x = self.silu(self.layer_9(x))
-                x = self.batch_norm_9(x)
                 x = self.layer_out(x)
-                # x = self.sigmoid(x)
                 return x
 
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         X_train[self.target_variable] = Y_train
         n_features = X_train.values.shape[1]
-        generator = GeneratorRegression(num_features=n_features, output_dim=n_features)
-        discriminator = DiscriminatorRegression(num_features=n_features)
+        generator = GeneratorRegression(
+            num_features=n_features,
+            output_dim=n_features,
+            dropout=self.gan_settings["generator_dropout_rate"],
+        )
+        discriminator = DiscriminatorRegression(
+            num_features=n_features,
+            dropout=self.gan_settings["discriminator_dropout_rate"],
+        )
 
         generator.to(device)
         discriminator.to(device)
@@ -266,8 +208,16 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
         generator, discriminator = self.get_generator_discriminator_regression()
         # Initialize weights
 
-        g_optim = optim.Adam(generator.parameters(), lr=0.0002, betas=(0.5, 0.999))
-        d_optim = optim.Adam(discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999))
+        g_optim = optim.Adam(
+            generator.parameters(),
+            lr=self.gan_settings["generator_learning_rate"],
+            betas=(0.5, 0.999),
+        )
+        d_optim = optim.Adam(
+            discriminator.parameters(),
+            lr=self.gan_settings["discriminator_learning_rate"],
+            betas=(0.5, 0.999),
+        )
 
         loss_fn = nn.BCELoss()
         return generator, discriminator, g_optim, d_optim, loss_fn
@@ -287,16 +237,14 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
         optimizer.step()
 
         for p in discriminator.parameters():
-            p.data.clamp_(-0.01, 0.01)
+            p.data.clamp_(-0.005, 0.005)
 
         return D_loss
 
     def train_generator_regression(self, optimizer, fake_data, discriminator, loss_fn):
         optimizer.zero_grad()
-        with torch.cuda.amp.autocast():
-            prediction = discriminator(fake_data)
-
-            G_loss = -torch.mean(prediction)
+        prediction = discriminator(fake_data)
+        G_loss = -torch.mean(prediction)
 
         G_loss.backward()
         optimizer.step()
@@ -415,7 +363,7 @@ class TabularGeneratorRegression(FullPipeline, GanDataset):
                 g_losses.append(g_loss / i)
                 d_losses.append(d_loss / i)
 
-            if epoch == 0 or g_loss > best_loss:
+            if epoch == 0 or g_loss < best_loss:
                 print(
                     f"Found better model in epoch {epoch} with generator loss {g_loss}"
                     f" and discriminator loss {d_loss}."

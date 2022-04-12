@@ -55,6 +55,7 @@ from sklearn.metrics import make_scorer, matthews_corrcoef, mean_squared_error
 from sklearn.mixture import GaussianMixture
 from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
 from sklearn.preprocessing import (
+    KBinsDiscretizer,
     MaxAbsScaler,
     MinMaxScaler,
     Normalizer,
@@ -82,7 +83,7 @@ def get_scaler(param):
     :return: scaler object from sklearn
     """
     if param["transformer"] == "quantile":
-        scaler = QuantileTransformer()
+        scaler = QuantileTransformer(output_distribution="normal")
     elif param["transformer"] == "maxabs":
         scaler = MaxAbsScaler()
     elif param["transformer"] == "robust":
@@ -97,6 +98,8 @@ def get_scaler(param):
         scaler = StandardScaler()
     elif param["transformer"] == "l2":
         scaler = Normalizer(norm="l2")
+    elif param["transformer"] == "kbins_discretizer":
+        scaler = KBinsDiscretizer(n_bins=10, encode="ordinal", strategy="uniform")
     else:
         scaler = QuantileTransformer(n_quantiles=param["n_quantiles"], random_state=23)
     return scaler
@@ -329,16 +332,16 @@ class PreProcessing:
         }
 
         self.checkpoints = {
-            "automatic_type_detection_casting": False,
-            "early_numeric_only_feature_selection": False,
-            "remove_duplicate_column_names": False,
-            "reset_dataframe_index": False,
+            "automatic_type_detection_casting": True,
+            "early_numeric_only_feature_selection": True,
+            "remove_duplicate_column_names": True,
+            "reset_dataframe_index": True,
             "regex_clean_text_data": False,
-            "handle_target_skewness": False,
+            "handle_target_skewness": True,
             "holistic_null_filling": True,  # slow
             "iterative_null_imputation": True,
             "fill_infinite_values": True,
-            "datetime_converter": False,
+            "datetime_converter": True,
             "pos_tagging_pca": True,  # slow with many categories
             "append_text_sentiment_score": True,
             "tfidf_vectorizer_to_pca": True,  # slow with many categories
@@ -353,7 +356,7 @@ class PreProcessing:
             "fill_nulls_static": True,
             "data_binning": True,
             "outlier_care": True,
-            "delete_outliers": False,
+            "delete_outliers": True,
             "remove_collinearity": True,
             "skewness_removal": True,
             "automated_feature_transformation": True,
@@ -370,10 +373,10 @@ class PreProcessing:
             "sort_columns_alphabetically": True,
             "synthetic_data_augmentation": True,
             "scale_data": True,
-            "smote": False,
+            "smote": True,
             "autoencoder_based_oversampling": True,
-            "final_kernel_pca_dimensionality_reduction": False,
-            "final_pca_dimensionality_reduction": False,
+            "final_kernel_pca_dimensionality_reduction": True,
+            "final_pca_dimensionality_reduction": True,
             "delete_low_variance_features": True,
             "shap_based_feature_selection": True,
             "delete_unpredictable_training_rows": True,
@@ -503,8 +506,10 @@ class PreProcessing:
         self.gan_settings = {
             "batch_size": 512,
             "num_workers": 4,
-            "generator_learning_rate": 5e-5,
-            "discriminator_learning_rate": 5e-5,
+            "generator_learning_rate": 0.0002,
+            "discriminator_learning_rate": 0.0002,
+            "generator_dropout_rate": 0.2,
+            "discriminator_dropout_rate": 0.2,
             "max_epochs": 100,
             "nb_synthetic_rows_to_create": 1000000,
             "concat_to_original_data": False,
@@ -3274,12 +3279,27 @@ class PreProcessing:
         self.get_current_timestamp("Execute categorical encoding")
         logging.info("Started category encoding.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+        if self.cat_encoder_model:
+            algorithm = self.cat_encoder_model
+        else:
+            algorithm = "target"
+
         if self.prediction_mode:
             cat_columns = self.cat_columns_encoded
             if algorithm == "target" and self.class_problem == "multiclass":
                 self.dataframe[cat_columns] = self.target_encode_multiclass(
                     self.dataframe[cat_columns], mode="transform"
                 )
+            elif algorithm == "onehot":
+                enc = self.preprocess_decisions["category_encoders"][
+                    f"{algorithm}_all_cols"
+                ]
+                df_onehot = enc.transform(self.dataframe[cat_columns])
+                self.dataframe = self.dataframe.merge(
+                    df_onehot, left_index=True, right_index=True, how="left"
+                )
+                self.dataframe = self.dataframe.drop(cat_columns, axis=1)
             else:
                 enc = self.preprocess_decisions["category_encoders"][
                     f"{algorithm}_all_cols"
@@ -3293,6 +3313,7 @@ class PreProcessing:
             cat_columns = X_train.select_dtypes(include=["object"]).columns.to_list()
             self.cat_columns_encoded = cat_columns
             self.preprocess_decisions["category_encoders"] = {}
+
             if algorithm == "target":
                 if self.class_problem in ["binary", "regression"]:
                     enc = TargetEncoder(cols=cat_columns)
@@ -3312,11 +3333,22 @@ class PreProcessing:
                     )
             elif algorithm == "onehot":
                 enc = OneHotEncoder(handle_unknown="ignore")
-                X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
-                X_test[cat_columns] = enc.transform(X_test[cat_columns])
+                or_cols = X_train.columns.to_list()
+                for col in cat_columns:
+                    or_cols.remove(col)
+                X_train_onehot = enc.fit_transform(X_train[cat_columns], Y_train)
+                X_test_onehot = enc.transform(X_test[cat_columns])
+                X_train = X_train.merge(
+                    X_train_onehot, left_index=True, right_index=True, how="left"
+                )
+                X_test = X_test.merge(
+                    X_test_onehot, left_index=True, right_index=True, how="left"
+                )
                 self.preprocess_decisions["category_encoders"][
                     f"{algorithm}_all_cols"
                 ] = enc
+                X_train = X_train.drop(cat_columns, axis=1)
+                X_test = X_test.drop(cat_columns, axis=1)
             elif algorithm == "woee":
                 enc = WOEEncoder(cols=cat_columns)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
@@ -3349,8 +3381,6 @@ class PreProcessing:
                 ] = enc
             logging.info("Finished category encoding.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
-            X_train.drop(cat_columns, axis=1)
-            X_test.drop(cat_columns, axis=1)
             try:
                 del enc
                 _ = gc.collect()
@@ -4939,14 +4969,17 @@ class PreProcessing:
 
                 for bins in [10, 9, 8, 7, 6, 5, 4, 3, 2]:
                     # create bins
-                    X_train["bin"] = pd.cut(
-                        X_train[self.target_variable], bins, labels=False
+                    X_train["bin"] = pd.qcut(
+                        X_train[self.target_variable],
+                        bins,
+                        labels=False,
+                        duplicates="drop",
                     )
                     bins_dist = X_train["bin"].value_counts()
                     print(
                         f"For {bins} bins the smallest bin contains {bins_dist.min()} samples."
                     )
-                    if bins_dist.min() > 5:
+                    if bins_dist.min() > 1:
                         print(f"Enough minimum samples found with {bins} bins.")
                         break
                     else:
@@ -5004,8 +5037,11 @@ class PreProcessing:
                         bins_needed = 0
                         for bins in [10, 9, 8, 7, 6, 5, 4, 3, 2]:
                             # create bins
-                            X_train["bin"] = pd.cut(
-                                X_train[self.target_variable], bins, labels=False
+                            X_train["bin"] = pd.qcut(
+                                X_train[self.target_variable],
+                                bins,
+                                labels=False,
+                                duplicates="drop",
                             )
                             bins_dist = X_train["bin"].value_counts()
                             print(
@@ -5056,7 +5092,7 @@ class PreProcessing:
                                 X_test, rarity_cols=["bin"], threshold=5, mask_as=99
                             )
                         else:
-                            X_test["bin"] = X_test["bin"] = pd.cut(
+                            X_test["bin"] = pd.cut(
                                 X_test[self.target_variable]
                                 + random_noise(X_test[self.target_variable]),
                                 bins_needed,
@@ -5097,7 +5133,7 @@ class PreProcessing:
                             "optimizer_choice", ["Adam", "AdamW", "RMSprop"]
                         )
                         param = {
-                            "nb_epochs": trial.suggest_int("nb_epochs", 2, 5000),
+                            "nb_epochs": trial.suggest_int("nb_epochs", 2, 200),
                             "h": trial.suggest_int("h", 20, 50),
                             "h2": trial.suggest_int("h2", 2, 19),
                             "latent_dim": trial.suggest_int("latent_dim", 1, 3),
@@ -5955,9 +5991,10 @@ class PreProcessing:
                             "l2",
                             "no_scaling",
                             "standard",
+                            "kbins_discretizer",
                         ],
                     ),
-                    "n_quantiles": trial.suggest_uniform("n_quantiles", 10, 1000),
+                    "n_quantiles": trial.suggest_uniform("n_quantiles", 5, 20),
                 }
                 scaler = get_scaler(param)
 

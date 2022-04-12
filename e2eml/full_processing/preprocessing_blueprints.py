@@ -148,7 +148,7 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing):
         if self.blueprint_step_selection_non_nlp["onehot_pca"]:
             self.onehot_pca()
         if self.blueprint_step_selection_non_nlp["category_encoding"]:
-            self.category_encoding(algorithm="target")
+            self.category_encoding(algorithm=self.cat_encoder_model)
         if self.blueprint_step_selection_non_nlp["fill_nulls_static"]:
             self.fill_nulls(how="static")  # can only be here when "static"
 
