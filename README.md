@@ -375,7 +375,7 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
-* 3.00
+* 3.00.01
   * Refined GAN architectures
   * Categorical encoding can be chosen via the cat_encoder_model attribute now
   * Fixed a bug when choosing onehot encoding

@@ -845,6 +845,8 @@ class ClassificationNNModel(
         for path in pathes:
             if re.search("class", path):
                 pthes.remove(path)
+            if re.search("autoencoder_model.pth", path):
+                pthes.remove(path)
 
         print(pthes)
         pred_dataloader = self.pred_nn_dataloader()

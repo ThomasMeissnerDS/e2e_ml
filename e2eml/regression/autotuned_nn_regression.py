@@ -834,6 +834,8 @@ class RegressionNNModel(
             for path in pathes:
                 if re.search("generator_model.pth", path):
                     pthes.remove(path)
+                if re.search("autoencoder_model.pth", path):
+                    pthes.remove(path)
         except Exception:
             pass
         print(pthes)
