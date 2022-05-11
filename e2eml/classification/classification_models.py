@@ -1724,12 +1724,16 @@ class ClassificationModels(
                     verbose=0,
                     # device_name='gpu'
                 )
+                if self.shuffle_during_training:
+                    random_st = self.booster_random_state
+                else:
+                    random_st = None
                 mean_matthew_corr = []
                 from sklearn.model_selection import StratifiedKFold
 
                 skf = StratifiedKFold(
                     n_splits=10,
-                    random_state=self.booster_random_state,
+                    random_state=random_st,
                     shuffle=self.shuffle_during_training,
                 )
 
@@ -2968,19 +2972,14 @@ class ClassificationModels(
                     plt.figure(figsize=(16, 12))
                     plt.show()
             elif feat_importance and importance_alg == "SHAP":
-                if self.preprocess_decisions["gpu_support"]["lgbm"] == "gpu":
-                    if self.class_problem == "binary":
-                        self.shap_explanations(
-                            model=model, test_df=X_test, cols=X_test.columns
-                        )
-                    else:
-                        lgb.plot_importance(model)
-                    plt.figure(figsize=(16, 12))
-                    plt.show()
+                if self.class_problem == "binary":
+                    self.shap_explanations(
+                        model=model, test_df=X_test, cols=X_test.columns
+                    )
                 else:
                     lgb.plot_importance(model)
-                    plt.figure(figsize=(16, 12))
-                    plt.show()
+                plt.figure(figsize=(16, 12))
+                plt.show()
             elif feat_importance and importance_alg == "inbuilt":
                 lgb.plot_importance(model)
                 plt.figure(figsize=(16, 12))

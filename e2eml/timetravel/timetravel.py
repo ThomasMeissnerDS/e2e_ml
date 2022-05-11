@@ -704,6 +704,18 @@ def timewalk_auto_exploration(  # noqa: C901
                         "data_binning"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
+                        "clustering_as_a_feature_dbscan"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "clustering_as_a_feature_kmeans_loop"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "clustering_as_a_feature_gaussian_mixture_loop"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
+                        "pca_clustering_results"
+                    ] = False
+                    class_instance.blueprint_step_selection_non_nlp[
                         "delete_outliers"
                     ] = True
                     class_instance.blueprint_step_selection_non_nlp[
@@ -741,14 +753,11 @@ def timewalk_auto_exploration(  # noqa: C901
                         "pca_clustering_results"
                     ] = False
                     class_instance.blueprint_step_selection_non_nlp[
-                        "delete_outliers"
-                    ] = True
-                    class_instance.blueprint_step_selection_non_nlp[
                         "automated_feature_transformation"
-                    ] = True
+                    ] = False
                     class_instance.blueprint_step_selection_non_nlp[
                         "shap_based_feature_selection"
-                    ] = True
+                    ] = False
             automl_travel.create_time_travel_checkpoints(
                 class_instance, reload_instance=True
             )

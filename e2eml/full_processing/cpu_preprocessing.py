@@ -2,6 +2,7 @@ import gc
 import logging
 import os
 import random
+import re
 import time
 import warnings
 
@@ -150,6 +151,8 @@ class PreProcessing:
         transformer_chosen="bert-base-uncased",
         transformer_model_load_from_path=None,
         transformer_model_save_states_path=None,
+        autoenc_outlier_model_load_from_path=None,
+        autoenc_outlier_save_states_path=None,
         transformer_epochs=25,
         tabular_nn_model_load_from_path=None,
         tabular_nn_model_save_states_path=None,
@@ -292,7 +295,7 @@ class PreProcessing:
             "datetime_converter": True,
             "pos_tagging_pca": False,  # slow with many categories
             "append_text_sentiment_score": False,
-            "tfidf_vectorizer_to_pca": True,  # slow with many categories
+            "tfidf_vectorizer_to_pca": False,  # slow with many categories
             "tfidf_vectorizer": False,
             "rare_feature_processing": True,
             "cardinality_remover": True,
@@ -302,6 +305,7 @@ class PreProcessing:
             "onehot_pca": True,
             "category_encoding": True,
             "fill_nulls_static": True,
+            "autoencoder_outlier_detection": True,
             "outlier_care": True,
             "delete_outliers": False,
             "remove_collinearity": True,
@@ -355,6 +359,7 @@ class PreProcessing:
             "category_encoding": True,
             "fill_nulls_static": True,
             "data_binning": True,
+            "autoencoder_outlier_detection": True,
             "outlier_care": True,
             "delete_outliers": True,
             "remove_collinearity": True,
@@ -486,6 +491,8 @@ class PreProcessing:
         }
         self.tabular_nn_model_load_from_path = tabular_nn_model_load_from_path
         self.tabular_nn_model_save_states_path = tabular_nn_model_save_states_path
+        self.autoenc_outlier_model_load_from_path = autoenc_outlier_model_load_from_path
+        self.autoenc_outlier_save_states_path = autoenc_outlier_save_states_path
         self.gan_model_load_from_path = gan_model_load_from_path
         self.gan_model_save_states_path = gan_model_save_states_path
         self.autotuned_nn_settings = {
@@ -514,7 +521,7 @@ class PreProcessing:
             "nb_synthetic_rows_to_create": 1000000,
             "concat_to_original_data": False,
             "discriminator_extra_training_rounds": 5,
-            "early_stopping_rounds": 3,
+            "early_stopping_rounds": 5,
             "transformer_model_path": self.gan_model_load_from_path,
             "model_save_states_path": {self.gan_model_save_states_path},
         }
@@ -2218,7 +2225,8 @@ class PreProcessing:
         logging.info("Start adding clusters as additional features.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if not self.data_scaled:
-            self.data_scaling()
+            pass
+            # self.data_scaling()
         if algorithm == "dbscan":
             if self.prediction_mode:
                 try:
@@ -6066,3 +6074,258 @@ class PreProcessing:
             logging.info("Finished automated feature transformation.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def autoencoder_based_outlier_detection(self):  # noqa: C901
+        self.get_current_timestamp("Autoencoder based outlier detection")
+        logging.info("Started autoencoder based outlier detection.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+        class DataBuilder(Dataset):
+            def __init__(self, dataset):
+                self.x = dataset.values
+                self.x = torch.from_numpy(self.x.astype(float)).to(torch.float)
+                self.len = self.x.shape[0]
+
+            def __getitem__(self, index):
+                return self.x[index]
+
+            def __len__(self):
+                return self.len
+
+        class Autoencoder(nn.Module):
+            def __init__(self, D_in, H=50, H2=12, latent_dim=3):
+
+                # Encoder
+                super(Autoencoder, self).__init__()
+                self.linear1 = nn.Linear(D_in, H)
+                self.lin_bn1 = nn.BatchNorm1d(num_features=H)
+                self.linear2 = nn.Linear(H, H2)
+                self.lin_bn2 = nn.BatchNorm1d(num_features=H2)
+                self.linear3 = nn.Linear(H2, H2)
+                self.lin_bn3 = nn.BatchNorm1d(num_features=H2)
+
+                # Latent vectors mu and sigma
+                self.fc1 = nn.Linear(H2, latent_dim)
+                self.bn1 = nn.BatchNorm1d(num_features=latent_dim)
+                self.fc21 = nn.Linear(latent_dim, latent_dim)
+                self.fc22 = nn.Linear(latent_dim, latent_dim)
+
+                # Sampling vector
+                self.fc3 = nn.Linear(latent_dim, latent_dim)
+                self.fc_bn3 = nn.BatchNorm1d(latent_dim)
+                self.fc4 = nn.Linear(latent_dim, H2)
+                self.fc_bn4 = nn.BatchNorm1d(H2)
+
+                # Decoder
+                self.linear4 = nn.Linear(H2, H2)
+                self.lin_bn4 = nn.BatchNorm1d(num_features=H2)
+                self.linear5 = nn.Linear(H2, H)
+                self.lin_bn5 = nn.BatchNorm1d(num_features=H)
+                self.linear6 = nn.Linear(H, D_in)
+                self.lin_bn6 = nn.BatchNorm1d(num_features=D_in)
+
+                self.relu = nn.ReLU()
+
+            def encode(self, x):
+                lin1 = self.relu(self.lin_bn1(self.linear1(x)))
+                lin2 = self.relu(self.lin_bn2(self.linear2(lin1)))
+                lin3 = self.relu(self.lin_bn3(self.linear3(lin2)))
+
+                fc1 = F.relu(self.bn1(self.fc1(lin3)))
+
+                r1 = self.fc21(fc1)
+                r2 = self.fc22(fc1)
+
+                return r1, r2
+
+            def reparameterize(self, mu, logvar):
+                if self.training:
+                    std = logvar.mul(0.5).exp_()
+                    eps = Variable(std.data.new(std.size()).normal_())
+                    return eps.mul(std).add_(mu)
+                else:
+                    return mu
+
+            def decode(self, z):
+                fc3 = self.relu(self.fc_bn3(self.fc3(z)))
+                fc4 = self.relu(self.fc_bn4(self.fc4(fc3)))
+
+                lin4 = self.relu(self.lin_bn4(self.linear4(fc4)))
+                lin5 = self.relu(self.lin_bn5(self.linear5(lin4)))
+                return self.lin_bn6(self.linear6(lin5))
+
+            def forward(self, x):
+                mu, logvar = self.encode(x)
+                z = self.reparameterize(mu, logvar)
+                return self.decode(z), mu, logvar
+
+        class customLoss(nn.Module):
+            def __init__(self):
+                super(customLoss, self).__init__()
+                self.mse_loss = nn.MSELoss(reduction="sum")
+
+            def forward(self, x_recon, x, mu, logvar):
+                loss_MSE = self.mse_loss(x_recon, x)
+                loss_KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+                return loss_MSE + loss_KLD
+
+        def predict(data_loader):
+            # loss = customLoss()
+            predictions = []
+            with torch.no_grad():
+                for data in data_loader:
+                    data = data.to(device)
+                    recon_batch, mu, logvar = model(data)
+                    outlier_scores = [
+                        loss_mse(
+                            recon_batch[i : i + 1, :],
+                            data[i : i + 1, :],
+                            mu[i : i + 1, :],
+                            logvar[i : i + 1, :],
+                        ).item()
+                        for i in range(len(data))
+                    ]
+                    predictions.append(outlier_scores)
+                    torch.cuda.empty_cache()
+            return predictions
+
+        def load_model_states(path=None):
+            logging.info("Load model save states.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            if path:
+                pass
+            else:
+                path = os.getcwd()
+            if self.prediction_mode:
+                pthes = [
+                    os.path.join(f"{path}/", s)
+                    for s in os.listdir(f"{path}/")
+                    if "autoencoder_model.pth" in s
+                ]
+                return pthes
+            else:
+                pthes = [
+                    os.path.join(f"{path}/", s)
+                    for s in os.listdir(f"{path}/")
+                    if "autoencoder_model.pth" in s
+                ]
+                return pthes
+
+        if self.prediction_mode:
+            pathes = load_model_states(path=self.autoenc_outlier_save_states_path)
+            pthes = load_model_states(path=self.autoenc_outlier_save_states_path)
+            try:
+                for path in pathes:
+                    if re.search("generator_model.pth", path):
+                        pthes.remove(path)
+            except Exception:
+                pass
+            for m_path in pathes:
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                loss_mse = customLoss()
+                D_in = self.dataframe.shape[1]
+                state = torch.load(m_path)
+                model = Autoencoder(D_in, 32, 8, 2)
+                model.load_state_dict(state["state_dict"])
+                model.to(device)
+                model.eval()
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                preddata_set = DataBuilder(self.dataframe)
+
+                predloader = DataLoader(dataset=preddata_set, batch_size=256)
+                pred_outlier = predict(predloader)
+
+                self.dataframe["autoencoder_outlier"] = np.hstack(pred_outlier)
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            logging.info("Finished autoencoder based outlier detection.")
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+            traindata_set = DataBuilder(X_train)
+            testdata_set = DataBuilder(X_test)
+
+            trainloader = DataLoader(dataset=traindata_set, batch_size=256)
+            testloader = DataLoader(dataset=testdata_set, batch_size=256)
+
+            D_in = X_train.shape[1]
+            # scaler = torch.cuda.amp.GradScaler()  # GPU
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model = Autoencoder(D_in, 32, 8, 2).to(device)
+            optimizer = optim.AdamW(model.parameters(), lr=0.0002)
+            loss_mse = customLoss()
+
+            def train(epoch):
+                model.train()
+                train_loss = 0
+                for data in trainloader:
+                    data = data.to(device)
+                    optimizer.zero_grad()
+                    recon_batch, mu, logvar = model(data)
+                    loss = loss_mse(recon_batch, data, mu, logvar)
+                    loss.backward()
+                    train_loss += loss.item()
+                    optimizer.step()
+                    if epoch % 200 == 0:
+                        print(
+                            "====> Epoch: {} Average training loss: {:.4f}".format(
+                                epoch, train_loss / len(trainloader.dataset)
+                            )
+                        )
+                train_losses.append(train_loss / len(trainloader.dataset))
+                torch.cuda.empty_cache()
+
+            def test(epoch):
+                with torch.no_grad():
+                    test_loss = 0
+                    for data in testloader:
+                        data = data.to(device)
+                        optimizer.zero_grad()
+                        recon_batch, mu, logvar = model(data)
+                        loss = loss_mse(recon_batch, data, mu, logvar)
+                        test_loss += loss.item()
+                        if epoch % 200 == 0:
+                            print(
+                                "====> Epoch: {} Average test loss: {:.4f}".format(
+                                    epoch,
+                                    test_loss / len(testloader.dataset),
+                                )
+                            )
+                test_losses.append(test_loss / len(testloader.dataset))
+                torch.cuda.empty_cache()
+
+            epochs = 10
+            bestscore = None
+            train_losses = []
+            test_losses = []
+            for epoch in range(1, epochs + 1):
+                train(epoch)
+                test(epoch)
+                if bestscore is None:
+                    bestscore = test_losses[-1]
+                    print("Save first model")
+                    state = {
+                        "state_dict": model.state_dict(),
+                        "optimizer_dict": optimizer.state_dict(),
+                        "bestscore": bestscore,
+                    }
+                    torch.save(state, "autoencoder_model" + ".pth")
+                elif test_losses[-1] < bestscore:
+                    bestscore = test_losses[-1]
+                    print("found better point")
+                    state = {
+                        "state_dict": model.state_dict(),
+                        "optimizer_dict": optimizer.state_dict(),
+                        "bestscore": bestscore,
+                    }
+                    torch.save(state, "autoencoder_model" + ".pth")
+
+            train_outlier = predict(trainloader)
+            test_outlier = predict(testloader)
+
+            X_train["autoencoder_outlier"] = np.hstack(train_outlier)
+            X_test["autoencoder_outlier"] = np.hstack(test_outlier)
+
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            logging.info("Finished autoencoder based outlier detection.")

@@ -3,7 +3,7 @@
   <component name="NewModuleRootManager" inherit-compiler-output="true">
     <exclude-output />
     <content url="file://$MODULE_DIR$" />
-    <orderEntry type="jdk" jdkName="Python 3.8 (rapids-21.06)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.8 (rapids-21.12)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Python 3.8 (crm_marketing_analytics) interpreter library" level="application" />
   </component>

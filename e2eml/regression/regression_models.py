@@ -1122,7 +1122,6 @@ class RegressionModels(postprocessing.FullPipeline):
             batch_size = self.tabnet_settings["batch_size"]
             virtual_batch_size = self.tabnet_settings["virtual_batch_size"]
             num_workers = self.tabnet_settings["num_workers"]
-            max_epochs = self.tabnet_settings["max_epochs"]
 
             def objective(trial):
                 depths = trial.suggest_int("depths", 16, 64)
@@ -1138,6 +1137,10 @@ class RegressionModels(postprocessing.FullPipeline):
                 )
                 n_shared = trial.suggest_int("n_shared", 1, 5)
                 n_independent = trial.suggest_int("n_independent", 1, 5)
+                pre_trainer_max_epochs = trial.suggest_int(
+                    "pre_trainer_max_epochs", 10, 1000
+                )
+                trainer_max_epochs = trial.suggest_int("trainer_max_epochs", 10, 1000)
                 # loss_func = trial.suggest_categorical('loss_func', ['rmsle', 'mae', 'rmse', 'mse'])
                 # ['auc', 'accuracy', 'balanced_accuracy', 'logloss', 'mae', 'mse', 'rmsle', 'unsup_loss', 'rmse']"
 
@@ -1158,10 +1161,14 @@ class RegressionModels(postprocessing.FullPipeline):
                     seed=self.global_random_state,
                     verbose=1,
                 )
+                if self.shuffle_during_training:
+                    random_st = self.booster_random_state
+                else:
+                    random_st = None
                 mean_abs_errors = []
                 skf = KFold(
                     n_splits=10,
-                    random_state=self.booster_random_state,
+                    random_state=random_st,
                     shuffle=self.shuffle_during_training,
                 )
 
@@ -1189,7 +1196,7 @@ class RegressionModels(postprocessing.FullPipeline):
                     pretrainer.fit(
                         x_train,
                         eval_set=[(x_test)],
-                        max_epochs=max_epochs,
+                        max_epochs=pre_trainer_max_epochs,
                         patience=50,
                         batch_size=batch_size,
                         virtual_batch_size=virtual_batch_size,
@@ -1208,7 +1215,7 @@ class RegressionModels(postprocessing.FullPipeline):
                         batch_size=batch_size,
                         virtual_batch_size=virtual_batch_size,
                         num_workers=num_workers,
-                        max_epochs=max_epochs,
+                        max_epochs=trainer_max_epochs,
                         drop_last=True,
                         from_unsupervised=pretrainer,
                     )
@@ -1276,7 +1283,7 @@ class RegressionModels(postprocessing.FullPipeline):
             pretrainer.fit(
                 X_train,
                 eval_set=[(X_test)],
-                max_epochs=max_epochs,
+                max_epochs=tabnet_best_param["pre_trainer_max_epochs"],
                 patience=50,
                 batch_size=batch_size,
                 virtual_batch_size=virtual_batch_size,
@@ -1296,7 +1303,7 @@ class RegressionModels(postprocessing.FullPipeline):
                 batch_size=batch_size,
                 virtual_batch_size=virtual_batch_size,
                 num_workers=num_workers,
-                max_epochs=max_epochs,
+                max_epochs=tabnet_best_param["trainer_max_epochs"],
                 drop_last=True,
                 from_unsupervised=pretrainer,
             )
