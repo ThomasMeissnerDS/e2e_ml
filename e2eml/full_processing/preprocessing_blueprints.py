@@ -171,8 +171,10 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing):
                 )
             except ValueError:
                 print("Clustering as a feature skipped due to ValueError.")
+            except KeyError:
+                print("Clustering as a feature skipped due to KeyError.")
         if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_kmeans_loop"]:
-            for nb_cluster in [3, 5, 7, 9]:
+            for nb_cluster in self.kmeans_components_to_loop:
                 try:
                     self.clustering_as_a_feature(
                         algorithm="kmeans",
@@ -182,17 +184,25 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing):
                         min_samples=50,
                     )
                 except ValueError:
+                    self.kmeans_components_to_loop.remove(nb_cluster)
                     print("Clustering as a feature skipped due to ValueError.")
+                except KeyError:
+                    self.kmeans_components_to_loop.remove(nb_cluster)
+                    print("Clustering as a feature skipped due to KeyError.")
         if self.blueprint_step_selection_non_nlp[
             "clustering_as_a_feature_gaussian_mixture_loop"
         ]:
-            for nb_cluster in [2, 4, 6, 8, 10]:
+            for nb_cluster in self.gaussian_components_to_loop:
                 try:
                     self.clustering_as_a_feature(
                         algorithm="gaussian", nb_clusters=nb_cluster
                     )
                 except ValueError:
+                    self.gaussian_components_to_loop.remove(nb_cluster)
                     print("Clustering as a feature skipped due to ValueError.")
+                except KeyError:
+                    self.gaussian_components_to_loop.remove(nb_cluster)
+                    print("Clustering as a feature skipped due to KeyError.")
         if self.blueprint_step_selection_non_nlp["pca_clustering_results"]:
             self.pca_clustering_results()
         if self.blueprint_step_selection_non_nlp["autotuned_clustering"]:

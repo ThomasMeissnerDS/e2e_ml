@@ -259,6 +259,8 @@ class PreProcessing:
         else:
             self.booster_random_state = global_random_state
         self.global_random_state = global_random_state
+        self.kmeans_components_to_loop = [3, 5, 7, 9]
+        self.gaussian_components_to_loop = [2, 4, 6, 8, 10]
         self.date_columns = date_columns
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
@@ -2189,11 +2191,11 @@ class PreProcessing:
                     )
                     gaussian.fit(dataframe)
                     self.preprocess_decisions[
-                        "clustering_gaussian_mixture_model"
+                        f"clustering_gaussian_mixture_model_{n_components}"
                     ] = gaussian
                 else:
                     gaussian = self.preprocess_decisions[
-                        "clustering_gaussian_mixture_model"
+                        f"clustering_gaussian_mixture_model_{n_components}"
                     ]
 
                 gaussian_clusters = gaussian.predict(dataframe)
@@ -2212,9 +2214,13 @@ class PreProcessing:
                         max_iter=500,
                     )
                     kmeans.fit(dataframe)
-                    self.preprocess_decisions["clustering_kmeans_model"] = kmeans
+                    self.preprocess_decisions[
+                        f"clustering_kmeans_model_{n_components}"
+                    ] = kmeans
                 else:
-                    kmeans = self.preprocess_decisions["clustering_kmeans_model"]
+                    kmeans = self.preprocess_decisions[
+                        f"clustering_kmeans_model_{n_components}"
+                    ]
                 kmeans_clusters = kmeans.predict(dataframe)
                 dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
                 del kmeans

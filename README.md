@@ -375,12 +375,13 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
-* 3.00.01
+* 3.01.00
   * Refined GAN architectures
   * Categorical encoding can be chosen via the cat_encoder_model attribute now
   * Fixed a bug when choosing onehot encoding
   * Optimized autoencoder based oversampling for regression
   * Added Autoencoder based oversampling
+  * Optimized clustering performance
 * 2.50
   * Added tabular GAN (experimental)
   * Minor bug fixes
