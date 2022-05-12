@@ -2115,11 +2115,11 @@ class PreProcessing:
                     )
                     kmeans.fit(dataframe)
                     self.preprocess_decisions[
-                        "clustering_gaussian_mixture_model"
+                        f"clustering_gaussian_mixture_model_{n_components}"
                     ] = kmeans
                 else:
                     kmeans = self.preprocess_decisions[
-                        "clustering_gaussian_mixture_model"
+                        f"clustering_gaussian_mixture_model_{n_components}"
                     ]
 
                 kmeans_clusters = kmeans.predict(dataframe)
@@ -2146,9 +2146,13 @@ class PreProcessing:
                         output_type="numpy",
                     )
                     kmeans.fit(dataframe)
-                    self.preprocess_decisions["clustering_kmeans_model"] = kmeans
+                    self.preprocess_decisions[
+                        f"kmeans_clusters_{n_components}"
+                    ] = kmeans
                 else:
-                    kmeans = self.preprocess_decisions["clustering_kmeans_model"]
+                    kmeans = self.preprocess_decisions[
+                        f"kmeans_clusters_{n_components}"
+                    ]
 
                 kmeans_clusters = kmeans.predict(dataframe)
                 try:
@@ -2250,6 +2254,9 @@ class PreProcessing:
                 except ValueError:
                     X_train[f"dbscan_clusters_{eps}"] = 1
                     X_test[f"dbscan_clusters_{eps}"] = 1
+                except KeyError:
+                    X_train[f"dbscan_clusters_{eps}"] = 1
+                    X_test[f"dbscan_clusters_{eps}"] = 1
                 logging.info("Finished adding clusters as additional features.")
                 logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -2260,6 +2267,8 @@ class PreProcessing:
                         self.dataframe, mode="predict"
                     )
                 except ValueError:
+                    self.dataframe[f"gaussian_clusters_{nb_clusters}"] = 0
+                except KeyError:
                     self.dataframe[f"gaussian_clusters_{nb_clusters}"] = 0
                 logging.info("Finished adding clusters as additional features.")
                 logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
@@ -2272,6 +2281,9 @@ class PreProcessing:
                 except ValueError:
                     X_train[f"gaussian_clusters_{nb_clusters}"] = 0
                     X_test[f"gaussian_clusters_{nb_clusters}"] = 0
+                except KeyError:
+                    X_train[f"gaussian_clusters_{nb_clusters}"] = 0
+                    X_test[f"gaussian_clusters_{nb_clusters}"] = 0
                 logging.info("Finished adding clusters as additional features.")
                 logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -2280,6 +2292,8 @@ class PreProcessing:
                 try:
                     self.dataframe = add_kmeans_clusters(self.dataframe, mode="predict")
                 except ValueError:
+                    self.dataframe[f"kmeans_clusters_{nb_clusters}"] = 0
+                except KeyError:
                     self.dataframe[f"kmeans_clusters_{nb_clusters}"] = 0
                 logging.info("Finished adding clusters as additional features.")
                 logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
@@ -2290,6 +2304,9 @@ class PreProcessing:
                     X_train = add_kmeans_clusters(X_train, mode="fit")
                     X_test = add_kmeans_clusters(X_test, mode="predict")
                 except ValueError:
+                    X_train[f"kmeans_clusters_{nb_clusters}"] = 0
+                    X_test[f"kmeans_clusters_{nb_clusters}"] = 0
+                except KeyError:
                     X_train[f"kmeans_clusters_{nb_clusters}"] = 0
                     X_test[f"kmeans_clusters_{nb_clusters}"] = 0
                 logging.info("Finished adding clusters as additional features.")
