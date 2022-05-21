@@ -2955,7 +2955,7 @@ class PreProcessing:
             :param dataframe:
             :return: Returns modified dataframe.
             """
-            for c in date_columns:
+            for c in self.date_columns:
                 if c in dataframe.columns:
                     if dataframe[c].dt.month.nunique() > 0:
                         dataframe[c + "_month"] = dataframe[c].dt.month
@@ -2989,7 +2989,7 @@ class PreProcessing:
                         )
                         self.new_sin_cos_col_names.append(c + "_sin")
                         self.new_sin_cos_col_names.append(c + "_cos")
-                        dataframe.drop(c, axis=1, inplace=True)
+                        # dataframe.drop(c, axis=1, inplace=True)
                     elif self.date_columns_created[c] == "day":
                         dataframe[c + "_sin"] = np.sin(
                             dataframe[c] * (2.0 * np.pi / 31)
@@ -2999,7 +2999,7 @@ class PreProcessing:
                         )
                         self.new_sin_cos_col_names.append(c + "_sin")
                         self.new_sin_cos_col_names.append(c + "_cos")
-                        dataframe.drop(c, axis=1, inplace=True)
+                        # dataframe.drop(c, axis=1, inplace=True)
                     elif self.date_columns_created[c] == "dayofweek":
                         dataframe[c + "_sin"] = np.sin(
                             (dataframe[c] + 1) * (2.0 * np.pi / 7)
@@ -3009,7 +3009,7 @@ class PreProcessing:
                         )
                         self.new_sin_cos_col_names.append(c + "_sin")
                         self.new_sin_cos_col_names.append(c + "_cos")
-                        dataframe.drop(c, axis=1, inplace=True)
+                        # dataframe.drop(c, axis=1, inplace=True)
                     elif self.date_columns_created[c] == "hour":
                         dataframe[c + "_sin"] = np.sin(
                             dataframe[c] * (2.0 * np.pi / 24)
@@ -3019,7 +3019,7 @@ class PreProcessing:
                         )
                         self.new_sin_cos_col_names.append(c + "_sin")
                         self.new_sin_cos_col_names.append(c + "_cos")
-                        dataframe.drop(c, axis=1, inplace=True)
+                        # dataframe.drop(c, axis=1, inplace=True)
                     elif self.date_columns_created[c] == "dayofyear":
                         dataframe[c + "_sin"] = np.sin(
                             dataframe[c] * (2.0 * np.pi / 365)
@@ -3029,7 +3029,7 @@ class PreProcessing:
                         )
                         self.new_sin_cos_col_names.append(c + "_sin")
                         self.new_sin_cos_col_names.append(c + "_cos")
-                        dataframe.drop(c, axis=1, inplace=True)
+                        # dataframe.drop(c, axis=1, inplace=True)
             return dataframe
 
         self.get_current_timestamp(task="Apply datetime transformation")
@@ -6194,18 +6194,16 @@ class PreProcessing:
                 return loss_MSE + loss_KLD
 
         def predict(data_loader):
-            # loss = customLoss()
+            loss = nn.MSELoss()
             predictions = []
             with torch.no_grad():
                 for data in data_loader:
                     data = data.to(device)
                     recon_batch, mu, logvar = model(data)
                     outlier_scores = [
-                        loss_mse(
+                        loss(
                             recon_batch[i : i + 1, :],
                             data[i : i + 1, :],
-                            mu[i : i + 1, :],
-                            logvar[i : i + 1, :],
                         ).item()
                         for i in range(len(data))
                     ]
@@ -6252,7 +6250,7 @@ class PreProcessing:
                 model = Autoencoder(D_in, 32, 8, 2)
                 model.load_state_dict(state["state_dict"])
                 model.to(device)
-                model.eval()
+                # model.eval()
                 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                 preddata_set = DataBuilder(self.dataframe)
 

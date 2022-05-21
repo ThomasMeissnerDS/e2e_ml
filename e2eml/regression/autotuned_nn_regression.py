@@ -7,6 +7,7 @@ import numpy as np
 import psutil
 import torch
 import torch.nn as nn
+from numpy import inf
 from sklearn.metrics import mean_squared_error, median_absolute_error
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
@@ -579,8 +580,20 @@ class RegressionNNModel(
         # I don't use loss, but I collect it
         losses = np.mean(losses)
         # Score with rmse
-        train_rme_loss = np.sqrt(mean_squared_error(alltargets, allpreds))
-
+        try:
+            train_rme_loss = np.sqrt(
+                mean_squared_error(
+                    np.array(alltargets), np.array(allpreds, dtype="float64")
+                )
+            )
+        except ValueError:
+            all_preds_arr = np.array(allpreds)
+            all_preds_arr[np.isnan(all_preds_arr)] = 0
+            all_preds_arr[all_preds_arr == -inf] = 0
+            all_preds_arr[all_preds_arr == inf] = 0
+            train_rme_loss = np.sqrt(
+                mean_squared_error(np.array(alltargets), all_preds_arr)
+            )
         return losses, train_rme_loss
 
     def nn_validating(self, valid_dataloader, model):
@@ -614,7 +627,20 @@ class RegressionNNModel(
         # I don't use loss, but I collect it
         losses = np.mean(losses)
         # Score with rmse
-        valid_rme_loss = np.sqrt(mean_squared_error(alltargets, allpreds))
+        try:
+            valid_rme_loss = np.sqrt(
+                mean_squared_error(
+                    np.array(alltargets), np.array(allpreds, dtype="float64")
+                )
+            )
+        except ValueError:
+            all_preds_arr = np.array(allpreds)
+            all_preds_arr[np.isnan(all_preds_arr)] = 0
+            all_preds_arr[all_preds_arr == -inf] = 0
+            all_preds_arr[all_preds_arr == inf] = 0
+            valid_rme_loss = np.sqrt(
+                mean_squared_error(np.array(alltargets), all_preds_arr)
+            )
 
         return allpreds, losses, valid_rme_loss
 
@@ -849,9 +875,14 @@ class RegressionNNModel(
             self.dataframe["neural_network_mean"] = self.dataframe[mode_cols].mean(
                 axis=1
             )
+            self.dataframe["neural_network_mean"] = self.target_skewness_handling(
+                preds_to_reconvert=self.dataframe["neural_network_mean"].values,
+                mode="revert",
+            )
             self.predicted_values["neural_network"] = self.dataframe[
                 "neural_network_mean"
             ]
+
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
@@ -882,4 +913,7 @@ class RegressionNNModel(
 
             X_test["neural_network_median"] = X_test[mode_cols].median(axis=1)
             X_test["neural_network_mean"] = X_test[mode_cols].mean(axis=1)
+            X_test["neural_network_mean"] = self.target_skewness_handling(
+                preds_to_reconvert=X_test["neural_network_mean"].values, mode="revert"
+            )
             self.predicted_values["neural_network"] = X_test["neural_network_median"]

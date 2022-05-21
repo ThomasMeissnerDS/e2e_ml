@@ -1837,7 +1837,7 @@ class RegressionModels(postprocessing.FullPipeline):
             _ = gc.collect()
             return self.trained_models
 
-    def lgbm_predict(self, feat_importance=True, importance_alg="auto"):
+    def lgbm_predict(self, feat_importance=True, importance_alg="SHAP"):
         """
         Loads the pretrained model from the class itself and predicts on new data.
         :param feat_importance: Set True, if feature importance shall be calculated based on SHAP values.
