@@ -251,7 +251,10 @@ class PreProcessing:
             self.preferred_training_mode = "cpu"
             print("No preferred_training_mode chosen. Fallback to CPU.")
         self.tune_mode = tune_mode
-        self.train_split_type = train_split_type
+        if self.class_problem in ["binary", "multiclass", "regression"]:
+            self.train_split_type = train_split_type
+        else:
+            self.train_split_type = "time"
         self.rapids_acceleration = rapids_acceleration
         self.shuffle_during_training = shuffle_during_training
         if self.shuffle_during_training:
@@ -537,17 +540,20 @@ class PreProcessing:
         }
         # automatically determine batch sizes for Tabnet
 
-        rec_batch_size = (len(self.dataframe.index) * 0.8) / 20
-        if int(rec_batch_size) % 2 == 0:
-            rec_batch_size = int(rec_batch_size)
+        if self.class_problem in ["binary", "multiclass", "regression"]:
+            rec_batch_size = (len(self.dataframe.index) * 0.8) / 20
+            if int(rec_batch_size) % 2 == 0:
+                rec_batch_size = int(rec_batch_size)
+            else:
+                rec_batch_size = int(rec_batch_size) + 1
+            if rec_batch_size > 16384:
+                rec_batch_size = 16384
+                virtual_batch_size = 4096
+            else:
+                virtual_batch_size = int(rec_batch_size / 4)
         else:
-            rec_batch_size = int(rec_batch_size) + 1
-        if rec_batch_size > 16384:
-            rec_batch_size = 16384
-            virtual_batch_size = 4096
-        else:
-
-            virtual_batch_size = int(rec_batch_size / 4)
+            rec_batch_size = 100
+            virtual_batch_size = 100
 
         self.tabnet_settings = {
             "batch_size": rec_batch_size,
@@ -576,6 +582,7 @@ class PreProcessing:
             "autoencoder_based_oversampling": 200,
             "final_kernel_pca_dimensionality_reduction": 50,
             "final_pca_dimensionality_reduction": 50,
+            "auto_arima": 50,
         }
 
         self.hyperparameter_tuning_max_runtime_secs = {
@@ -598,6 +605,7 @@ class PreProcessing:
             "autoencoder_based_oversampling": 2 * 60 * 60,
             "final_kernel_pca_dimensionality_reduction": 4 * 60 * 60,
             "final_pca_dimensionality_reduction": 2 * 60 * 60,
+            "auto_arima": 2 * 60 * 60,
         }
 
         self.feature_selection_sample_size = 100000

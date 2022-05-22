@@ -2,9 +2,10 @@ import logging
 
 from e2eml.full_processing.cpu_processing_nlp import NlpPreprocessing
 from e2eml.model_utils.tabular_gan_training import TabularGan
+from e2eml.time_series.time_series_preprocessing import TimeSeriesPreprocessing
 
 
-class PreprocessingBluePrint(TabularGan, NlpPreprocessing):
+class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessing):
     def check_prediction_mode(self, df):
         """
         Takes in the dataframe that has been passed to the blueprint pipeline. If no dataframe has been passed,
@@ -249,6 +250,20 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing):
             self.sort_columns_alphabetically()
         if self.blueprint_step_selection_non_nlp["use_tabular_gan"]:
             self.train_tabular_gans()
+
+    def arima_preprocessing_pipeline(self, df):
+        logging.info("Start blueprint.")
+        self.runtime_warnings(warn_about="future_architecture_change")
+
+        self.train_test_split(how=self.train_split_type)
+        if self.blueprint_step_selection_non_nlp["automatic_type_detection_casting"]:
+            self.automatic_type_detection_casting()
+        if self.blueprint_step_selection_non_nlp["remove_duplicate_column_names"]:
+            self.remove_duplicate_column_names()
+        if self.blueprint_step_selection_non_nlp["reset_dataframe_index"]:
+            self.reset_dataframe_index()
+        self.reattach_targets()
+        self.make_stationary()
 
     def nlp_transformer_preprocessing_pipeline(self, df):
         logging.info("Start blueprint.")

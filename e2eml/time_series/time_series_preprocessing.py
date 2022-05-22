@@ -1,13 +1,14 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from statsmodels.tsa.stattools import adfuller, kpss
 
-from e2eml.full_processing import postprocessing
+from e2eml.full_processing import cpu_preprocessing
 
 plt.style.use("fivethirtyeight")
 
 
-class TimeSeriesPreprocessing(postprocessing.FullPipeline):
+class TimeSeriesPreprocessing(cpu_preprocessing.PreProcessing):
     def time_series_unpacking(self):
         """
         Takes the datasource dictionary within the class and unpacks it, depending on the provided source format.
@@ -19,6 +20,15 @@ class TimeSeriesPreprocessing(postprocessing.FullPipeline):
         elif self.source_format == "Pandas dataframe":
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             return X_train, X_test, Y_train, Y_test
+
+    def reattach_targets(self):
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train[self.target_variable] = Y_train
+            X_test[self.target_variable] = Y_test
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def time_series_wrap_test_train_to_dict(
         self, X_train=None, X_test=None, Y_train=None, Y_test=None
@@ -50,10 +60,10 @@ class TimeSeriesPreprocessing(postprocessing.FullPipeline):
         """
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         # Determing rolling statistics
-        rolmean = Y_train.rolling(window=window).mean()
-        rolstd = Y_train.rolling(window=window).std()
+        rolmean = X_train.rolling(window=window).mean()
+        rolstd = X_train.rolling(window=window).std()
         # Plot rolling statistics:
-        plt.plot(Y_train, color="blue", label="Original")
+        plt.plot(X_train, color="blue", label="Original")
         plt.plot(rolmean, color="red", label="Rolling Mean")
         plt.plot(rolstd, color="black", label="Rolling Std")
         plt.legend(loc="best")
@@ -61,7 +71,7 @@ class TimeSeriesPreprocessing(postprocessing.FullPipeline):
         plt.show()
         # Perform Dickey-Fuller test:
         print("Results of Dickey-Fuller Test:")
-        dftest = adfuller(Y_train, autolag="AIC")
+        dftest = adfuller(X_train, autolag="AIC")
         dfoutput = pd.Series(
             dftest[0:4],
             index=[
@@ -74,6 +84,10 @@ class TimeSeriesPreprocessing(postprocessing.FullPipeline):
         for key, value in dftest[4].items():
             dfoutput["Critical Value (%s)" % key] = value
         print(dfoutput)
+        if dfoutput["p-value"] >= 0.5:
+            self.preprocess_decisions["adf_test_is_stationary"] = False
+        else:
+            self.preprocess_decisions["adf_test_is_stationary"] = True
 
     def kwiatkowski_phillips_schmidt_shin_test(self):
         """
@@ -93,13 +107,97 @@ class TimeSeriesPreprocessing(postprocessing.FullPipeline):
         """
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         print("Results of KPSS Test:")
-        kpsstest = kpss(Y_train, regression="c")
-        kpss_output = pd.Series(
-            kpsstest[0:3], index=["Test Statistic", "p-value", "Lags Used"]
-        )
-        for key, value in kpsstest[3].items():
-            kpss_output["Critical Value (%s)" % key] = value
-        print(kpss_output)
+        try:
+            kpsstest = kpss(X_train.values, regression="c")
+            kpss_output = pd.Series(
+                kpsstest[0:3], index=["Test Statistic", "p-value", "Lags Used"]
+            )
+            for key, value in kpsstest[3].items():
+                kpss_output["Critical Value (%s)" % key] = value
+            print(kpss_output)
+            if kpss_output["p-value"] < 0.5:
+                self.preprocess_decisions["kpss_test_is_stationary"] = False
+            else:
+                self.preprocess_decisions["kpss_test_is_stationary"] = True
+        except ValueError:
+            kpss_output = {}
+            kpss_output["p-value"] = "nan"
+            print("KPSS test failed. Use ADF results only.")
+            self.preprocess_decisions[
+                "kpss_test_is_stationary"
+            ] = self.preprocess_decisions["adf_test_is_stationary"]
+
+    def make_stationary(self):
+        if self.prediction_mode:
+            length = len(self.dataframe.index)
+            # memory uit
+            if self.preprocess_decisions["arima_nb_differentiations"] > 0:
+                if self.preprocess_decisions["arima_transformation_used"] == "log":
+                    self.dataframe = np.log1p(self.dataframe)
+                    self.dataframe[np.isfinite(self.dataframe) is False] = 0
+                else:
+                    full_data = pd.concat(
+                        [
+                            self.preprocess_decisions["target_memory_unit"],
+                            self.dataframe,
+                        ]
+                    ).reset_index(drop=True)
+                    full_data = full_data.diff(
+                        self.preprocess_decisions["arima_nb_differentiations"]
+                    )
+                    self.dataframe = full_data[-length:]
+            else:
+                pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            self.preprocess_decisions["arima_nb_differentiations"] = 0
+            self.preprocess_decisions["arima_transformation_used"] = "None"
+            X_train_copy = X_train.copy()
+
+            self.augmented_dickey_fuller_test(window=6)
+            self.kwiatkowski_phillips_schmidt_shin_test()
+
+            while (
+                not self.preprocess_decisions["adf_test_is_stationary"]
+                and not self.preprocess_decisions["kpss_test_is_stationary"]
+            ):
+                self.preprocess_decisions["arima_nb_differentiations"] += 1
+                X_train = X_train.diff(
+                    self.preprocess_decisions["arima_nb_differentiations"]
+                ).dropna()
+                self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+                X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+                if self.preprocess_decisions["arima_nb_differentiations"] > 3:
+                    X_train = X_train_copy
+                    X_train = np.log1p(X_train)
+                    X_train[np.isfinite(X_train) is False] = 0
+                    Y_train = X_train
+                    self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+                    self.preprocess_decisions["arima_transformation_used"] = "log"
+
+                self.augmented_dickey_fuller_test(window=6)
+                self.kwiatkowski_phillips_schmidt_shin_test()
+
+            Y_train = X_train
+
+            if self.preprocess_decisions["arima_transformation_used"] == "log":
+                Y_test = np.log1p(Y_test)
+                Y_test[np.isfinite(Y_test) is False] = 0
+            elif self.preprocess_decisions["arima_nb_differentiations"] > 0:
+                length = len(Y_test.index)
+                full_test = pd.concat([Y_train, Y_test])
+                full_test = full_test.diff(
+                    self.preprocess_decisions["arima_nb_differentiations"]
+                )  # .dropna()
+                full_test = full_test.ffill()
+                Y_test = full_test.tail(length)
+                Y_test = pd.Series(Y_test[self.target_variable].values)
+            else:
+                pass
+
+            Y_train = pd.Series(Y_train[self.target_variable].values)
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def stationarity_explainer(self):
         explanation = """
