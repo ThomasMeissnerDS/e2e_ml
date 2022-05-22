@@ -263,6 +263,7 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
         if self.blueprint_step_selection_non_nlp["reset_dataframe_index"]:
             self.reset_dataframe_index()
         self.reattach_targets()
+        self.keep_target_only()
         self.make_stationary()
 
     def nlp_transformer_preprocessing_pipeline(self, df):

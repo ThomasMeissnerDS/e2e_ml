@@ -21,6 +21,15 @@ class TimeSeriesPreprocessing(cpu_preprocessing.PreProcessing):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             return X_train, X_test, Y_train, Y_test
 
+    def keep_target_only(self):
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train = X_train[[self.target_variable]]
+            X_test = X_test[[self.target_variable]]
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
     def reattach_targets(self):
         if self.prediction_mode:
             pass
@@ -129,25 +138,7 @@ class TimeSeriesPreprocessing(cpu_preprocessing.PreProcessing):
 
     def make_stationary(self):
         if self.prediction_mode:
-            length = len(self.dataframe.index)
-            # memory uit
-            if self.preprocess_decisions["arima_nb_differentiations"] > 0:
-                if self.preprocess_decisions["arima_transformation_used"] == "log":
-                    self.dataframe = np.log1p(self.dataframe)
-                    self.dataframe[np.isfinite(self.dataframe) is False] = 0
-                else:
-                    full_data = pd.concat(
-                        [
-                            self.preprocess_decisions["target_memory_unit"],
-                            self.dataframe,
-                        ]
-                    ).reset_index(drop=True)
-                    full_data = full_data.diff(
-                        self.preprocess_decisions["arima_nb_differentiations"]
-                    )
-                    self.dataframe = full_data[-length:]
-            else:
-                pass
+            pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             self.preprocess_decisions["arima_nb_differentiations"] = 0
