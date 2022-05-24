@@ -130,6 +130,11 @@ Multiclass blueprints can handle binary and multiclass tasks:
 - ml_bp08_multiclass_full_processing_ridge()
 - ml_bp09_multiclass_full_processing_catboost()
 - ml_bp10_multiclass_full_processing_sgd()
+- ml_bp11_multiclass_full_processing_quadratic_discriminant_analysis()
+- ml_bp12_multiclass_full_processing_svm()
+- ml_bp13_multiclass_full_processing_multinomial_nb()
+- ml_bp14_multiclass_full_processing_lgbm_focal()
+- ml_bp16_multiclass_full_processing_neural_network() # offers fully connected ANN & 1D CNN
 - ml_special_binary_full_processing_boosting_blender()
 - ml_special_multiclass_auto_model_exploration()
 - ml_special_multiclass_full_processing_multimodel_max_voting()
@@ -149,8 +154,13 @@ There are regression blueprints as well (in regression module):
 - ml_bp20_regression_full_processing_sgd()
 - ml_bp21_regression_full_processing_ransac()
 - ml_bp22_regression_full_processing_svm()
+- ml_bp23_regressions_full_processing_neural_network() # offers fully connected ANN & 1D CNN
 - ml_special_regression_full_processing_multimodel_avg_blender()
 - ml_special_regression_auto_model_exploration()
+
+In the time series module we recently embedded blueprints as well:
+- ml_bp100_univariate_timeseries_full_processing_auto_arima()
+- ml_bp101_multivariate_timeseries_full_processing_lstm()
 
 In ensembles algorithms can be chosen via the class attribute:
 test_class.special_blueprint_algorithms = {"ridge": True,
@@ -167,44 +177,55 @@ test_class.special_blueprint_algorithms = {"ridge": True,
 Also preprocessing steps can be selected:
 test_class.blueprint_step_selection_non_nlp = {
             "automatic_type_detection_casting": True,
-            "early_numeric_only_feature_selection": True,
             "remove_duplicate_column_names": True,
             "reset_dataframe_index": True,
+            "fill_infinite_values": True,
+            "early_numeric_only_feature_selection": True,
+            "delete_high_null_cols": True,
+            "data_binning": True,
             "regex_clean_text_data": False,
             "handle_target_skewness": False,
-            "holistic_null_filling": True, # slow
-            "iterative_null_imputation": False, # very slow
-            "fill_infinite_values": True,
             "datetime_converter": True,
-            "pos_tagging_pca": False, # slow with many categories
+            "pos_tagging_pca": False,  # slow with many categories
             "append_text_sentiment_score": False,
-            "tfidf_vectorizer_to_pca": True, # slow with many categories
+            "tfidf_vectorizer_to_pca": False,  # slow with many categories
             "tfidf_vectorizer": False,
             "rare_feature_processing": True,
             "cardinality_remover": True,
-            "delete_high_null_cols": True,
+            "categorical_column_embeddings": False,
+            "holistic_null_filling": True,  # slow
             "numeric_binarizer_pca": True,
             "onehot_pca": True,
             "category_encoding": True,
             "fill_nulls_static": True,
-            "data_binning": True,
+            "autoencoder_outlier_detection": True,
             "outlier_care": True,
+            "delete_outliers": False,
             "remove_collinearity": True,
             "skewness_removal": True,
+            "automated_feature_transformation": False,
+            "random_trees_embedding": False,
             "clustering_as_a_feature_dbscan": True,
-            "clustering_as_a_feature_kmeans_loop": True, # slow for big data, but can be heavily accelerated using rapids_acceleration=True during class instantiation
-            "clustering_as_a_feature_gaussian_mixture_loop": True, # slow for big data, but can be heavily accelerated using rapids_acceleration=True during class instantiation (will run a Kmeans on GPU)
+            "clustering_as_a_feature_kmeans_loop": True,
+            "clustering_as_a_feature_gaussian_mixture_loop": True,
             "pca_clustering_results": True,
+            "svm_outlier_detection_loop": False,
+            "autotuned_clustering": False,
             "reduce_memory_footprint": False,
-            "automated_feature_selection": True,
-            "bruteforce_random_feature_selection": False, # slow, this feature is experimental!
-            "sort_columns_alphabetically": True,
-            "synthetic_data_augmentation": False, # this feature is experimental, can be heavily accelerated using rapids_acceleration=True during class instantiation
-            "delete_unpredictable_training_rows": False, # this feature is experimental!
-            "scale_data": False,
+            "scale_data": True,
             "smote": False,
-            "autoencoder_based_oversampling": False, # perfect for imbalanced binary and multiclass data
-            "final_pca_dimensionality_reduction": False
+            "automated_feature_selection": True,
+            "bruteforce_random_feature_selection": False,  # slow
+            "autoencoder_based_oversampling": False,
+            "synthetic_data_augmentation": False,
+            "final_pca_dimensionality_reduction": False,
+            "final_kernel_pca_dimensionality_reduction": False,
+            "delete_low_variance_features": False,
+            "shap_based_feature_selection": False,
+            "delete_unpredictable_training_rows": False,
+            "trained_tokenizer_embedding": False,
+            "sort_columns_alphabetically": True,
+            "use_tabular_gan": False,
         }
 
 The bruteforce_random_feature_selection step is experimental. It showed promising results. The number of trials can be controlled.
@@ -221,43 +242,51 @@ test_class.tabnet_settings = "batch_size": rec_batch_size,
                                 "num_workers": 0,
                                 "max_epochs": 1000}
 
-test_class.hyperparameter_tuning_rounds = {"xgboost": 100,
-                                             "lgbm": 500,
-                                             "tabnet": 25,
-                                             "ngboost": 25,
-                                             "sklearn_ensemble": 10,
-                                             "ridge": 500,
-                                             "elasticnet": 100,
-                                             "catboost": 25,
-                                             "sgd": 2000,
-                                             "svm": 50,
-                                             "svm_regression": 50,
-                                             "ransac": 50,
-                                             "multinomial_nb": 100,
-                                             "bruteforce_random": 400,
-                                             "synthetic_data_augmentation": 100,
-                                             "autoencoder_based_oversampling": 200,
-                                             "final_kernel_pca_dimensionality_reduction": 50,
-                                             "final_pca_dimensionality_reduction": 50}
+test_class.hyperparameter_tuning_rounds = {
+            "xgboost": 100,
+            "lgbm": 500,
+            "lgbm_focal": 50,
+            "tabnet": 25,
+            "ngboost": 25,
+            "sklearn_ensemble": 10,
+            "ridge": 500,
+            "elasticnet": 100,
+            "catboost": 25,
+            "sgd": 2000,
+            "svm": 50,
+            "svm_regression": 50,
+            "ransac": 50,
+            "multinomial_nb": 100,
+            "bruteforce_random": 400,
+            "synthetic_data_augmentation": 100,
+            "autoencoder_based_oversampling": 200,
+            "final_kernel_pca_dimensionality_reduction": 50,
+            "final_pca_dimensionality_reduction": 50,
+            "auto_arima": 50,
+        }
 
-test_class.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
-                                                       "lgbm": 2*60*60,
-                                                       "tabnet": 2*60*60,
-                                                       "ngboost": 2*60*60,
-                                                       "sklearn_ensemble": 2*60*60,
-                                                       "ridge": 2*60*60,
-                                                       "elasticnet": 2*60*60,
-                                                       "catboost": 2*60*60,
-                                                       "sgd": 2*60*60,
-                                                       "svm": 2*60*60,
-                                                       "svm_regression": 2*60*60,
-                                                       "ransac": 2*60*60,
-                                                       "multinomial_nb": 2*60*60,
-                                                       "bruteforce_random": 2*60*60,
-                                                       "synthetic_data_augmentation": 1*60*60,
-                                                       "autoencoder_based_oversampling": 2*60*60,
-                                                       "final_kernel_pca_dimensionality_reduction": 4*60*60,
-                                                       "final_pca_dimensionality_reduction": 2*60*60}
+test_class.hyperparameter_tuning_max_runtime_secs = {
+            "xgboost": 2 * 60 * 60,
+            "lgbm": 2 * 60 * 60,
+            "lgbm_focal": 2 * 60 * 60,
+            "tabnet": 2 * 60 * 60,
+            "ngboost": 2 * 60 * 60,
+            "sklearn_ensemble": 2 * 60 * 60,
+            "ridge": 2 * 60 * 60,
+            "elasticnet": 2 * 60 * 60,
+            "catboost": 2 * 60 * 60,
+            "sgd": 2 * 60 * 60,
+            "svm": 2 * 60 * 60,
+            "svm_regression": 2 * 60 * 60,
+            "ransac": 2 * 60 * 60,
+            "multinomial_nb": 2 * 60 * 60,
+            "bruteforce_random": 2 * 60 * 60,
+            "synthetic_data_augmentation": 1 * 60 * 60,
+            "autoencoder_based_oversampling": 2 * 60 * 60,
+            "final_kernel_pca_dimensionality_reduction": 4 * 60 * 60,
+            "final_pca_dimensionality_reduction": 2 * 60 * 60,
+            "auto_arima": 2 * 60 * 60,
+        }
 
 When these parameters have to updated, please overwrite the keys individually to not break the blueprints eventually.
 I.e.: test_class.hyperparameter_tuning_max_runtime_secs["xgboost"] = 12*60*60 would work fine.
@@ -278,7 +307,7 @@ For binary classification a sample size of 100k datapoints is sufficient in most
 depending on class imbalance.
 
 For multiclass we recommend to start with small samples as algorithms like Xgboost and LGBM will easily grow in memory consumption
-with growing number of classes.
+with growing number of classes. LGBM focal or neural network will be good starts here.
 
 Whenever classes are imbalanced (binary & multiclass) we recommend to use the preprocessing step "autoencoder_based_oversampling".
 """
@@ -377,6 +406,7 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 * 3.20.00
   * Added Autoarima for univariate time series predictions
+  * Added LSTM for uni- & multivariate time series prediction
 * 3.02.00
   * Refined GAN architectures
   * Categorical encoding can be chosen via the cat_encoder_model attribute now
