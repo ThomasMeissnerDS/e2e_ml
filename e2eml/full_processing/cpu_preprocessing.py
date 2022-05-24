@@ -530,6 +530,24 @@ class PreProcessing:
             "transformer_model_path": self.gan_model_load_from_path,
             "model_save_states_path": {self.gan_model_save_states_path},
         }
+        self.lstm_settings = {
+            "train_batch_size": 32,
+            "test_batch_size": 32,
+            "pred_batch_size": 32,
+            "drop_out": 0.2,
+            "layer_dim": 2,
+            "hidden_dim": 256,
+            "num_workers": 4,
+            "learning_rate": 1e-3,
+            "weight_decay": 1e-5,
+            "seq_len": 5,
+            "regression_loss": "mse",
+            "epochs": 1000,
+            "nb_model_to_create": 1,
+            "transformer_model_path": self.tabular_nn_model_load_from_path,
+            "model_save_states_path": {self.tabular_nn_model_save_states_path},
+            "keep_best_model_only": False,
+        }
         self.deesc_settings = {
             "learning_rate": 0.3,
             "random_state": self.global_random_state,
@@ -864,6 +882,13 @@ class PreProcessing:
                     self.detected_col_types[col] = "object"
             logging.info("Finished column type detection and casting.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def get_nb_features(self):
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            self.preprocess_decisions["n_features"] = X_train.columns
 
     def binary_imbalance(self):
         """
@@ -1308,6 +1333,40 @@ class PreProcessing:
                 self.data_scaled,
                 self.preprocess_decisions,
             )
+
+    def scale_with_target(self, mode="fit", drop_target=False):
+        if mode == "reverse":
+            scaler = self.preprocess_decisions["scaler_with_target"]
+            scaler.inverse_transform(
+                self.dataframe[self.preprocess_decisions["scaling_with_target_cols"]]
+            )
+            self.dataframe = pd.DataFrame(
+                self.dataframe[self.preprocess_decisions["scaling_with_target_cols"]],
+                columns=self.preprocess_decisions["scaling_with_target_cols"],
+            )
+            if drop_target:
+                self.dataframe = self.dataframe.drop(self.target_variable, axis=1)
+        elif mode == "fit" and not self.prediction_mode:
+            from sklearn.preprocessing import MinMaxScaler
+
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train_cols = X_train.columns
+            X_train[self.target_variable] = Y_train
+            X_test[self.target_variable] = Y_test
+            scaler = MinMaxScaler()
+            scaler.fit(X_train)
+            X_train = scaler.transform(X_train)
+            X_test = scaler.transform(X_test)
+            X_train = pd.DataFrame(X_train, columns=X_train_cols)
+            X_test = pd.DataFrame(X_test, columns=X_train_cols)
+            Y_train = X_train[self.target_variable]
+            Y_test = X_test[self.target_variable]
+            if drop_target:
+                X_train = X_train.drop(self.target_variable, axis=1)
+                X_test = X_test.drop(self.target_variable, axis=1)
+            self.preprocess_decisions["scaler_with_target"] = scaler
+            self.preprocess_decisions["scaling_with_target_cols"] = X_train_cols
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def skewness_removal(self, overwrite_orig_col=False):
         """
@@ -3325,25 +3384,30 @@ class PreProcessing:
             algorithm = "target"
 
         if self.prediction_mode:
-            cat_columns = self.cat_columns_encoded
-            if algorithm == "target" and self.class_problem == "multiclass":
-                self.dataframe[cat_columns] = self.target_encode_multiclass(
-                    self.dataframe[cat_columns], mode="transform"
-                )
-            elif algorithm == "onehot":
-                enc = self.preprocess_decisions["category_encoders"][
-                    f"{algorithm}_all_cols"
-                ]
-                df_onehot = enc.transform(self.dataframe[cat_columns])
-                self.dataframe = self.dataframe.merge(
-                    df_onehot, left_index=True, right_index=True, how="left"
-                )
-                self.dataframe = self.dataframe.drop(cat_columns, axis=1)
-            else:
-                enc = self.preprocess_decisions["category_encoders"][
-                    f"{algorithm}_all_cols"
-                ]
-                self.dataframe[cat_columns] = enc.transform(self.dataframe[cat_columns])
+            try:
+                cat_columns = self.cat_columns_encoded
+                if algorithm == "target" and self.class_problem == "multiclass":
+                    self.dataframe[cat_columns] = self.target_encode_multiclass(
+                        self.dataframe[cat_columns], mode="transform"
+                    )
+                elif algorithm == "onehot":
+                    enc = self.preprocess_decisions["category_encoders"][
+                        f"{algorithm}_all_cols"
+                    ]
+                    df_onehot = enc.transform(self.dataframe[cat_columns])
+                    self.dataframe = self.dataframe.merge(
+                        df_onehot, left_index=True, right_index=True, how="left"
+                    )
+                    self.dataframe = self.dataframe.drop(cat_columns, axis=1)
+                else:
+                    enc = self.preprocess_decisions["category_encoders"][
+                        f"{algorithm}_all_cols"
+                    ]
+                    self.dataframe[cat_columns] = enc.transform(
+                        self.dataframe[cat_columns]
+                    )
+            except KeyError:  # is expected when no cat columns existed during training
+                pass
             logging.info("Finished category encoding.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe

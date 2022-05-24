@@ -1,10 +1,13 @@
 import logging
 
 from e2eml.full_processing.preprocessing_blueprints import PreprocessingBluePrint
+from e2eml.time_series.lstm_model import LstmModel
 from e2eml.time_series.time_series_models import UnivariateTimeSeriesModels
 
 
-class TimeSeriesBluePrint(UnivariateTimeSeriesModels, PreprocessingBluePrint):
+class TimeSeriesBluePrint(
+    UnivariateTimeSeriesModels, PreprocessingBluePrint, LstmModel
+):
     """
     Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
     if the predict_mode attribute is True.
@@ -43,7 +46,7 @@ class TimeSeriesBluePrint(UnivariateTimeSeriesModels, PreprocessingBluePrint):
     :return: Updates class attributes by its predictions.
     """
 
-    def ml_bp100_train_test_timeseries_full_processing_auto_arima(
+    def ml_bp100_univariate_timeseries_full_processing_auto_arima(
         self, df=None, n_forecast=1
     ):
         """
@@ -62,6 +65,27 @@ class TimeSeriesBluePrint(UnivariateTimeSeriesModels, PreprocessingBluePrint):
             self.auto_arima_train()
         algorithm = "auto_arima"
         self.auto_arima_predict(n_forecast=n_forecast)
+        self.regression_eval(algorithm=algorithm)
+        self.prediction_mode = True
+        logging.info("Finished blueprint.")
+
+    def ml_bp101_multivariate_timeseries_full_processing_lstm(self, df=None):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
+        :return: Updates class attributes by its predictions.
+        """
+        self.lstm_preprocessing_pipeline(df=df)
+        if self.prediction_mode:
+            pass
+        else:
+            self.lstm_train()
+        algorithm = "lstm"
+        self.lstm_predict()
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")

@@ -39,6 +39,29 @@ class TimeSeriesPreprocessing(cpu_preprocessing.PreProcessing):
             X_test[self.target_variable] = Y_test
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
+    def sliding_windows(self, data, seq_length=5):
+        x = []
+        y = []
+
+        for i in range(len(data) - seq_length - 1):
+            _x = data[i : (i + seq_length)]
+            _y = data[i + seq_length]
+            x.append(_x)
+            y.append(_y)
+
+        return np.array(x), np.array(y)
+
+    def create_sliding_windows(self):
+        x, y = self.sliding_windows(self.dataframe.to_numpy())
+        train_size = int(len(y) * 0.30)
+
+        X_train = np.array(x[0:train_size])
+        Y_train = np.array(y[0:train_size])
+
+        X_test = np.array(x[train_size : len(x)])
+        Y_test = np.array(y[train_size : len(y)])
+        self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
     def time_series_wrap_test_train_to_dict(
         self, X_train=None, X_test=None, Y_train=None, Y_test=None
     ):
