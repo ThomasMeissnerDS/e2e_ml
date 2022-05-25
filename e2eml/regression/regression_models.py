@@ -1329,16 +1329,13 @@ class RegressionModels(postprocessing.FullPipeline):
             print("Nb pred cols")
             print(len(self.dataframe.columns))
             print(self.dataframe.info())
-            predicted_probs = model.predict(self.dataframe.to_numpy())
+            predicted_probs = model.predict(self.dataframe.to_numpy(dtype="float32"))
             predicted_probs = self.target_skewness_handling(
                 preds_to_reconvert=predicted_probs, mode="revert"
             )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            Y_train = Y_train.values.reshape(-1, 1)
-            Y_test = Y_test.values.reshape(-1, 1)
-            X_train = X_train.to_numpy()
-            X_test = X_test.to_numpy()
+            X_test = X_test.to_numpy(dtype="float32")
             model = self.trained_models[f"{algorithm}"]
             predicted_probs = model.predict(X_test)
             predicted_probs = self.target_skewness_handling(

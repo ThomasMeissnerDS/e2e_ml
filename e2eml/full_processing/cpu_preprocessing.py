@@ -634,7 +634,7 @@ class PreProcessing:
             "double"  # 'lgbm', 'vowpal_wabbit', 'auto
         )
 
-        if self.class_problem == "regression":
+        if self.class_problem in ["regression", "time_series"]:
             skewness = datasource[self.target_variable].skew(axis=0, skipna=True)
             if skewness < -0.75 or skewness > 0.75:
                 self.target_is_skewed = True
@@ -1255,7 +1255,7 @@ class PreProcessing:
         self.labels_encoded = True
         if self.class_problem == "binary" or self.class_problem == "multiclass":
             target = target[self.target_variable].astype(int)
-        elif self.class_problem == "regression":
+        elif self.class_problem in ["regression", "time_series"]:
             target = target[self.target_variable].astype(float)
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         return target
@@ -1335,7 +1335,7 @@ class PreProcessing:
             )
 
     def scale_with_target(self, mode="fit", drop_target=False):
-        if mode == "reverse":
+        if mode == "reverse" and self.prediction_mode:
             scaler = self.preprocess_decisions["scaler_with_target"]
             scaler.inverse_transform(
                 self.dataframe[self.preprocess_decisions["scaling_with_target_cols"]]
@@ -1346,13 +1346,25 @@ class PreProcessing:
             )
             if drop_target:
                 self.dataframe = self.dataframe.drop(self.target_variable, axis=1)
+        elif mode == "reverse" and not self.prediction_mode:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            scaler = self.preprocess_decisions["scaler_with_target"]
+            scaler.inverse_transform(
+                X_test[self.preprocess_decisions["scaling_with_target_cols"]]
+            )
+            self.dataframe = pd.DataFrame(
+                X_test[self.preprocess_decisions["scaling_with_target_cols"]],
+                columns=self.preprocess_decisions["scaling_with_target_cols"],
+            )
+            if drop_target:
+                X_test = X_test.drop(self.target_variable, axis=1)
         elif mode == "fit" and not self.prediction_mode:
             from sklearn.preprocessing import MinMaxScaler
 
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train_cols = X_train.columns
             X_train[self.target_variable] = Y_train
             X_test[self.target_variable] = Y_test
+            X_train_cols = X_train.columns
             scaler = MinMaxScaler()
             scaler.fit(X_train)
             X_train = scaler.transform(X_train)
@@ -3418,7 +3430,7 @@ class PreProcessing:
             self.preprocess_decisions["category_encoders"] = {}
 
             if algorithm == "target":
-                if self.class_problem in ["binary", "regression"]:
+                if self.class_problem in ["binary", "regression", "time_series"]:
                     enc = TargetEncoder(cols=cat_columns)
                     X_train[cat_columns] = enc.fit_transform(
                         X_train[cat_columns], Y_train
@@ -3607,7 +3619,7 @@ class PreProcessing:
         if self.prediction_mode:
             pass
         else:
-            if self.class_problem == "regression":
+            if self.class_problem in ["regression", "time_series"]:
                 pass
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -3621,7 +3633,7 @@ class PreProcessing:
         if self.prediction_mode:
             pass
         else:
-            if self.class_problem == "regression":
+            if self.class_problem in ["regression", "time_series"]:
                 pass
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -3752,7 +3764,7 @@ class PreProcessing:
                 metric = make_scorer(matthews_corrcoef)
                 problem = "multiclass"
                 class_cats = Y_train_sample.unique()
-            elif self.class_problem == "regression":
+            elif self.class_problem in ["regression", "time_series"]:
                 metric = "neg_mean_squared_error"
                 problem = "regression"
 
@@ -4517,7 +4529,7 @@ class PreProcessing:
                     br = BoostARoota(clf=model)
                 elif self.feature_selection_backend == "xgboost":
                     br = BoostARoota(metric="mlogloss")
-            elif self.class_problem == "regression":
+            elif self.class_problem in ["regression", "time_series"]:
                 if self.feature_selection_backend == "lgbm":
                     model = lgb.LGBMRegressor(
                         random_state=self.global_random_state, objective="regression"
@@ -4607,7 +4619,7 @@ class PreProcessing:
                 metric = make_scorer(matthews_corrcoef)
             elif self.class_problem == "multiclass":
                 metric = make_scorer(matthews_corrcoef)
-            elif self.class_problem == "regression":
+            elif self.class_problem in ["regression", "time_series"]:
                 metric = "neg_mean_squared_error"
 
             data_size = len(X_train.index)
@@ -5135,7 +5147,7 @@ class PreProcessing:
                 else:
                     X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
-                    if self.class_problem == "regression":
+                    if self.class_problem in ["regression", "time_series"]:
                         X_train[self.target_variable] = Y_train
                         bins_needed = 0
                         for bins in [10, 9, 8, 7, 6, 5, 4, 3, 2]:
@@ -5501,7 +5513,7 @@ class PreProcessing:
                     with torch.no_grad():
                         pred = model.decode(z).cpu().numpy()
 
-                    if self.class_problem == "regression":
+                    if self.class_problem in ["regression", "time_series"]:
                         Y_train_class_only = Y_train_original.iloc[
                             np.where(Y_train == target_class)[0]
                         ]
@@ -5578,7 +5590,7 @@ class PreProcessing:
                 metric = make_scorer(matthews_corrcoef)
             elif self.class_problem == "multiclass":
                 metric = make_scorer(matthews_corrcoef)
-            elif self.class_problem == "regression":
+            elif self.class_problem in ["regression", "time_series"]:
                 metric = "neg_mean_squared_error"
 
             def objective(trial):
@@ -5743,7 +5755,7 @@ class PreProcessing:
                 metric = make_scorer(matthews_corrcoef)
             elif self.class_problem == "multiclass":
                 metric = make_scorer(matthews_corrcoef)
-            elif self.class_problem == "regression":
+            elif self.class_problem in ["regression", "time_series"]:
                 metric = "neg_mean_squared_error"
 
             def objective(trial):
@@ -6076,7 +6088,7 @@ class PreProcessing:
                 metric = make_scorer(matthews_corrcoef)
             elif self.class_problem == "multiclass":
                 metric = make_scorer(matthews_corrcoef)
-            elif self.class_problem == "regression":
+            elif self.class_problem in ["regression", "time_series"]:
                 metric = "neg_mean_squared_error"
 
             def objective(trial):

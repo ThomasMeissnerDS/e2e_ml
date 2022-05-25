@@ -152,15 +152,14 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
             self.category_encoding(algorithm=self.cat_encoder_model)
         if self.blueprint_step_selection_non_nlp["fill_nulls_static"]:
             self.fill_nulls(how="static")  # can only be here when "static"
-
-        if self.blueprint_step_selection_non_nlp["delete_outliers"]:
-            self.outlier_care(method="isolation", how="delete", threshold=-0.5)
         if self.blueprint_step_selection_non_nlp["remove_collinearity"]:
             self.remove_collinearity(threshold=0.8)
         if self.blueprint_step_selection_non_nlp["autoencoder_outlier_detection"]:
             self.autoencoder_based_outlier_detection()
         if self.blueprint_step_selection_non_nlp["outlier_care"]:
             self.outlier_care(method="isolation", how="append")
+        if self.blueprint_step_selection_non_nlp["delete_outliers"]:
+            self.outlier_care(method="isolation", how="delete", threshold=-0.5)
         if self.blueprint_step_selection_non_nlp["skewness_removal"]:
             self.skewness_removal(overwrite_orig_col=False)
         if self.blueprint_step_selection_non_nlp["automated_feature_transformation"]:
@@ -288,6 +287,39 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
         self.get_nb_features()
         if self.blueprint_step_selection_non_nlp["scale_data"]:
             self.scale_with_target(mode="fit")
+
+    def regression_for_time_series_preprocessing_pipeline(self, df):
+        logging.info("Start blueprint.")
+        self.runtime_warnings(warn_about="future_architecture_change")
+        self.check_prediction_mode(df)
+        if self.blueprint_step_selection_nlp_transformers["train_test_split"]:
+            self.train_test_split(how=self.train_split_type)
+        if self.blueprint_step_selection_non_nlp["automatic_type_detection_casting"]:
+            self.automatic_type_detection_casting()
+        if self.blueprint_step_selection_non_nlp["remove_duplicate_column_names"]:
+            self.remove_duplicate_column_names()
+        if self.blueprint_step_selection_non_nlp["reset_dataframe_index"]:
+            self.reset_dataframe_index()
+        if self.blueprint_step_selection_non_nlp["datetime_converter"]:
+            self.datetime_converter(datetime_handling="all")
+        if self.blueprint_step_selection_non_nlp["category_encoding"]:
+            self.category_encoding(algorithm=self.cat_encoder_model)
+        if self.blueprint_step_selection_non_nlp["fill_nulls_static"]:
+            self.fill_nulls(how="static")  # can only be here when "static"
+        if self.blueprint_step_selection_non_nlp["remove_collinearity"]:
+            self.remove_collinearity(threshold=0.8)
+        if self.blueprint_step_selection_non_nlp["autoencoder_outlier_detection"]:
+            self.autoencoder_based_outlier_detection()
+        if self.blueprint_step_selection_non_nlp["outlier_care"]:
+            self.outlier_care(method="isolation", how="append")
+        if self.blueprint_step_selection_non_nlp["automated_feature_selection"]:
+            self.automated_feature_selection(numeric_only=False)
+        if self.blueprint_step_selection_non_nlp["shap_based_feature_selection"]:
+            self.shap_based_feature_selection()
+        if self.blueprint_step_selection_non_nlp["sort_columns_alphabetically"]:
+            self.sort_columns_alphabetically()
+        if self.blueprint_step_selection_non_nlp["scale_data"]:
+            self.data_scaling()
 
     def nlp_transformer_preprocessing_pipeline(self, df):
         logging.info("Start blueprint.")

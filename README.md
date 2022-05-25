@@ -161,6 +161,12 @@ There are regression blueprints as well (in regression module):
 In the time series module we recently embedded blueprints as well:
 - ml_bp100_univariate_timeseries_full_processing_auto_arima()
 - ml_bp101_multivariate_timeseries_full_processing_lstm()
+- ml_bp102_multivariate_timeseries_full_processing_tabnet()
+
+Time series blueprints use less preprocessing on default and cannot use all options like
+classification and regression models. Non-time series algorithms like TabNet are different
+to their regression counterpart as cross validation is replaced by time series splits and
+data scaling covers the target variable as well.
 
 In ensembles algorithms can be chosen via the class attribute:
 test_class.special_blueprint_algorithms = {"ridge": True,
