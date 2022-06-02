@@ -490,6 +490,7 @@ class PreProcessing:
             "pred_batch_size": 32,
             "num_workers": 4,
             "epochs": self.transformer_epochs,
+            "nb_model_to_create": 1,
             "transformer_model_path": self.transformer_model_load_from_path,
             "model_save_states_path": {self.transformer_model_save_states_path},
             "keep_best_model_only": False,
@@ -508,6 +509,7 @@ class PreProcessing:
             "num_workers": 4,
             "learning_rate": 1e-3,
             "weight_decay": 1e-5,
+            "nb_model_to_create": 1,
             "architecture": "1d-cnn",
             "regression_loss": "mse",
             "epochs": self.tabular_nn_epochs,
@@ -580,6 +582,13 @@ class PreProcessing:
             "max_epochs": 1000,
         }
 
+        self.auto_arima_settings = {
+            "plot_adf_kpss": False,
+            "max_p": 3,
+            "max_d": 3,
+            "max_q": 3,
+        }
+
         self.hyperparameter_tuning_rounds = {
             "xgboost": 100,
             "lgbm": 500,
@@ -600,7 +609,7 @@ class PreProcessing:
             "autoencoder_based_oversampling": 200,
             "final_kernel_pca_dimensionality_reduction": 50,
             "final_pca_dimensionality_reduction": 50,
-            "auto_arima": 50,
+            "auto_arima": 4,
         }
 
         self.hyperparameter_tuning_max_runtime_secs = {
@@ -1166,6 +1175,20 @@ class PreProcessing:
             X_test = self.reduce_mem_usage(X_test)
             logging.info("Finished reducing memory footprint.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def get_iloc_cat_columns(self):
+        logging.info("Started getting cat column indices.")
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            cat_columns = X_train.select_dtypes(include=["object"]).columns.to_list()
+            cat_col_map = {}
+            for col in cat_columns:
+                idx = X_train.columns.get_loc(col)
+                cat_col_map[col] = idx
+            self.preprocess_decisions["cat_columns_idx_map"] = cat_col_map
+            logging.info("Finished getting cat column indices.")
 
     def sort_columns_alphabetically(self):
         """

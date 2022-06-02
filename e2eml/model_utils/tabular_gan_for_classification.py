@@ -143,6 +143,7 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
                 self.dropout2 = nn.Dropout(dropout_output)
                 dense2 = nn.Linear(output_size, output_dim, bias=False)
                 self.dense2 = nn.utils.weight_norm(dense2)
+                self.silu = nn.SiLU()
 
                 # self.loss = nn.BCEWithLogitsLoss()
 
@@ -180,6 +181,8 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
                 x = self.dropout2(x)
                 x = self.dense2(x)
 
+                # x = self.silu(x)
+
                 return x
 
             def predict(self, x):
@@ -215,6 +218,8 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
                 x = self.batch_norm2(x)
                 x = self.dropout2(x)
                 x = self.dense2(x)
+
+                # x = self.silu(x)
 
                 return x
 

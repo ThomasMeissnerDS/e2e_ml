@@ -91,18 +91,19 @@ class TimeSeriesPreprocessing(cpu_preprocessing.PreProcessing):
         :return:
         """
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        # Determing rolling statistics
-        rolmean = X_train.rolling(window=window).mean()
-        rolstd = X_train.rolling(window=window).std()
-        # Plot rolling statistics:
-        plt.plot(X_train, color="blue", label="Original")
-        plt.plot(rolmean, color="red", label="Rolling Mean")
-        plt.plot(rolstd, color="black", label="Rolling Std")
-        plt.legend(loc="best")
-        plt.title("Rolling Mean & Standard Deviation")
-        plt.show()
-        # Perform Dickey-Fuller test:
-        print("Results of Dickey-Fuller Test:")
+        if self.auto_arima_settings["plot_adf_kpss"]:
+            # Determing rolling statistics
+            rolmean = X_train.rolling(window=window).mean()
+            rolstd = X_train.rolling(window=window).std()
+            # Plot rolling statistics:
+            plt.plot(X_train, color="blue", label="Original")
+            plt.plot(rolmean, color="red", label="Rolling Mean")
+            plt.plot(rolstd, color="black", label="Rolling Std")
+            plt.legend(loc="best")
+            plt.title("Rolling Mean & Standard Deviation")
+            plt.show()
+            # Perform Dickey-Fuller test:
+            print("Results of Dickey-Fuller Test:")
         dftest = adfuller(X_train, autolag="AIC")
         dfoutput = pd.Series(
             dftest[0:4],
@@ -115,7 +116,8 @@ class TimeSeriesPreprocessing(cpu_preprocessing.PreProcessing):
         )
         for key, value in dftest[4].items():
             dfoutput["Critical Value (%s)" % key] = value
-        print(dfoutput)
+        if self.auto_arima_settings["plot_adf_kpss"]:
+            print(dfoutput)
         if dfoutput["p-value"] >= 0.5:
             self.preprocess_decisions["adf_test_is_stationary"] = False
         else:
@@ -138,7 +140,6 @@ class TimeSeriesPreprocessing(cpu_preprocessing.PreProcessing):
         :return:
         """
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-        print("Results of KPSS Test:")
         try:
             kpsstest = kpss(X_train.values, regression="c")
             kpss_output = pd.Series(
@@ -146,7 +147,10 @@ class TimeSeriesPreprocessing(cpu_preprocessing.PreProcessing):
             )
             for key, value in kpsstest[3].items():
                 kpss_output["Critical Value (%s)" % key] = value
-            print(kpss_output)
+
+            if self.auto_arima_settings["plot_adf_kpss"]:
+                print("Results of KPSS Test:")
+                print(kpss_output)
             if kpss_output["p-value"] < 0.5:
                 self.preprocess_decisions["kpss_test_is_stationary"] = False
             else:
@@ -154,7 +158,8 @@ class TimeSeriesPreprocessing(cpu_preprocessing.PreProcessing):
         except ValueError:
             kpss_output = {}
             kpss_output["p-value"] = "nan"
-            print("KPSS test failed. Use ADF results only.")
+            if self.auto_arima_settings["plot_adf_kpss"]:
+                print("KPSS test failed. Use ADF results only.")
             self.preprocess_decisions[
                 "kpss_test_is_stationary"
             ] = self.preprocess_decisions["adf_test_is_stationary"]
@@ -182,7 +187,10 @@ class TimeSeriesPreprocessing(cpu_preprocessing.PreProcessing):
                 self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
-                if self.preprocess_decisions["arima_nb_differentiations"] > 3:
+                if (
+                    self.preprocess_decisions["arima_nb_differentiations"]
+                    > self.auto_arima_settings["max_d"]
+                ):
                     X_train = X_train_copy
                     X_train = np.log1p(X_train)
                     X_train[np.isfinite(X_train) is False] = 0

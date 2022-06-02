@@ -309,13 +309,16 @@ For data bigger than 100k rows it is possible to limit the amount of data for va
 - test_class.hyperparameter_tuning_sample_size = 100000 # for model hyperparameter optimization
 - test_class.brute_force_selection_sample_size = 15000 # for an experimental feature selection
 
-For binary classification a sample size of 100k datapoints is sufficient in most cases. Hyperparameter tuning sample size can be much less,
+For binary classification a sample size of 100k datapoints is sufficient in most cases.
+Hyperparameter tuning sample size can be much less,
 depending on class imbalance.
 
-For multiclass we recommend to start with small samples as algorithms like Xgboost and LGBM will easily grow in memory consumption
+For multiclass we recommend to start with small samples as algorithms like Xgboost and LGBM will
+easily grow in memory consumption
 with growing number of classes. LGBM focal or neural network will be good starts here.
 
-Whenever classes are imbalanced (binary & multiclass) we recommend to use the preprocessing step "autoencoder_based_oversampling".
+Whenever classes are imbalanced (binary & multiclass) we recommend to use the preprocessing step
+"autoencoder_based_oversampling".
 """
 # After running the blueprint the pipeline is done. I can be saved with:
 save_to_production(test_class, file_name='automl_instance')
@@ -413,6 +416,11 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 * 3.20.00
   * Added Autoarima for univariate time series predictions
   * Added LSTM for uni- & multivariate time series prediction
+  * Autotuned NNs, LSTM and NLP transformers got an extra setting to set how
+    many models shall be created
+  * All tabular NNs (except NLPs) store predicted probabilities now
+    (binary classifiers will blend them when
+    creation of multiple modls has ben specified)
 * 3.02.00
   * Refined GAN architectures
   * Categorical encoding can be chosen via the cat_encoder_model attribute now

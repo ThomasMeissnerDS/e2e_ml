@@ -64,9 +64,9 @@ class UnivariateTimeSeriesModels(postprocessing.FullPipeline):
                     i_term = 0
 
                 param = {
-                    "p": trial.suggest_int("p", 1, 24),
+                    "p": trial.suggest_int("p", 1, self.auto_arima_settings["max_p"]),
                     "i": i_term,
-                    "q": trial.suggest_int("q", 1, 24),
+                    "q": trial.suggest_int("q", 1, self.auto_arima_settings["max_q"]),
                 }
 
                 mean_abs_errors = []

@@ -499,7 +499,7 @@ class NlpModel(
             bestscores = []
             bestscores.append(bestscore)
 
-            for fold in range(1, 5):
+            for fold in range(self.transformer_settings["nb_model_to_create"]):
 
                 self.reset_test_train_index()
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()

@@ -33,7 +33,7 @@ from sklearn.linear_model import (
     RidgeClassifier,
     SGDClassifier,
 )
-from sklearn.metrics import make_scorer, matthews_corrcoef
+from sklearn.metrics import make_scorer, matthews_corrcoef, roc_auc_score
 from sklearn.model_selection import cross_val_score
 from sklearn.multiclass import _ConstantPredictor
 from sklearn.naive_bayes import MultinomialNB
@@ -67,6 +67,16 @@ class Matthews(Metric):
         except Exception:
             matthews = 0
         return matthews
+
+
+class Gini(Metric):
+    def __init__(self):
+        self._name = "gini"
+        self._maximize = True
+
+    def __call__(self, y_true, y_score):
+        auc = roc_auc_score(y_true, y_score[:, 1])
+        return max(2 * auc - 1, 0.0)
 
 
 class RidgeClassifierWithProba(RidgeClassifier):
@@ -233,6 +243,7 @@ class OneVsRestLightGBMWithCustomizedLoss:
 class ClassificationModels(
     postprocessing.FullPipeline,
     Matthews,
+    Gini,
     FocalLoss,
     OneVsRestLightGBMWithCustomizedLoss,
 ):

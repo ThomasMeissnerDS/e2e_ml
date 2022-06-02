@@ -179,10 +179,13 @@ class ClassificationNNModel(
         if type == "ann":
 
             class MultipleClassification(nn.Module):
-                def __init__(self, num_features, num_classes, dropout=0.3):
+                def __init__(
+                    self, num_features, num_classes, dropout=0.3, mode="binary"
+                ):
                     super(MultipleClassification, self).__init__()
 
                     self.dropout = dropout
+                    self.mode = mode
 
                     self.layer_0 = nn.Linear(num_features, 4096)
                     self.batch_norm_0 = nn.BatchNorm1d(4096)
@@ -221,6 +224,7 @@ class ClassificationNNModel(
                     self.layer_out = nn.Linear(16, num_classes)
 
                     self.silu = nn.SiLU()
+                    self.softmax = nn.Softmax(dim=1)
 
                 def forward(self, inputs):
                     x = self.silu(self.layer_0(inputs))
@@ -248,6 +252,8 @@ class ClassificationNNModel(
                     x = self.silu(self.layer_9(x))
                     x = self.batch_norm_9(x)
                     x = self.layer_out(x)
+                    if self.mode == "binary":
+                        x = self.softmax(x)
                     return x
 
                 def predict(self, inputs):
@@ -276,12 +282,15 @@ class ClassificationNNModel(
                     x = self.silu(self.layer_9(x))
                     x = self.batch_norm_9(x)
                     x = self.layer_out(x)
+                    if self.mode == "binary":
+                        x = self.softmax(x)
                     return x
 
             model = MultipleClassification(
                 num_features=num_features,
                 num_classes=num_classes,
                 dropout=self.autotuned_nn_settings["drop_out"],
+                mode=self.class_problem,
             )
             return model
 
@@ -299,6 +308,7 @@ class ClassificationNNModel(
                     dropout_input=0.2,
                     dropout_hidden=0.2,
                     dropout_output=0.2,
+                    mode="binary",
                 ):
                     super().__init__()
 
@@ -307,6 +317,7 @@ class ClassificationNNModel(
                     sign_size2 = sign_size // 2
                     output_size = (sign_size // 4) * cha_hidden
 
+                    self.mode = mode
                     self.hidden_size = hidden_size
                     self.cha_input = cha_input
                     self.cha_hidden = cha_hidden
@@ -385,6 +396,7 @@ class ClassificationNNModel(
                     self.dropout2 = nn.Dropout(dropout_output)
                     dense2 = nn.Linear(output_size, output_dim, bias=False)
                     self.dense2 = nn.utils.weight_norm(dense2)
+                    self.softmax = nn.Softmax(dim=1)
 
                     # self.loss = nn.BCEWithLogitsLoss()
 
@@ -421,6 +433,8 @@ class ClassificationNNModel(
                     x = self.batch_norm2(x)
                     x = self.dropout2(x)
                     x = self.dense2(x)
+                    if self.mode == "binary":
+                        x = self.softmax(x)
 
                     return x
 
@@ -457,6 +471,8 @@ class ClassificationNNModel(
                     x = self.batch_norm2(x)
                     x = self.dropout2(x)
                     x = self.dense2(x)
+                    if self.mode == "binary":
+                        x = self.softmax(x)
 
                     return x
 
@@ -466,27 +482,32 @@ class ClassificationNNModel(
                 dropout_input=self.autotuned_nn_settings["drop_out"],
                 dropout_hidden=self.autotuned_nn_settings["drop_out"],
                 dropout_output=self.autotuned_nn_settings["drop_out"],
+                mode=self.class_problem,
             )
             return model
 
         else:
 
-            class MultipleRegression(nn.Module):
-                def __init__(self, num_features, num_classes):
-                    super(MultipleRegression, self).__init__()
+            class SimpleANN(nn.Module):
+                def __init__(self, num_features, num_classes, mode="binary"):
+                    super(SimpleANN, self).__init__()
 
                     self.layer_1 = nn.Linear(num_features, 64)
                     self.layer_2 = nn.Linear(64, 128)
                     self.layer_3 = nn.Linear(128, 64)
                     self.layer_out = nn.Linear(64, num_classes)
 
+                    self.mode = mode
                     self.relu = nn.ReLU()
+                    self.softmax = nn.Softmax(dim=1)
 
                 def forward(self, inputs):
                     x = self.relu(self.layer_1(inputs))
                     x = self.relu(self.layer_2(x))
                     x = self.relu(self.layer_3(x))
                     x = self.layer_out(x)
+                    if self.mode == "binary":
+                        x = self.softmax(x)
                     return x
 
                 def predict(self, test_inputs):
@@ -494,10 +515,14 @@ class ClassificationNNModel(
                     x = self.relu(self.layer_2(x))
                     x = self.relu(self.layer_3(x))
                     x = self.layer_out(x)
+                    if self.mode == "binary":
+                        x = self.softmax(x)
                     return x
 
-            model = MultipleRegression(
-                num_features=num_features, num_classes=num_classes
+            model = SimpleANN(
+                num_features=num_features,
+                num_classes=num_classes,
+                mode=self.class_problem,
             )
             return model
 
@@ -574,13 +599,13 @@ class ClassificationNNModel(
             # Combine dataloader minutes
 
         allpreds = np.concatenate(allpreds, axis=0)
-        allpreds = np.asarray([np.argmax(line) for line in allpreds])
+        allpreds_classes = np.asarray([np.argmax(line) for line in allpreds])
         alltargets = np.concatenate(alltargets, axis=0)
 
         # I don't use loss, but I collect it
         losses = np.mean(losses)
         # Score with rmse
-        train_rme_loss = matthews_corrcoef(alltargets, allpreds)
+        train_rme_loss = matthews_corrcoef(alltargets, allpreds_classes)
 
         return losses, train_rme_loss
 
@@ -611,15 +636,15 @@ class ClassificationNNModel(
                 # Combine dataloader minutes
 
         allpreds = np.concatenate(allpreds, axis=0)
-        allpreds = np.asarray([np.argmax(line) for line in allpreds])
+        allpreds_classes = np.asarray([np.argmax(line) for line in allpreds])
         alltargets = np.concatenate(alltargets, axis=0)
 
         # I don't use loss, but I collect it
         losses = np.mean(losses)
         # Score with rmse
-        valid_rme_loss = matthews_corrcoef(alltargets, allpreds)
+        valid_rme_loss = matthews_corrcoef(alltargets, allpreds_classes)
 
-        return allpreds, losses, valid_rme_loss
+        return allpreds_classes, losses, valid_rme_loss
 
     def nn_predicting(self, pred_dataloader, model, pathes):
         logging.info("Start Neural network prediction loop.")
@@ -645,18 +670,25 @@ class ClassificationNNModel(
                     preds.append(y_pred_pred.detach().cpu().numpy())
 
                 preds = np.concatenate(preds)
+                pred_probas = np.asarray([line[1] for line in preds])
                 pred_classes = np.asarray([np.argmax(line) for line in preds])
 
-                if self.class_problem in ["binary", "multiclass"]:
-                    pred_probas = np.asarray([line[1] for line in preds])
+                if self.class_problem in ["multiclass"]:
+                    pred_probas = pred_classes
 
                 if self.prediction_mode:
-                    self.dataframe[f"preds_model{model_no}"] = pred_classes
+                    self.dataframe[f"preds_model{model_no}"] = pred_probas
                 else:
                     X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-                    X_test[f"preds_model{model_no}"] = pred_classes
+                    X_test[f"preds_model{model_no}"] = pred_probas
                 mode_cols.append(f"preds_model{model_no}")
-                self.predicted_probs[f"{algorithm}_{model_no}"] = pred_probas
+
+                if self.class_problem == "binary":
+                    self.predicted_probs[f"{algorithm}_{model_no}"] = preds
+                    self.predicted_classes[f"{algorithm}_{model_no}"] = pred_classes
+                else:
+                    self.predicted_probs[f"{algorithm}_{model_no}"] = pred_classes
+                    self.predicted_classes[f"{algorithm}_{model_no}"] = pred_classes
 
                 allpreds.append(preds)
                 model_no += 1
@@ -744,7 +776,7 @@ class ClassificationNNModel(
             bestscores = []
             bestscores.append(bestscore)
 
-            for fold in range(1, 5):
+            for fold in range(self.autotuned_nn_settings["nb_model_to_create"]):
 
                 self.reset_test_train_index(drop_target=True)
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -853,8 +885,24 @@ class ClassificationNNModel(
         allpreds, mode_cols = self.nn_predicting(pred_dataloader, model, pthes)
 
         if self.prediction_mode:
-            self.dataframe["majority_class"] = self.dataframe[mode_cols].mode(axis=1)[0]
-            self.predicted_classes["neural_network"] = self.dataframe["majority_class"]
+            if self.class_problem == "binary":
+                self.dataframe["probas_mean"] = self.dataframe[mode_cols].mean(axis=1)
+                pred_classes = self.dataframe["probas_mean"].values > 0.5
+                self.dataframe["majority_class"] = pred_classes
+                self.predicted_probs["neural_network"] = self.dataframe["probas_mean"]
+                self.predicted_classes["neural_network"] = self.dataframe[
+                    "majority_class"
+                ]
+            else:
+                self.dataframe["majority_class"] = self.dataframe[mode_cols].mode(
+                    axis=1
+                )[0]
+                self.predicted_probs["neural_network"] = self.dataframe[
+                    "majority_class"
+                ]
+                self.predicted_classes["neural_network"] = self.dataframe[
+                    "majority_class"
+                ]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
@@ -885,5 +933,13 @@ class ClassificationNNModel(
             else:
                 pass
 
-            X_test["majority_class"] = X_test[mode_cols].mode(axis=1)[0]
-            self.predicted_classes["neural_network"] = X_test["majority_class"]
+            if self.class_problem == "binary":
+                X_test["probas_mean"] = X_test[mode_cols].mean(axis=1)
+                pred_classes = X_test["probas_mean"].values > 0.5
+                X_test["majority_class"] = pred_classes
+                self.predicted_probs["neural_network"] = X_test["probas_mean"]
+                self.predicted_classes["neural_network"] = X_test["majority_class"]
+            else:
+                X_test["majority_class"] = X_test[mode_cols].mode(axis=1)[0]
+                self.predicted_probs["neural_network"] = X_test["majority_class"]
+                self.predicted_classes["neural_network"] = X_test["majority_class"]
