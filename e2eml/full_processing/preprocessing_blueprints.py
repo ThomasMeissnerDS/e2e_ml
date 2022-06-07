@@ -152,6 +152,8 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
             self.category_encoding(algorithm=self.cat_encoder_model)
         if self.blueprint_step_selection_non_nlp["fill_nulls_static"]:
             self.fill_nulls(how="static")  # can only be here when "static"
+        if self.blueprint_step_selection_non_nlp["skewness_removal"]:
+            self.skewness_removal(overwrite_orig_col=False)
         if self.blueprint_step_selection_non_nlp["remove_collinearity"]:
             self.remove_collinearity(threshold=0.8)
         if self.blueprint_step_selection_non_nlp["autoencoder_outlier_detection"]:
@@ -160,8 +162,7 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
             self.outlier_care(method="isolation", how="append")
         if self.blueprint_step_selection_non_nlp["delete_outliers"]:
             self.outlier_care(method="isolation", how="delete", threshold=-0.5)
-        if self.blueprint_step_selection_non_nlp["skewness_removal"]:
-            self.skewness_removal(overwrite_orig_col=False)
+
         if self.blueprint_step_selection_non_nlp["automated_feature_transformation"]:
             self.automated_feature_transformation()
         if self.blueprint_step_selection_non_nlp["clustering_as_a_feature_dbscan"]:

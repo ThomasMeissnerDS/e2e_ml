@@ -181,7 +181,7 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
                 x = self.dropout2(x)
                 x = self.dense2(x)
 
-                # x = self.silu(x)
+                x = self.silu(x)
 
                 return x
 
@@ -219,7 +219,7 @@ class TabularGeneratorClassification(FullPipeline, GanDataset):
                 x = self.dropout2(x)
                 x = self.dense2(x)
 
-                # x = self.silu(x)
+                x = self.silu(x)
 
                 return x
 

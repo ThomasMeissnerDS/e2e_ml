@@ -11,7 +11,11 @@ from pytorch_tabnet.pretraining import TabNetPretrainer
 from pytorch_tabnet.tab_model import TabNetRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import TimeSeriesSplit
-from statsmodels.tsa.arima.model import ARIMA
+
+try:
+    from statsmodels.tsa.arima.model import ARIMA
+except ModuleNotFoundError:
+    from statsmodels.tsa.arima_model import ARIMA
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from e2eml.full_processing import postprocessing

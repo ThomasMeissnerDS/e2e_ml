@@ -525,7 +525,7 @@ class PreProcessing:
             "generator_dropout_rate": 0.2,
             "discriminator_dropout_rate": 0.2,
             "max_epochs": 100,
-            "nb_synthetic_rows_to_create": 1000000,
+            "nb_synthetic_rows_to_create": 10000,
             "concat_to_original_data": False,
             "discriminator_extra_training_rounds": 5,
             "early_stopping_rounds": 5,

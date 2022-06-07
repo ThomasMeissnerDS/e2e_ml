@@ -413,7 +413,7 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
-* 3.20.00
+* 4.00.10
   * Added Autoarima for univariate time series predictions
   * Added LSTM for uni- & multivariate time series prediction
   * Autotuned NNs, LSTM and NLP transformers got an extra setting to set how
@@ -421,6 +421,7 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
   * All tabular NNs (except NLPs) store predicted probabilities now
     (binary classifiers will blend them when
     creation of multiple modls has ben specified)
+  * Optimized preprocessing order
 * 3.02.00
   * Refined GAN architectures
   * Categorical encoding can be chosen via the cat_encoder_model attribute now

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "e2eml"
-version = "3.20.00"
+version = "4.00.00"
 description = "An end-to-end solution for automl"
 authors = ["Thomas Meißner <meissnercorporation@gmx.de>"]
 license = "GPL-3.0-only"
