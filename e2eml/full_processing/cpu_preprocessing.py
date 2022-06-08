@@ -1360,11 +1360,11 @@ class PreProcessing:
     def scale_with_target(self, mode="fit", drop_target=False):
         if mode == "reverse" and self.prediction_mode:
             scaler = self.preprocess_decisions["scaler_with_target"]
-            scaler.inverse_transform(
+            self.dataframe = scaler.inverse_transform(
                 self.dataframe[self.preprocess_decisions["scaling_with_target_cols"]]
             )
             self.dataframe = pd.DataFrame(
-                self.dataframe[self.preprocess_decisions["scaling_with_target_cols"]],
+                self.dataframe,
                 columns=self.preprocess_decisions["scaling_with_target_cols"],
             )
             if drop_target:
@@ -1372,15 +1372,16 @@ class PreProcessing:
         elif mode == "reverse" and not self.prediction_mode:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             scaler = self.preprocess_decisions["scaler_with_target"]
-            scaler.inverse_transform(
+            X_test = scaler.inverse_transform(
                 X_test[self.preprocess_decisions["scaling_with_target_cols"]]
             )
             self.dataframe = pd.DataFrame(
-                X_test[self.preprocess_decisions["scaling_with_target_cols"]],
+                X_test,
                 columns=self.preprocess_decisions["scaling_with_target_cols"],
             )
             if drop_target:
                 X_test = X_test.drop(self.target_variable, axis=1)
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         elif mode == "fit" and not self.prediction_mode:
             from sklearn.preprocessing import MinMaxScaler
 
