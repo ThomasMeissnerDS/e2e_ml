@@ -297,6 +297,7 @@ class PreProcessing:
             "data_binning": True,
             "regex_clean_text_data": False,
             "handle_target_skewness": False,
+            "add_is_weekend_flag": True,
             "datetime_converter": True,
             "pos_tagging_pca": False,  # slow with many categories
             "append_text_sentiment_score": False,
@@ -350,6 +351,7 @@ class PreProcessing:
             "holistic_null_filling": True,  # slow
             "iterative_null_imputation": True,
             "fill_infinite_values": True,
+            "add_is_weekend_flag": True,
             "datetime_converter": True,
             "pos_tagging_pca": True,  # slow with many categories
             "append_text_sentiment_score": True,
@@ -540,11 +542,11 @@ class PreProcessing:
             "layer_dim": 2,
             "hidden_dim": 256,
             "num_workers": 4,
-            "learning_rate": 1e-3,
+            "learning_rate": 0.01,
             "weight_decay": 1e-5,
             "seq_len": 5,
             "regression_loss": "mse",
-            "epochs": 1000,
+            "epochs": 100,
             "nb_model_to_create": 1,
             "transformer_model_path": self.tabular_nn_model_load_from_path,
             "model_save_states_path": {self.tabular_nn_model_save_states_path},
@@ -584,9 +586,9 @@ class PreProcessing:
 
         self.auto_arima_settings = {
             "plot_adf_kpss": False,
-            "max_p": 3,
+            "max_p": 20,
             "max_d": 3,
-            "max_q": 3,
+            "max_q": 20,
         }
 
         self.hyperparameter_tuning_rounds = {
@@ -2968,6 +2970,21 @@ class PreProcessing:
             logging.info("Finished outlier handling.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.iqr_remover(threshold=1.5)
+
+    def add_weekend_flag(self):
+        if self.prediction_mode:
+            for key in self.detected_col_types:
+                if self.detected_col_types[key] == "datetime[ns]":
+                    self.dataframe[f"{key} is weekend"] = (
+                        self.dataframe[key].dt.dayofweek > 4
+                    )
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            for key in self.detected_col_types:
+                if self.detected_col_types[key] == "datetime[ns]":
+                    X_train[f"{key} is weekend"] = X_train[key].dt.dayofweek > 4
+                    X_test[f"{key} is weekend"] = X_test[key].dt.dayofweek > 4
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def datetime_converter(  # noqa: C901
         self, datetime_handling="all", force_conversion=False

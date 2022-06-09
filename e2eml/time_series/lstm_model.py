@@ -25,8 +25,10 @@ class TimeSeriesDataset(Dataset):
         self.features = features
         self.target = target
         self.sequence_length = sequence_length
-        self.y = torch.from_numpy(dataframe[target].to_numpy()).float()
-        self.X = torch.from_numpy(dataframe[features].to_numpy()).float()
+        self.y = torch.from_numpy(dataframe[target].to_numpy(dtype=np.float32)).float()
+        self.X = torch.from_numpy(
+            dataframe[features].to_numpy(dtype=np.float32)
+        ).float()
 
     def __len__(self):
         return self.X.shape[0]

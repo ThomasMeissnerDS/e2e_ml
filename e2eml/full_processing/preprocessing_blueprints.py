@@ -115,6 +115,8 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
             self.regex_clean_text_data()
         if self.blueprint_step_selection_non_nlp["handle_target_skewness"]:
             self.target_skewness_handling(mode="fit")
+        if self.blueprint_step_selection_non_nlp["add_is_weekend_flag"]:
+            self.add_weekend_flag()
         # self.fill_nulls(how='static') # can only be here when "static"
         if self.blueprint_step_selection_non_nlp["datetime_converter"]:
             self.datetime_converter(datetime_handling="all")
@@ -278,6 +280,10 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
             self.remove_duplicate_column_names()
         if self.blueprint_step_selection_non_nlp["reset_dataframe_index"]:
             self.reset_dataframe_index()
+        if self.blueprint_step_selection_non_nlp["handle_target_skewness"]:
+            self.target_skewness_handling(mode="fit")
+        if self.blueprint_step_selection_non_nlp["add_is_weekend_flag"]:
+            self.add_weekend_flag()
         if self.blueprint_step_selection_non_nlp["datetime_converter"]:
             self.datetime_converter(datetime_handling="all")
         if self.blueprint_step_selection_non_nlp["category_encoding"]:
@@ -301,6 +307,8 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
             self.remove_duplicate_column_names()
         if self.blueprint_step_selection_non_nlp["reset_dataframe_index"]:
             self.reset_dataframe_index()
+        if self.blueprint_step_selection_non_nlp["add_is_weekend_flag"]:
+            self.add_weekend_flag()
         if self.blueprint_step_selection_non_nlp["datetime_converter"]:
             self.datetime_converter(datetime_handling="all")
         if self.blueprint_step_selection_non_nlp["category_encoding"]:

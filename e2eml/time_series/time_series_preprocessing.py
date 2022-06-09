@@ -62,6 +62,22 @@ class TimeSeriesPreprocessing(cpu_preprocessing.PreProcessing):
         Y_test = np.array(y[train_size : len(y)])
         self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
+    def add_rolling_feature(self, dataframe, col_list, marker_text, time_window):
+        """Takes a dataframe, column to use and a time window to create a rolling mean.
+        :params:
+        dataframe: the dataframe to use the feature from
+        col:_name: the column to be used for the rolling feature
+        col_list: list of calls to loop through
+        marker_text: unique marker to prevent join attachments like x & y
+        time_window: number of days to roll over
+        returns: the modified dataframe
+        """
+        for columns in col_list:
+            dataframe[f"rolling_avg_{columns}_{time_window}D_{marker_text}"] = (
+                dataframe[columns].rolling(window=time_window).mean()
+            )
+        return dataframe
+
     def time_series_wrap_test_train_to_dict(
         self, X_train=None, X_test=None, Y_train=None, Y_test=None
     ):

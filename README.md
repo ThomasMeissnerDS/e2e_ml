@@ -413,7 +413,7 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
-* 4.00.10
+* 4.00.30
   * Added Autoarima for univariate time series predictions
   * Added LSTM for uni- & multivariate time series prediction
   * Autotuned NNs, LSTM and NLP transformers got an extra setting to set how
