@@ -253,7 +253,7 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
         if self.blueprint_step_selection_non_nlp["use_tabular_gan"]:
             self.train_tabular_gans()
 
-    def arima_preprocessing_pipeline(self, df):
+    def arima_preprocessing_pipeline(self):
         logging.info("Start blueprint.")
         self.runtime_warnings(warn_about="future_architecture_change")
 
@@ -264,6 +264,19 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
             self.remove_duplicate_column_names()
         if self.blueprint_step_selection_non_nlp["reset_dataframe_index"]:
             self.reset_dataframe_index()
+        self.reattach_targets()
+        self.keep_target_only()
+        self.make_stationary()
+
+    def holt_winters_preprocessing_pipeline(self):
+        logging.info("Start blueprint.")
+        self.runtime_warnings(warn_about="future_architecture_change")
+
+        self.train_test_split(how=self.train_split_type)
+        if self.blueprint_step_selection_non_nlp["automatic_type_detection_casting"]:
+            self.automatic_type_detection_casting()
+        if self.blueprint_step_selection_non_nlp["remove_duplicate_column_names"]:
+            self.remove_duplicate_column_names()
         self.reattach_targets()
         self.keep_target_only()
         self.make_stationary()
@@ -280,6 +293,8 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
             self.remove_duplicate_column_names()
         if self.blueprint_step_selection_non_nlp["reset_dataframe_index"]:
             self.reset_dataframe_index()
+        if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
+            self.delete_high_null_cols(threshold=0.05)
         if self.blueprint_step_selection_non_nlp["handle_target_skewness"]:
             self.target_skewness_handling(mode="fit")
         if self.blueprint_step_selection_non_nlp["add_is_weekend_flag"]:

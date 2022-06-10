@@ -552,6 +552,26 @@ class PreProcessing:
             "model_save_states_path": {self.tabular_nn_model_save_states_path},
             "keep_best_model_only": False,
         }
+
+        self.rnn_settings = {
+            "train_batch_size": 32,
+            "test_batch_size": 32,
+            "pred_batch_size": 32,
+            "drop_out": 0.2,
+            "layer_dim": 2,
+            "hidden_dim": 256,
+            "num_workers": 4,
+            "learning_rate": 0.01,
+            "weight_decay": 1e-5,
+            "seq_len": 5,
+            "regression_loss": "mse",
+            "epochs": 100,
+            "nb_model_to_create": 1,
+            "transformer_model_path": self.tabular_nn_model_load_from_path,
+            "model_save_states_path": {self.tabular_nn_model_save_states_path},
+            "keep_best_model_only": False,
+        }
+
         self.deesc_settings = {
             "learning_rate": 0.3,
             "random_state": self.global_random_state,
@@ -611,7 +631,8 @@ class PreProcessing:
             "autoencoder_based_oversampling": 200,
             "final_kernel_pca_dimensionality_reduction": 50,
             "final_pca_dimensionality_reduction": 50,
-            "auto_arima": 4,
+            "auto_arima": 10,
+            "holt_winters": 50,
         }
 
         self.hyperparameter_tuning_max_runtime_secs = {
@@ -635,6 +656,7 @@ class PreProcessing:
             "final_kernel_pca_dimensionality_reduction": 4 * 60 * 60,
             "final_pca_dimensionality_reduction": 2 * 60 * 60,
             "auto_arima": 2 * 60 * 60,
+            "holt_winters": 2 * 60 * 60,
         }
 
         self.feature_selection_sample_size = 100000
@@ -1362,7 +1384,9 @@ class PreProcessing:
     def scale_with_target(self, mode="fit", drop_target=False):
         if mode == "reverse" and self.prediction_mode:
             scaler = self.preprocess_decisions["scaler_with_target"]
-            self.dataframe = scaler.inverse_transform(
+            self.dataframe[
+                self.preprocess_decisions["scaling_with_target_cols"]
+            ] = scaler.inverse_transform(
                 self.dataframe[self.preprocess_decisions["scaling_with_target_cols"]]
             )
             self.dataframe = pd.DataFrame(
@@ -1374,7 +1398,9 @@ class PreProcessing:
         elif mode == "reverse" and not self.prediction_mode:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             scaler = self.preprocess_decisions["scaler_with_target"]
-            X_test = scaler.inverse_transform(
+            X_test[
+                self.preprocess_decisions["scaling_with_target_cols"]
+            ] = scaler.inverse_transform(
                 X_test[self.preprocess_decisions["scaling_with_target_cols"]]
             )
             self.dataframe = pd.DataFrame(

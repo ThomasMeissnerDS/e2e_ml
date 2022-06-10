@@ -14,6 +14,7 @@ from sklearn.model_selection import TimeSeriesSplit
 
 try:
     from statsmodels.tsa.arima.model import ARIMA
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing
 except ModuleNotFoundError:
     from statsmodels.tsa.arima_model import ARIMA
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -176,6 +177,166 @@ class UnivariateTimeSeriesModels(postprocessing.FullPipeline):
                 predicted_values = np.expm1(predicted_values.astype(float))
         self.predicted_values[f"{algorithm}"] = {}
         self.predicted_values[f"{algorithm}"] = predicted_values
+        del model
+        _ = gc.collect()
+
+    def holt_winters_train(self):
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            algorithm = "holt_winters"
+            tscv = TimeSeriesSplit(n_splits=3)
+            stric_pos = (X_train <= 0).sum().sum() == 0
+
+            def objective(trial):
+                options = ["additive", "multiplicative", None]
+                if not stric_pos:
+                    options.remove("additive")
+                    options.remove("multiplicative")
+                param = {
+                    "trend": trial.suggest_categorical("trend", options),
+                    "damped_trend": trial.suggest_categorical(
+                        "damped_trend", [True, False]
+                    ),
+                    "seasonal": trial.suggest_categorical("seasonal", options),
+                    "initialization_method": trial.suggest_categorical(
+                        "initialization_method", ["estimated", None]
+                    ),
+                    "use_boxcox": trial.suggest_categorical(
+                        "use_boxcox", [True, False]
+                    ),
+                    "method": trial.suggest_categorical(
+                        "method",
+                        [
+                            "L-BFGS-B",
+                            "TNC",
+                            "SLSQP",
+                            "Powell",
+                            "trust-constr",
+                            "basinhopping",
+                        ],
+                    ),
+                }
+
+                if param["trend"]:
+                    param["damped_trend"] = trial.suggest_categorical(
+                        "damped_trend", [True, False]
+                    )
+                else:
+                    param["damped_trend"] = False
+
+                mean_abs_errors = []
+                for train_index, test_index in tscv.split(X_train):
+                    x_train, x_test = (
+                        X_train.iloc[train_index],
+                        X_train.iloc[test_index],
+                    )
+
+                    y_train, y_test = (  # noqa: F841
+                        Y_train.iloc[train_index],
+                        Y_train.iloc[test_index],
+                    )
+                    max_len = int((len(x_train.index)) / 3)
+                    if param["seasonal"] in [
+                        "add",
+                        "mul",
+                        "additive",
+                        "multiplicative",
+                    ]:
+                        param["seasonal_periods"] = trial.suggest_int(
+                            "seasonal_periods", 2, max_len
+                        )
+                    else:
+                        param["seasonal_periods"] = None
+
+                    model = ExponentialSmoothing(
+                        x_train,
+                        trend=param["trend"],
+                        damped_trend=param["damped_trend"],
+                        seasonal=param["seasonal"],
+                        initialization_method=param["initialization_method"],
+                        seasonal_periods=param["seasonal_periods"],
+                    )
+                    model = model.fit(
+                        optimized=True, method=param["method"], use_brute=True
+                    )
+                    preds = model.forecast(len(x_test.index))
+                    mae = mean_absolute_error(y_test, preds)
+                    mean_abs_errors.append(mae)
+
+                return np.mean(np.asarray(mean_abs_errors))
+
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
+            study = optuna.create_study(
+                direction="minimize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
+            self.optuna_studies[f"{algorithm}"] = {}
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                pass
+
+            best_parameters = study.best_trial.params
+
+            if "seasonal_periods" not in best_parameters:
+                best_parameters["seasonal_periods"] = None
+
+            model = ExponentialSmoothing(
+                pd.concat([X_train, X_test]).values,
+                trend=best_parameters["trend"],
+                damped_trend=best_parameters["damped_trend"],
+                seasonal=best_parameters["seasonal"],
+                initialization_method=best_parameters["initialization_method"],
+                seasonal_periods=best_parameters["seasonal_periods"],
+            )
+            model = model.fit(
+                optimized=True, method=best_parameters["method"], use_brute=True
+            )
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
+            return self.trained_models
+
+    def holt_winters_predict(self, n_forecast=1):
+        """
+        Loads the pretrained model from the class itself and predicts on new data.
+        :param feat_importance: Set True, if feature importance shall be calculated.
+        :param importance_alg: Chose 'permutation' (recommended on CPU) or 'SHAP' (recommended when model uses
+        GPU acceleration). (Default: 'permutation')
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp(task="Predict with Holt winters")
+        algorithm = "holt_winters"
+        if self.prediction_mode:
+            self.reset_test_train_index()
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.forecast(n_forecast)
+
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = self.trained_models[f"{algorithm}"]
+            predicted_probs = model.forecast(len(X_test.index))
+
+        self.predicted_values[f"{algorithm}"] = {}
+        self.predicted_values[f"{algorithm}"] = predicted_probs
         del model
         _ = gc.collect()
 
