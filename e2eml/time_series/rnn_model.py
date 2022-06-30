@@ -221,11 +221,11 @@ class RNNModel(postprocessing.FullPipeline, TimeSeriesDataset):
     def get_nn_architecture(
         self, input_dim, hidden_dim, layer_dim, output_dim, dropout_prob
     ):
-        class LSTMModel(nn.Module):
+        class RNNModel(nn.Module):
             def __init__(
                 self, input_dim, hidden_dim, layer_dim, output_dim, dropout_prob
             ):
-                super(LSTMModel, self).__init__()
+                super(RNNModel, self).__init__()
 
                 # Defining the number of layers and the nodes in each layer
                 self.hidden_dim = hidden_dim
@@ -248,16 +248,11 @@ class RNNModel(postprocessing.FullPipeline, TimeSeriesDataset):
                     self.layer_dim, x.size(0), self.hidden_dim, dtype=torch.float32
                 ).to(device)
 
-                # Initializing cell state for first input with zeros
-                c0 = torch.zeros(
-                    self.layer_dim, x.size(0), self.hidden_dim, dtype=torch.float32
-                ).to(device)
-
                 # We need to detach as we are doing truncated backpropagation through time (BPTT)
                 # If we don't, we'll backprop all the way to the start even after going through another batch
                 # Forward propagation by passing in the input, hidden state, and cell state into the model
                 # Propagate input through LSTM
-                ula, (h_out, _) = self.rnn(x, (h0.detach(), c0.detach()))
+                ula, h_out = self.rnn(x, h0.detach())
 
                 h_out = h_out[0].view(-1, self.hidden_dim)
 
@@ -313,7 +308,8 @@ class RNNModel(postprocessing.FullPipeline, TimeSeriesDataset):
         model.train()
         allpreds = []
         alltargets = []
-        self.reset_test_train_index(drop_target=False)
+        if self.shuffle_during_training:
+            self.reset_test_train_index(drop_target=False)
 
         for X_train_batch, y_train_batch in train_dataloader:
             losses = []
@@ -368,7 +364,8 @@ class RNNModel(postprocessing.FullPipeline, TimeSeriesDataset):
         model.eval()
         allpreds = []
         alltargets = []
-        self.reset_test_train_index(drop_target=False)
+        if self.shuffle_during_training:
+            self.reset_test_train_index(drop_target=False)
 
         for X_test_batch, y_test_batch in valid_dataloader:
             losses = []
@@ -478,7 +475,8 @@ class RNNModel(postprocessing.FullPipeline, TimeSeriesDataset):
         else:
             logging.info("Start LSTM training.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
-            self.reset_test_train_index(drop_target=False)
+            if self.shuffle_during_training:
+                self.reset_test_train_index(drop_target=False)
 
             train_dataloader = self.create_nn_train_dataloader()
             test_dataloader = self.create_nn_test_dataloader()
@@ -533,7 +531,8 @@ class RNNModel(postprocessing.FullPipeline, TimeSeriesDataset):
 
             for fold in range(self.rnn_settings["nb_model_to_create"]):
 
-                self.reset_test_train_index(drop_target=False)
+                if self.shuffle_during_training:
+                    self.reset_test_train_index(drop_target=False)
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
                 # initializing the data
@@ -621,7 +620,8 @@ class RNNModel(postprocessing.FullPipeline, TimeSeriesDataset):
     def rnn_predict(self):
         logging.info("Start RNN transformer prediction.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
-        self.reset_test_train_index(drop_target=False)
+        if self.shuffle_during_training:
+            self.reset_test_train_index(drop_target=False)
         if self.prediction_mode:
             model = self.get_nn_architecture(
                 input_dim=self.dataframe[self.preprocess_decisions["n_features"]].shape[

@@ -162,6 +162,8 @@ In the time series module we recently embedded blueprints as well:
 - ml_bp100_univariate_timeseries_full_processing_auto_arima()
 - ml_bp101_multivariate_timeseries_full_processing_lstm()
 - ml_bp102_multivariate_timeseries_full_processing_tabnet()
+- ml_bp103_multivariate_timeseries_full_processing_rnn()
+- ml_bp104_univariate_timeseries_full_processing_holt_winters()
 
 Time series blueprints use less preprocessing on default and cannot use all options like
 classification and regression models. Non-time series algorithms like TabNet are different
@@ -269,6 +271,7 @@ test_class.hyperparameter_tuning_rounds = {
             "final_kernel_pca_dimensionality_reduction": 50,
             "final_pca_dimensionality_reduction": 50,
             "auto_arima": 50,
+            "holt_winters": 50,
         }
 
 test_class.hyperparameter_tuning_max_runtime_secs = {
@@ -292,6 +295,7 @@ test_class.hyperparameter_tuning_max_runtime_secs = {
             "final_kernel_pca_dimensionality_reduction": 4 * 60 * 60,
             "final_pca_dimensionality_reduction": 2 * 60 * 60,
             "auto_arima": 2 * 60 * 60,
+            "holt_winters": 2 * 60 * 60,
         }
 
 When these parameters have to updated, please overwrite the keys individually to not break the blueprints eventually.
@@ -413,6 +417,9 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
+* 4.10.00
+  * Added fully connected NN for regression with quantile loss
+  * Fixed wrong assignment in RNN model
 * 4.00.50
   * Added Autoarima & Holt winters for univariate time series predictions
   * Added LSTM & RNN for uni- & multivariate time series prediction

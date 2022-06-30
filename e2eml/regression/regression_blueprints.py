@@ -2,12 +2,17 @@ import logging
 
 from e2eml.full_processing.preprocessing_blueprints import PreprocessingBluePrint
 from e2eml.regression.autotuned_nn_regression import RegressionNNModel
+from e2eml.regression.deep_quantile_regression import DeepQuantileRegression
 from e2eml.regression.nlp_regression import NlpModel
 from e2eml.regression.regression_models import RegressionModels
 
 
 class RegressionBluePrint(
-    RegressionModels, PreprocessingBluePrint, NlpModel, RegressionNNModel
+    RegressionModels,
+    PreprocessingBluePrint,
+    NlpModel,
+    RegressionNNModel,
+    DeepQuantileRegression,
 ):
     """
     Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
@@ -466,6 +471,25 @@ class RegressionBluePrint(
             self.neural_network_train()
         self.neural_network_predict()
         algorithm = "neural_network"
+        self.regression_eval(algorithm)
+        self.prediction_mode = True
+        logging.info("Finished blueprint.")
+
+    def ml_bp24_regressions_full_processing_deep_quantile_regression(self, df=None):
+        """
+        Runs an NLP transformer blue print specifically for text regression. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_nlp_10" or "bp_nlp_11")
+        :return: Updates class attributes by its predictions.
+        """
+        self.quantile_regression_nn_preprocessing_pipeline(df=df)
+        if self.prediction_mode:
+            pass
+        else:
+            self.deep_quantile_regression_train()
+        self.deep_quantile_regression_predict()
+        algorithm = "deep_quantile_regression"
         self.regression_eval(algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")

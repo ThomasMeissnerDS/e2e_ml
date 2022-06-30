@@ -173,6 +173,7 @@ class PreProcessing:
         train_split_type="cross",
         rapids_acceleration=False,
         shuffle_during_training=True,
+        train_size=0.80,
         global_random_state=1000,
     ):
 
@@ -257,6 +258,7 @@ class PreProcessing:
             self.train_split_type = "time"
         self.rapids_acceleration = rapids_acceleration
         self.shuffle_during_training = shuffle_during_training
+        self.train_size = train_size
         if self.shuffle_during_training:
             self.booster_random_state = None
         else:
@@ -514,10 +516,26 @@ class PreProcessing:
             "nb_model_to_create": 1,
             "architecture": "1d-cnn",
             "regression_loss": "mse",
+            "quantiles": (0.2, 0.5, 0.8),
             "epochs": self.tabular_nn_epochs,
             "transformer_model_path": self.tabular_nn_model_load_from_path,
             "model_save_states_path": {self.tabular_nn_model_save_states_path},
             "keep_best_model_only": False,
+        }
+        self.quantile_nn_settings = {
+            "train_batch_size": 16,
+            "test_batch_size": 16,
+            "pred_batch_size": 16,
+            "num_workers": 4,
+            "learning_rate": 1e-5,
+            "weight_decay": 1e-5,
+            "drop_out": 0.3,
+            "nb_model_to_create": 1,
+            "architecture": "ann",
+            "quantiles": (0.2, 0.5, 0.8),
+            "epochs": 500,
+            "transformer_model_path": self.tabular_nn_model_load_from_path,
+            "model_save_states_path": {self.tabular_nn_model_save_states_path},
         }
         self.gan_settings = {
             "batch_size": 512,
@@ -547,6 +565,7 @@ class PreProcessing:
             "seq_len": 5,
             "regression_loss": "mse",
             "epochs": 100,
+            "quantiles": (0.2, 0.5, 0.8),
             "nb_model_to_create": 1,
             "transformer_model_path": self.tabular_nn_model_load_from_path,
             "model_save_states_path": {self.tabular_nn_model_save_states_path},
@@ -1337,6 +1356,31 @@ class PreProcessing:
                 "max_sentence_len"
             ] = sentence_length.max()
 
+    def zscore_scaling(self):
+        self.get_current_timestamp(task="Zscore data scaling")
+        if self.prediction_mode:
+            for vartype in self.num_dtypes:
+                num_cols = self.dataframe.select_dtypes(include=[vartype]).columns
+                for col in num_cols:
+                    self.dataframe[col] = (
+                        self.dataframe[col] - self.dataframe[col].mean()
+                    ) / self.dataframe[col].std()
+        else:
+            logging.info("Started data scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            for vartype in self.num_dtypes:
+                num_cols = X_train.select_dtypes(include=[vartype]).columns
+                for col in num_cols:
+                    X_train[col] = (X_train[col] - X_train[col].mean()) / X_train[
+                        col
+                    ].std()
+                    X_test[col] = (X_test[col] - X_test[col].mean()) / X_test[col].std()
+
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+        logging.info("Finished Zscore data scaling.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
     def data_scaling(self, scaling="minmax"):
         """
         Scales the data using the chosen scaling algorithm.
@@ -1371,6 +1415,55 @@ class PreProcessing:
             X_test = pd.DataFrame(X_test, columns=X_train_cols)
             self.data_scaled = True
             logging.info("Finished data scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            del scaler
+            _ = gc.collect()
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            return (
+                self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test),
+                self.data_scaled,
+                self.preprocess_decisions,
+            )
+
+    def data_scaling_target_only(self, mode="fit", to_scale=None):
+        """
+        Scales the data using the chosen scaling algorithm.
+        :param scaling: Chose 'minmax'.
+        :return: Returns scaled dataframes
+        """
+        self.get_current_timestamp(task="Scale target only")
+        if mode == "reverse" and self.blueprint_step_selection_non_nlp["scale_data"]:
+            logging.info("Started target scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            scaler = self.preprocess_decisions["target_scaling"]
+            to_scale = scaler.inverse_transform(
+                pd.DataFrame(to_scale.values, columns=[self.target_variable])
+            )
+            to_scale = pd.DataFrame(to_scale, columns=[self.target_variable])
+            to_scale = pd.Series(to_scale[self.target_variable])
+            logging.info("Finished target scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            return to_scale
+
+        elif mode == "fit" and not self.prediction_mode:
+            logging.info("Started target scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            scaler = MinMaxScaler(feature_range=(0.01, 1))
+            scaler.fit(pd.DataFrame(Y_train, columns=[self.target_variable]))
+            Y_train = scaler.transform(
+                pd.DataFrame(Y_train, columns=[self.target_variable])
+            )
+            Y_test = scaler.transform(
+                pd.DataFrame(Y_test, columns=[self.target_variable])
+            )
+            self.preprocess_decisions["target_scaling"] = scaler
+            Y_train = pd.DataFrame(Y_train, columns=[self.target_variable])
+            Y_test = pd.DataFrame(Y_test, columns=[self.target_variable])
+
+            Y_train = pd.Series(Y_train[self.target_variable])
+            Y_test = pd.Series(Y_test[self.target_variable])
+            logging.info("Finished target scaling.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             del scaler
             _ = gc.collect()
@@ -1631,7 +1724,7 @@ class PreProcessing:
                 X_train, X_test, Y_train, Y_test = model_selection.train_test_split(
                     self.dataframe,
                     self.dataframe[self.target_variable],
-                    train_size=train_size,
+                    train_size=self.train_size,
                     random_state=self.global_random_state,
                     stratify=self.dataframe[self.target_variable],
                 )
@@ -1639,7 +1732,7 @@ class PreProcessing:
                 X_train, X_test, Y_train, Y_test = model_selection.train_test_split(
                     self.dataframe,
                     self.dataframe[self.target_variable],
-                    train_size=train_size,
+                    train_size=self.train_size,
                     random_state=self.global_random_state,
                 )
             try:
@@ -1660,7 +1753,7 @@ class PreProcessing:
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             if self.source_format == "numpy array":
                 length = self.dataframe.size
-                train_length = int(length * train_size)
+                train_length = int(length * self.train_size)
                 test_length = length - train_length
                 Y_train, Y_test = (
                     self.dataframe[:train_length],
@@ -1671,7 +1764,7 @@ class PreProcessing:
                 return self.np_array_wrap_test_train_to_dict(Y_train, Y_test)
             elif self.source_format == "Pandas dataframe":
                 length = len(self.dataframe.index)
-                train_length = int(length * 0.80)
+                train_length = int(length * self.train_size)
                 test_length = length - train_length
                 if not split_by_col:
                     self.dataframe = self.dataframe.sort_index()
@@ -3000,16 +3093,22 @@ class PreProcessing:
     def add_weekend_flag(self):
         if self.prediction_mode:
             for key in self.detected_col_types:
-                if self.detected_col_types[key] == "datetime[ns]":
-                    self.dataframe[f"{key} is weekend"] = (
-                        self.dataframe[key].dt.dayofweek > 4
-                    )
+                try:
+                    if self.detected_col_types[key] == "datetime[ns]":
+                        self.dataframe[f"{key} is weekend"] = (
+                            self.dataframe[key].dt.dayofweek > 4
+                        )
+                except KeyError:
+                    pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             for key in self.detected_col_types:
-                if self.detected_col_types[key] == "datetime[ns]":
-                    X_train[f"{key} is weekend"] = X_train[key].dt.dayofweek > 4
-                    X_test[f"{key} is weekend"] = X_test[key].dt.dayofweek > 4
+                try:
+                    if self.detected_col_types[key] == "datetime[ns]":
+                        X_train[f"{key} is weekend"] = X_train[key].dt.dayofweek > 4
+                        X_test[f"{key} is weekend"] = X_test[key].dt.dayofweek > 4
+                except KeyError:
+                    pass
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def datetime_converter(  # noqa: C901
@@ -4476,7 +4575,7 @@ class PreProcessing:
             for col in X_train[float_cols].columns.to_list():
                 if self.detected_col_types[col] == "float":
                     print(
-                        f"Started augmenting column {col}. Progress: {round(((self.preprocess_decisions['random_state_counter']+1)/num_float_cols)*100, 2)}%"
+                        f"Started augmenting column {col}. Progress: {round(((self.preprocess_decisions['random_state_counter'] + 1) / num_float_cols) * 100, 2)}%"
                     )
                     self.preprocess_decisions["random_state_counter"] += 1
                     self.set_random_seed()
@@ -5205,7 +5304,7 @@ class PreProcessing:
                 executed_classes += 1
                 print(
                     f"""Starting oversampling for class {i}.
-                Progress after this step is {round((executed_classes/len(unique_classes))*100, 2)}%."""
+                Progress after this step is {round((executed_classes / len(unique_classes)) * 100, 2)}%."""
                 )
                 target_class = unique_classes[i]
                 target_delta = deltas[i]

@@ -8,12 +8,12 @@ import psutil
 import torch
 import torch.nn as nn
 from numpy import inf
-from sklearn.metrics import mean_squared_error, median_absolute_error
+from sklearn.metrics import mean_squared_error
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-from e2eml.full_processing import postprocessing
+from e2eml.full_processing import cpu_preprocessing, postprocessing
 
 # specify GPU
 scaler = torch.cuda.amp.GradScaler()  # GPU
@@ -45,7 +45,9 @@ class TimeSeriesDataset(Dataset):
         return x, self.y[i]
 
 
-class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
+class LSTMQuantileModel(
+    postprocessing.FullPipeline, cpu_preprocessing.PreProcessing, TimeSeriesDataset
+):
     """
     This class stores all model training and prediction methods for classification tasks.
     This class stores all pipeline relevant information (inherited from cpu preprocessing).
@@ -73,8 +75,8 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
     However we highly recommend GPU usage to heavily decrease model training times.
     """
 
-    def create_lstm_train_dataset(self):
-        logging.info("Create LSTM train dataset.")
+    def create_lstm_quantile_train_dataset(self):
+        logging.info("Create NLP train dataset.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         train_dataset = TimeSeriesDataset(
@@ -89,8 +91,8 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
         )
         return train_dataset
 
-    def create_lstm_test_dataset(self):
-        logging.info("Create LSTM test dataset.")
+    def create_lstm_quantile_test_dataset(self):
+        logging.info("Create NLP test dataset.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         test_dataset = TimeSeriesDataset(
@@ -105,7 +107,7 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
         )
         return test_dataset
 
-    def create_lstm_pred_dataset(self):
+    def create_lstm_quantile_pred_dataset(self):
         logging.info("Create NLP prediction dataset.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
@@ -136,7 +138,9 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
             )
         return pred_dataset
 
-    def create_lstm_train_dataloader(self, train_batch_size=None, workers=None):
+    def create_lstm_quantile_train_dataloader(
+        self, train_batch_size=None, workers=None
+    ):
         if train_batch_size:
             pass
         else:
@@ -148,7 +152,7 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
             workers = self.lstm_settings["num_workers"]
         logging.info("Create Neural network train dataloader.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
-        train_dataset = self.create_lstm_train_dataset()
+        train_dataset = self.create_lstm_quantile_train_dataset()
         train_dataloader = DataLoader(
             train_dataset,
             batch_size=train_batch_size,
@@ -158,7 +162,7 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
         )
         return train_dataloader
 
-    def create_lstm_test_dataloader(self, test_batch_size=None, workers=None):
+    def create_lstm_quantile_test_dataloader(self, test_batch_size=None, workers=None):
         if test_batch_size:
             pass
         else:
@@ -168,9 +172,9 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
             pass
         else:
             workers = self.lstm_settings["num_workers"]
-        logging.info("Create LSTM test dataloader.")
+        logging.info("Create NLP test dataloader.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
-        test_dataset = self.create_lstm_test_dataset()
+        test_dataset = self.create_lstm_quantile_test_dataset()
         test_dataloader = DataLoader(
             test_dataset,
             batch_size=test_batch_size,
@@ -180,7 +184,7 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
         )
         return test_dataloader
 
-    def pred_lstm_dataloader(self, pred_batch_size=None, workers=None):
+    def pred_lstm_quantile_dataloader(self, pred_batch_size=None, workers=None):
         if pred_batch_size:
             pass
         else:
@@ -192,7 +196,7 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
             workers = self.lstm_settings["num_workers"]
         logging.info("Create Neural network prediction dataloader.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
-        pred_dataset = self.create_lstm_pred_dataset()
+        pred_dataset = self.create_lstm_quantile_pred_dataset()
         pred_dataloader = DataLoader(
             pred_dataset,
             batch_size=pred_batch_size,
@@ -202,36 +206,25 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
         )
         return pred_dataloader
 
-    def loss_fn(self, output, target):
-        if self.lstm_settings["regression_loss"] == "mse":
-            return torch.sqrt(nn.MSELoss()(output, target))
-        elif self.lstm_settings["regression_loss"] == "smoothl1":
-            return torch.sqrt(nn.SmoothL1Loss()(output, target))
-        elif self.lstm_settings["regression_loss"] == "l1":
-            return torch.sqrt(nn.L1Loss()(output, target))
-        elif self.lstm_settings["regression_loss"] == "poisson":
-            return torch.sqrt(nn.PoissonNLLLoss()(output, target))
-
     def get_num_features(self):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
         N, D = X_train.shape
         self.preprocess_decisions["num_features"] = D
         return D
 
-    def get_lstm_architecture(
+    def get_lstm_quantile_architecture(
         self, input_dim, hidden_dim, layer_dim, output_dim, dropout_prob
     ):
-        class LSTMModel(nn.Module):
+        class lstmQuantile(nn.Module):
             def __init__(
                 self, input_dim, hidden_dim, layer_dim, output_dim, dropout_prob
             ):
-                super(LSTMModel, self).__init__()
+                super(lstmQuantile, self).__init__()
 
                 # Defining the number of layers and the nodes in each layer
                 self.hidden_dim = hidden_dim
                 self.layer_dim = layer_dim
 
-                # LSTM layers
                 self.lstm = nn.LSTM(
                     input_dim,
                     hidden_dim,
@@ -266,23 +259,23 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
 
                 return out
 
-        model = LSTMModel(input_dim, hidden_dim, layer_dim, output_dim, dropout_prob)
+        model = lstmQuantile(input_dim, hidden_dim, layer_dim, output_dim, dropout_prob)
         return model
 
-    def lstm_model_setup(self, epochs=None):
+    def lstm_quantile_model_setup(self, epochs=None):
         if self.prediction_mode:
             pass
         else:
-            logging.info("Define LSTM model.")
+            logging.info("Define NLP model.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             self.get_num_features()
-            model = self.get_lstm_architecture(
+            model = self.get_lstm_quantile_architecture(
                 input_dim=X_train[self.preprocess_decisions["n_features"]].shape[1]
                 - 1,  # removes target from count
                 hidden_dim=self.lstm_settings["hidden_dim"],
                 layer_dim=self.lstm_settings["layer_dim"],
-                output_dim=1,
+                output_dim=3,
                 dropout_prob=self.lstm_settings["drop_out"],
             )
             model.to(device)
@@ -308,14 +301,36 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
             )
             return model, optimizer, train_steps, num_steps, scheduler
 
-    def lstm_training(self, train_dataloader, model, optimizer, scheduler):
-        logging.info("Start LSTM training loop.")
+    def simple_multi_bound_loss(self, y_hat_low, y_hat_up, target):
+        mse_loss_mean = torch.mean((target - ((y_hat_low + y_hat_up) / 2)) ** 2)
+        return mse_loss_mean
+
+    def quantile_loss(self, preds, target, quantiles):
+        assert not target.requires_grad
+        assert preds.size(0) == target.size(0)
+        losses = []
+        for i, q in enumerate(quantiles):
+            errors = target - preds[:, i]
+            losses.append(torch.max((q - 1) * errors, q * errors).unsqueeze(1))
+        loss = torch.mean(torch.sum(torch.cat(losses, dim=1), dim=1))
+        return loss
+
+    def fillna_inf(self, array):
+        array = np.array(array)
+        array[np.isnan(array)] = 0
+        array[array == -inf] = 0
+        array[array == inf] = 0
+        return array
+
+    def lstm_quantile_training(self, train_dataloader, model, optimizer, scheduler):
+        logging.info("Start NLP training loop.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         model.train()
         allpreds = []
+        allpreds_low = []
+        allpreds_up = []
         alltargets = []
-        if self.shuffle_during_training:
-            self.reset_test_train_index(drop_target=False)
+        self.reset_test_train_index(drop_target=False)
 
         for X_train_batch, y_train_batch in train_dataloader:
             losses = []
@@ -327,11 +342,17 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
                 ), y_train_batch.to(device)
 
                 y_train_pred = model(X_train_batch)
+
                 y_train_batch = y_train_batch.unsqueeze(1)
-                loss = self.loss_fn(y_train_pred, y_train_batch)
+                loss = self.quantile_loss(
+                    y_train_pred, y_train_batch, self.lstm_settings["quantiles"]
+                )
 
                 # For scoring
                 losses.append(loss.item() / len(y_train_pred))
+                y_train_pred = y_train_pred[:, 1:2]
+                allpreds_low.append(y_train_pred[:, 0:1].detach().cpu().numpy())
+                allpreds_up.append(y_train_pred[:, 2:3].detach().cpu().numpy())
                 allpreds.append(y_train_pred.detach().cpu().numpy())
                 alltargets.append(y_train_batch.detach().squeeze(-1).cpu().numpy())
 
@@ -345,33 +366,25 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
         allpreds = np.concatenate(allpreds)
         alltargets = np.concatenate(alltargets)
 
+        allpreds = self.fillna_inf(allpreds)
+
         # I don't use loss, but I collect it
         losses = np.mean(losses)
         # Score with rmse
         try:
-            train_rme_loss = np.sqrt(
-                mean_squared_error(
-                    np.array(alltargets), np.array(allpreds, dtype="float64")
-                )
-            )
+            train_rme_loss = mean_squared_error(alltargets, allpreds)
         except ValueError:
-            all_preds_arr = np.array(allpreds)
-            all_preds_arr[np.isnan(all_preds_arr)] = 0
-            all_preds_arr[all_preds_arr == -inf] = 0
-            all_preds_arr[all_preds_arr == inf] = 0
-            train_rme_loss = np.sqrt(
-                mean_squared_error(np.array(alltargets), all_preds_arr)
-            )
+            train_rme_loss = mean_squared_error(alltargets, allpreds)
         return losses, train_rme_loss
 
-    def lstm_validating(self, valid_dataloader, model):
+    def lstm_quantile_validating(self, valid_dataloader, model):
         logging.info("Start NLP validation loop.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         model.eval()
         allpreds = []
+        allpreds_low = []
+        allpreds_up = []
         alltargets = []
-        if self.shuffle_during_training:
-            self.reset_test_train_index(drop_target=False)
 
         for X_test_batch, y_test_batch in valid_dataloader:
             losses = []
@@ -380,42 +393,43 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
                 X_test_batch, y_test_batch = X_test_batch.to(device), y_test_batch.to(
                     device
                 )
-
                 y_train_pred = model(X_test_batch)
-
                 y_test_batch = y_test_batch.unsqueeze(1)
-                loss = self.loss_fn(y_train_pred, y_test_batch)
+                loss = self.quantile_loss(
+                    y_train_pred, y_test_batch, self.lstm_settings["quantiles"]
+                )
 
                 # For scoring
                 losses.append(loss.item() / len(y_train_pred))
+                y_train_pred = y_train_pred[:, 1:2]
+                allpreds_low.append(y_train_pred[:, 0:1].detach().cpu().numpy())
+                allpreds_up.append(y_train_pred[:, 2:3].detach().cpu().numpy())
                 allpreds.append(y_train_pred.detach().cpu().numpy())
                 alltargets.append(y_test_batch.detach().squeeze(-1).cpu().numpy())
-                # Combine dataloader minutes
 
+        allpreds_low = np.concatenate(allpreds_low)
+        allpreds_up = np.concatenate(allpreds_up)
         allpreds = np.concatenate(allpreds)
         alltargets = np.concatenate(alltargets)
+
+        allpreds_low = self.fillna_inf(allpreds_low)
+        allpreds_up = self.fillna_inf(allpreds_up)
+        allpreds = self.fillna_inf(allpreds)
 
         # I don't use loss, but I collect it
         losses = np.mean(losses)
         # Score with rmse
         try:
-            valid_rme_loss = np.sqrt(
-                mean_squared_error(
-                    np.array(alltargets), np.array(allpreds, dtype="float64")
-                )
-            )
+            valid_rme_loss = mean_squared_error(alltargets, allpreds)
+            # valid_rme_loss = np.nan_to_num(valid_rme_loss, nan=0, neginf=0)
         except ValueError:
-            all_preds_arr = np.array(allpreds)
-            all_preds_arr[np.isnan(all_preds_arr)] = 0
-            all_preds_arr[all_preds_arr == -inf] = 0
-            all_preds_arr[all_preds_arr == inf] = 0
-            valid_rme_loss = np.sqrt(
-                mean_squared_error(np.array(alltargets), all_preds_arr)
-            )
+            allpreds_low = self.fillna_inf(allpreds_low)
+            allpreds_up = self.fillna_inf(allpreds_up)
+            valid_rme_loss = mean_squared_error(alltargets, allpreds)
 
         return allpreds, losses, valid_rme_loss
 
-    def lstm_predicting(self, pred_dataloader, model, pathes):
+    def lstm_quantile_predicting(self, pred_dataloader, model, pathes):
         logging.info("Start Neural network prediction loop.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         allpreds = []
@@ -427,6 +441,8 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
             model.to(device)
             model.eval()
             preds = []
+            preds_low = []
+            preds_up = []
             # allvalloss = 0
             with torch.no_grad():
                 for X_pred_batch, y_pred_batch in pred_dataloader:
@@ -434,16 +450,83 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
                         device
                     ), y_pred_batch.to(device)
                     y_pred_pred = model(X_pred_batch)
-                    y_pred_pred = y_pred_pred.squeeze(-1)
-                    preds.append(y_pred_pred.detach().cpu().numpy())
+
+                    preds_low.append(y_pred_pred[:, 0:1].detach().cpu().numpy())
+                    preds_up.append(y_pred_pred[:, 2:3].detach().cpu().numpy())
+                    preds.append(y_pred_pred[:, 1:2].detach().cpu().numpy())
 
                 preds = np.concatenate(preds)
+                preds_low = np.concatenate(preds_low)
+                preds_up = np.concatenate(preds_up)
 
                 if self.prediction_mode:
                     self.dataframe[f"preds_model{model_no}"] = preds
+                    self.dataframe[f"preds_low_model{model_no}"] = preds_low
+                    self.dataframe[f"preds_up_model{model_no}"] = preds_up
+
+                    self.dataframe[
+                        f"preds_model{model_no}"
+                    ] = self.data_scaling_target_only(
+                        mode="reverse",
+                        to_scale=self.dataframe[f"preds_model{model_no}"],
+                    )
+                    self.dataframe[
+                        f"preds_low_model{model_no}"
+                    ] = self.data_scaling_target_only(
+                        mode="reverse",
+                        to_scale=self.dataframe[f"preds_low_model{model_no}"],
+                    )
+                    self.dataframe[
+                        f"preds_up_model{model_no}"
+                    ] = self.data_scaling_target_only(
+                        mode="reverse",
+                        to_scale=self.dataframe[f"preds_up_model{model_no}"],
+                    )
+
+                    self.dataframe[
+                        f"preds_low_model{model_no}"
+                    ] = self.target_skewness_handling(
+                        preds_to_reconvert=self.dataframe[
+                            f"preds_low_model{model_no}"
+                        ].values,
+                        mode="revert",
+                    )
+                    self.dataframe[
+                        f"preds_up_model{model_no}"
+                    ] = self.target_skewness_handling(
+                        preds_to_reconvert=self.dataframe[
+                            f"preds_up_model{model_no}"
+                        ].values,
+                        mode="revert",
+                    )
                 else:
                     X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                     X_test[f"preds_model{model_no}"] = preds
+                    X_test[f"preds_low_model{model_no}"] = preds_low
+                    X_test[f"preds_up_model{model_no}"] = preds_up
+
+                    X_test[f"preds_model{model_no}"] = self.data_scaling_target_only(
+                        mode="reverse", to_scale=X_test[f"preds_model{model_no}"]
+                    )
+                    X_test[
+                        f"preds_low_model{model_no}"
+                    ] = self.data_scaling_target_only(
+                        mode="reverse", to_scale=X_test[f"preds_low_model{model_no}"]
+                    )
+                    X_test[f"preds_up_model{model_no}"] = self.data_scaling_target_only(
+                        mode="reverse", to_scale=X_test[f"preds_up_model{model_no}"]
+                    )
+
+                    X_test[
+                        f"preds_low_model{model_no}"
+                    ] = self.target_skewness_handling(
+                        preds_to_reconvert=X_test[f"preds_low_model{model_no}"].values,
+                        mode="revert",
+                    )
+                    X_test[f"preds_up_model{model_no}"] = self.target_skewness_handling(
+                        preds_to_reconvert=X_test[f"preds_up_model{model_no}"].values,
+                        mode="revert",
+                    )
                 mode_cols.append(f"preds_model{model_no}")
 
                 allpreds.append(preds)
@@ -475,24 +558,23 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
             ]
             return pthes
 
-    def lstm_train(self):
+    def lstm_quantile_regression_train(self):
         if self.prediction_mode:
             pass
         else:
-            logging.info("Start LSTM training.")
+            logging.info("Start NLP transformer training.")
             logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
-            if self.shuffle_during_training:
-                self.reset_test_train_index(drop_target=False)
+            self.reset_test_train_index(drop_target=False)
 
-            train_dataloader = self.create_lstm_train_dataloader()
-            test_dataloader = self.create_lstm_test_dataloader()
+            train_dataloader = self.create_lstm_quantile_train_dataloader()
+            test_dataloader = self.create_lstm_quantile_test_dataloader()
             (
                 model,
                 optimizer,
                 train_steps,
                 num_steps,
                 scheduler,
-            ) = self.lstm_model_setup()
+            ) = self.lstm_quantile_model_setup()
             scheduler = get_linear_schedule_with_warmup(
                 optimizer, num_steps, train_steps
             )
@@ -505,13 +587,13 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
 
             for epoch in tqdm(range(self.lstm_settings["epochs"])):
                 print("---------------" + str(epoch) + "start-------------")
-                trainloss, trainscore = self.lstm_training(
+                trainloss, trainscore = self.lstm_quantile_training(
                     train_dataloader, model, optimizer, scheduler
                 )
                 trainlosses.append(trainloss)
                 trainscores.append(trainscore)
                 print("trainscore is " + str(trainscore))
-                preds, validloss, valscore = self.lstm_validating(
+                preds, validloss, valscore = self.lstm_quantile_validating(
                     test_dataloader, model
                 )
                 vallosses.append(validloss)
@@ -545,24 +627,23 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
 
             for fold in range(self.lstm_settings["nb_model_to_create"]):
 
-                if self.shuffle_during_training:
-                    self.reset_test_train_index(drop_target=False)
+                self.reset_test_train_index(drop_target=False)
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
                 # initializing the data
-                train_dataloader = self.create_lstm_train_dataloader()
-                test_dataloader = self.create_lstm_test_dataloader()
+                train_dataloader = self.create_lstm_quantile_train_dataloader()
+                test_dataloader = self.create_lstm_quantile_test_dataloader()
 
-                model = self.get_lstm_architecture(
+                model = self.get_lstm_quantile_architecture(
                     input_dim=X_train[self.preprocess_decisions["n_features"]].shape[1]
                     - 1,  # removes target from count
                     hidden_dim=self.lstm_settings["hidden_dim"],
                     layer_dim=self.lstm_settings["layer_dim"],
-                    output_dim=1,
+                    output_dim=3,
                     dropout_prob=self.lstm_settings["drop_out"],
                 )
                 model.to(device)
-                LR = self.lstm_settings["learning_rate"]
+                LR = 2e-5  # 1e-3
                 optimizer = AdamW(
                     model.parameters(), LR, betas=(0.99, 0.999), weight_decay=1e-2
                 )
@@ -584,14 +665,14 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
 
                 for epoch in tqdm(range(self.lstm_settings["epochs"])):
                     print("---------------" + str(epoch) + "start-------------")
-                    trainloss, trainscore = self.lstm_training(
+                    trainloss, trainscore = self.lstm_quantile_training(
                         train_dataloader, model, optimizer, scheduler
                     )
                     trainlosses.append(trainloss)
                     trainscores.append(trainscore)
 
                     print("trainscore is " + str(trainscore))
-                    preds, validloss, valscore = self.lstm_validating(
+                    preds, validloss, valscore = self.lstm_quantile_validating(
                         test_dataloader, model
                     )
 
@@ -624,37 +705,29 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
             del model, optimizer, scheduler
             _ = gc.collect()
 
-    def median_abs_error_eval(self, true_y, predicted):
-        try:
-            median_absolute_error_score = median_absolute_error(true_y, predicted)
-        except Exception:
-            median_absolute_error_score = 0
-        return median_absolute_error_score
-
-    def lstm_predict(self):
-        logging.info("Start LSTM transformer prediction.")
+    def lstm_quantile_regression_predict(self):
+        logging.info("Start NLP transformer prediction.")
         logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
-        if self.shuffle_during_training:
-            self.reset_test_train_index(drop_target=False)
+        self.reset_test_train_index(drop_target=False)
         if self.prediction_mode:
-            model = self.get_lstm_architecture(
+            model = self.get_lstm_quantile_architecture(
                 input_dim=self.dataframe[self.preprocess_decisions["n_features"]].shape[
                     1
                 ]
                 - 1,  # removes target from count
                 hidden_dim=self.lstm_settings["hidden_dim"],
                 layer_dim=self.lstm_settings["layer_dim"],
-                output_dim=1,
+                output_dim=3,
                 dropout_prob=self.lstm_settings["drop_out"],
             )
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            model = self.get_lstm_architecture(
+            model = self.get_lstm_quantile_architecture(
                 input_dim=X_test[self.preprocess_decisions["n_features"]].shape[1]
                 - 1,  # removes target from count
                 hidden_dim=self.lstm_settings["hidden_dim"],
                 layer_dim=self.lstm_settings["layer_dim"],
-                output_dim=1,
+                output_dim=3,
                 dropout_prob=self.lstm_settings["drop_out"],
             )
         pathes = self.load_model_states(path=self.tabular_nn_model_save_states_path)
@@ -668,58 +741,37 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
         except Exception:
             pass
         print(pthes)
-        pred_dataloader = self.pred_lstm_dataloader()
-        allpreds, mode_cols = self.lstm_predicting(pred_dataloader, model, pthes)
+        pred_dataloader = self.pred_lstm_quantile_dataloader()
+        allpreds, mode_cols = self.lstm_quantile_predicting(
+            pred_dataloader, model, pthes
+        )
 
         if self.prediction_mode:
-            self.dataframe["lstm_median"] = self.dataframe[mode_cols].median(axis=1)
-            self.dataframe["lstm_mean"] = self.dataframe[mode_cols].mean(axis=1)
-
-            # reverse scale target and df
-            self.dataframe[self.target_variable] = self.dataframe["lstm_mean"]
-            self.scale_with_target(mode="reverse", drop_target=False)
-
-            self.dataframe[self.target_variable] = self.target_skewness_handling(
-                preds_to_reconvert=self.dataframe[self.target_variable].values,
+            self.dataframe["lstm_quantile_regression_median"] = self.dataframe[
+                mode_cols
+            ].median(axis=1)
+            self.dataframe["lstm_quantile_regression_mean"] = self.dataframe[
+                mode_cols
+            ].mean(axis=1)
+            self.dataframe[
+                "lstm_quantile_regression_mean"
+            ] = self.target_skewness_handling(
+                preds_to_reconvert=self.dataframe[
+                    "lstm_quantile_regression_mean"
+                ].values,
                 mode="revert",
             )
-            self.predicted_values["lstm"] = self.dataframe[self.target_variable]
+            self.predicted_values["lstm_quantile_regression"] = self.dataframe[
+                "lstm_quantile_regression_mean"
+            ]
 
         else:
-            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-
-            if self.lstm_settings["keep_best_model_only"]:
-                # we check, if one savestate underperforms and delete him out
-                scorings = []
-                states = []
-                for state in mode_cols:
-                    state_score = self.median_abs_error_eval(Y_test, X_test[state])
-                    # print(state_score)
-                    scorings.append(state_score)
-                    states.append(state)
-                scorings_arr = np.array(scorings)
-                scorings_mean = np.mean(scorings_arr)
-                scorings_std = np.std(scorings_arr)
-                # print(scorings_std)
-                keep_state = scorings_arr < scorings_mean + scorings_std
-                for index, state in enumerate(states):
-                    os_string = state[-6:]
-                    if keep_state.tolist()[index]:
-                        pass
-                    else:
-                        states.remove(state)
-                        X_test.drop(state, axis=1)
-                        os.remove(f"{os_string}.pth")
-            else:
-                pass
-
-            X_test["lstm_median"] = X_test[mode_cols].median(axis=1)
-            X_test["lstm_mean"] = X_test[mode_cols].mean(axis=1)
-            # reverse scale target and df
-            X_test[self.target_variable] = X_test["lstm_mean"]
-            self.scale_with_target(mode="reverse", drop_target=False)
-
-            X_test[self.target_variable] = self.target_skewness_handling(
-                preds_to_reconvert=X_test[self.target_variable].values, mode="revert"
+            X_test["lstm_quantile_regression_median"] = X_test[mode_cols].median(axis=1)
+            X_test["lstm_quantile_regression_mean"] = X_test[mode_cols].mean(axis=1)
+            X_test["lstm_quantile_regression_mean"] = self.target_skewness_handling(
+                preds_to_reconvert=X_test["lstm_quantile_regression_mean"].values,
+                mode="revert",
             )
-            self.predicted_values["lstm"] = X_test[self.target_variable]
+            self.predicted_values["lstm_quantile_regression"] = X_test[
+                "lstm_quantile_regression_median"
+            ]

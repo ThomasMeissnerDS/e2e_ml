@@ -37,7 +37,7 @@ class AutoDataSlicer:
         self.supress_granular_prints = supress_granular_prints
         self.timeout = timeout
         self.slice_one_category_only = slice_one_category_only
-        self.pre_remove_slices = (pre_remove_slices,)
+        self.pre_remove_slices = pre_remove_slices
         self.study = None
         self.cat_columns = None
         self.num_col_list = None

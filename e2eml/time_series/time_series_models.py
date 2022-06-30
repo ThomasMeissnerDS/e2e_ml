@@ -17,6 +17,7 @@ try:
     from statsmodels.tsa.holtwinters import ExponentialSmoothing
 except ModuleNotFoundError:
     from statsmodels.tsa.arima_model import ARIMA
+
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from e2eml.full_processing import postprocessing
@@ -191,13 +192,15 @@ class UnivariateTimeSeriesModels(postprocessing.FullPipeline):
 
             def objective(trial):
                 options = ["additive", "multiplicative", None]
+                damped_trend_options = [True, False]
                 if not stric_pos:
                     options.remove("additive")
                     options.remove("multiplicative")
+                    damped_trend_options.remove(True)
                 param = {
                     "trend": trial.suggest_categorical("trend", options),
                     "damped_trend": trial.suggest_categorical(
-                        "damped_trend", [True, False]
+                        "damped_trend", damped_trend_options
                     ),
                     "seasonal": trial.suggest_categorical("seasonal", options),
                     "initialization_method": trial.suggest_categorical(

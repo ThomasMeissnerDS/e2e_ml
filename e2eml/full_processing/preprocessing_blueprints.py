@@ -310,6 +310,69 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
         if self.blueprint_step_selection_non_nlp["scale_data"]:
             self.scale_with_target(mode="fit")
 
+    def quantile_regression_nn_preprocessing_pipeline(self, df):
+        logging.info("Start blueprint.")
+        self.runtime_warnings(warn_about="future_architecture_change")
+        self.check_prediction_mode(df)
+        if self.blueprint_step_selection_nlp_transformers["train_test_split"]:
+            self.train_test_split(how=self.train_split_type)
+        if self.blueprint_step_selection_non_nlp["automatic_type_detection_casting"]:
+            self.automatic_type_detection_casting()
+        if self.blueprint_step_selection_non_nlp["remove_duplicate_column_names"]:
+            self.remove_duplicate_column_names()
+        if self.blueprint_step_selection_non_nlp["reset_dataframe_index"]:
+            self.reset_dataframe_index()
+        if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
+            self.delete_high_null_cols(threshold=0.05)
+        if self.blueprint_step_selection_non_nlp["handle_target_skewness"]:
+            self.target_skewness_handling(mode="fit")
+        if self.blueprint_step_selection_non_nlp["add_is_weekend_flag"]:
+            self.add_weekend_flag()
+        if self.blueprint_step_selection_non_nlp["datetime_converter"]:
+            self.datetime_converter(datetime_handling="all")
+        if self.blueprint_step_selection_non_nlp["holistic_null_filling"]:
+            self.holistic_null_filling(iterative=False)
+        if self.blueprint_step_selection_non_nlp["category_encoding"]:
+            self.category_encoding(algorithm=self.cat_encoder_model)
+        if self.blueprint_step_selection_non_nlp["fill_nulls_static"]:
+            self.fill_nulls(how="static")  # can only be here when "static"
+        if self.blueprint_step_selection_non_nlp["scale_data"]:
+            self.scale_with_target(mode="fit")
+        if self.blueprint_step_selection_non_nlp["autoencoder_outlier_detection"]:
+            self.autoencoder_based_outlier_detection()
+        if self.blueprint_step_selection_non_nlp["automated_feature_selection"]:
+            self.automated_feature_selection(numeric_only=False)
+
+    def lstm_quantile_preprocessing_pipeline(self, df):
+        logging.info("Start blueprint.")
+        self.runtime_warnings(warn_about="future_architecture_change")
+        self.check_prediction_mode(df)
+        if self.blueprint_step_selection_nlp_transformers["train_test_split"]:
+            self.train_test_split(how=self.train_split_type)
+        if self.blueprint_step_selection_non_nlp["automatic_type_detection_casting"]:
+            self.automatic_type_detection_casting()
+        if self.blueprint_step_selection_non_nlp["remove_duplicate_column_names"]:
+            self.remove_duplicate_column_names()
+        if self.blueprint_step_selection_non_nlp["reset_dataframe_index"]:
+            self.reset_dataframe_index()
+        if self.blueprint_step_selection_non_nlp["delete_high_null_cols"]:
+            self.delete_high_null_cols(threshold=0.05)
+        if self.blueprint_step_selection_non_nlp["handle_target_skewness"]:
+            self.target_skewness_handling(mode="fit")
+        if self.blueprint_step_selection_non_nlp["add_is_weekend_flag"]:
+            self.add_weekend_flag()
+        if self.blueprint_step_selection_non_nlp["datetime_converter"]:
+            self.datetime_converter(datetime_handling="all")
+        if self.blueprint_step_selection_non_nlp["category_encoding"]:
+            self.category_encoding(algorithm=self.cat_encoder_model)
+        if self.blueprint_step_selection_non_nlp["fill_nulls_static"]:
+            self.fill_nulls(how="static")  # can only be here when "static"
+        self.reattach_targets()
+        self.get_nb_features()
+        if self.blueprint_step_selection_non_nlp["scale_data"]:
+            self.data_scaling()
+            self.data_scaling_target_only(mode="fit")
+
     def regression_for_time_series_preprocessing_pipeline(self, df):
         logging.info("Start blueprint.")
         self.runtime_warnings(warn_about="future_architecture_change")
