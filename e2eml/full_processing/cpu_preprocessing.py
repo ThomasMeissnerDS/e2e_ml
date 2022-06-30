@@ -316,7 +316,7 @@ class PreProcessing:
             "autoencoder_outlier_detection": True,
             "outlier_care": True,
             "delete_outliers": False,
-            "remove_collinearity": True,
+            "remove_collinearity": False,
             "skewness_removal": True,
             "automated_feature_transformation": False,
             "random_trees_embedding": False,
@@ -342,6 +342,28 @@ class PreProcessing:
             "sort_columns_alphabetically": True,
             "use_tabular_gan": False,
         }
+
+        # correct for regression tasks
+        if self.class_problem in ["regression"]:
+            self.blueprint_step_selection_non_nlp["data_binning"] = False
+            self.blueprint_step_selection_non_nlp[
+                "early_numeric_only_feature_selection"
+            ] = False
+            self.blueprint_step_selection_non_nlp["numeric_binarizer_pca"] = False
+            self.blueprint_step_selection_non_nlp[
+                "clustering_as_a_feature_dbscan"
+            ] = False
+            self.blueprint_step_selection_non_nlp[
+                "clustering_as_a_feature_kmeans_loop"
+            ] = False
+            self.blueprint_step_selection_non_nlp[
+                "clustering_as_a_feature_gaussian_mixture_loop"
+            ] = False
+            self.blueprint_step_selection_non_nlp["pca_clustering_results"] = False
+            self.blueprint_step_selection_non_nlp[
+                "autoencoder_outlier_detection"
+            ] = False
+            self.blueprint_step_selection_non_nlp["outlier_care"] = False
 
         self.checkpoints = {
             "automatic_type_detection_casting": True,

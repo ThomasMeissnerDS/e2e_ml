@@ -417,9 +417,10 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
-* 4.10.00
+* 4.11.00
   * Added fully connected NN for regression with quantile loss
   * Fixed wrong assignment in RNN model
+  * Adjusted default preprocessing steps for regression tasks
 * 4.00.50
   * Added Autoarima & Holt winters for univariate time series predictions
   * Added LSTM & RNN for uni- & multivariate time series prediction
