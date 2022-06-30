@@ -16,7 +16,7 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 from e2eml.full_processing import cpu_preprocessing, postprocessing
 
 # specify GPU
-scaler = torch.cuda.amp.GradScaler()  # GPU
+scaler = torch.cuda.amp.GradScaler()  # GPUs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
