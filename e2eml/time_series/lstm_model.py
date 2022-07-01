@@ -716,3 +716,4 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
                 preds_to_reconvert=X_test[self.target_variable].values, mode="revert"
             )
             self.predicted_values["lstm"] = X_test[self.target_variable]
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
