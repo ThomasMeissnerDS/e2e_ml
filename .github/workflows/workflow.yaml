@@ -1,0 +1,21 @@
+name: CI workflow
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2.3.1
+        with:
+          python-version: "3.8"
+          architecture: "x64"
+      - name: Run pre-commit
+        uses: pre-commit/action@v2.0.3

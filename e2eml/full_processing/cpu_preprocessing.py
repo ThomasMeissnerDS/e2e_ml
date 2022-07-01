@@ -1,57 +1,109 @@
-import param
-from pandas.core.common import SettingWithCopyWarning
-from sklearn import model_selection
-from sklearn.linear_model import BayesianRidge, Ridge
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import TimeSeriesSplit
-import numpy as np
-import pandas as pd
-from category_encoders import *
-from category_encoders.wrapper import NestedCVWrapper
-from imblearn.over_sampling import SMOTE
-from sklearn.ensemble import IsolationForest
-from sklearn.svm import OneClassSVM
-from sklearn.cluster import DBSCAN, KMeans
-from sklearn.mixture import GaussianMixture
-from sklearn.experimental import enable_iterative_imputer
-from sklearn.impute import IterativeImputer, SimpleImputer
-from sklearn.decomposition import PCA, KernelPCA
-from sklearn.model_selection import cross_val_score
-from sklearn.utils import class_weight
-from sklearn.metrics import make_scorer
-from sklearn.metrics import matthews_corrcoef, mean_squared_error
-from scipy.stats import bernoulli, norm, poisson, uniform,  gamma, expon, binom, pareto, levy, dweibull, halfcauchy, halfnorm, powernorm, semicircular, tukeylambda, rdist
-from boostaroota import BoostARoota
-from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
-from catboost import CatBoostClassifier
-import lightgbm as lgb
-import optuna
-import lightgbm
-import xgboost as xgb
-from scipy import stats
+import gc
+import logging
+import os
+import random
+import re
+import time
+import warnings
 
+import dill as pickle
+import lightgbm
+import lightgbm as lgb
+import numpy as np
+import optuna
+import pandas as pd
+import psutil
+import shap
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+import xgboost as xgb
+from boostaroota import BoostARoota
+from catboost import CatBoostClassifier
+from category_encoders import (
+    GLMMEncoder,
+    LeaveOneOutEncoder,
+    OneHotEncoder,
+    OrdinalEncoder,
+    TargetEncoder,
+    WOEEncoder,
+)
+from imblearn.over_sampling import SMOTE
+from pandas.core.common import SettingWithCopyWarning
+from scipy.stats import (
+    binom,
+    dweibull,
+    expon,
+    gamma,
+    halfcauchy,
+    halfnorm,
+    levy,
+    norm,
+    pareto,
+    poisson,
+    powernorm,
+    rdist,
+    semicircular,
+    tukeylambda,
+)
+from sklearn import model_selection
+from sklearn.cluster import DBSCAN, KMeans
+from sklearn.decomposition import PCA, KernelPCA
+from sklearn.ensemble import IsolationForest, RandomTreesEmbedding
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import IterativeImputer, SimpleImputer
+from sklearn.linear_model import BayesianRidge, LinearRegression, LogisticRegression
+from sklearn.metrics import make_scorer, matthews_corrcoef, mean_squared_error
+from sklearn.mixture import GaussianMixture
+from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
+from sklearn.preprocessing import (
+    KBinsDiscretizer,
+    MaxAbsScaler,
+    MinMaxScaler,
+    Normalizer,
+    PowerTransformer,
+    QuantileTransformer,
+    RobustScaler,
+    StandardScaler,
+)
+from sklearn.svm import OneClassSVM
 from torch import nn, optim
 from torch.autograd import Variable
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
+from vowpalwabbit.sklearn_vw import VWClassifier, VWRegressor
 
-import gc
-import warnings
-import logging
-import dill as pickle
-import os
-import psutil
-import time
-import random
-from copy import copy
 warnings.filterwarnings("ignore")
-#from copy import deepcopy
-#from IPython.display import clear_output
 
 pd.options.display.max_colwidth = 1000
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
+
+
+def get_scaler(param):
+    """
+    Takes the Optuna dictionary and returns scaler accordingly.
+    :param param: Dictionary
+    :return: scaler object from sklearn
+    """
+    if param["transformer"] == "quantile":
+        scaler = QuantileTransformer(output_distribution="normal")
+    elif param["transformer"] == "maxabs":
+        scaler = MaxAbsScaler()
+    elif param["transformer"] == "robust":
+        scaler = RobustScaler()
+    elif param["transformer"] == "minmax":
+        scaler = MinMaxScaler()
+    elif param["transformer"] == "yeo-johnson":
+        scaler = PowerTransformer(method="yeo-johnson")
+    elif param["transformer"] == "box_cox":
+        scaler = PowerTransformer(method="box-cox")
+    elif param["transformer"] == "standard":
+        scaler = StandardScaler()
+    elif param["transformer"] == "l2":
+        scaler = Normalizer(norm="l2")
+    elif param["transformer"] == "kbins_discretizer":
+        scaler = KBinsDiscretizer(n_bins=10, encode="ordinal", strategy="uniform")
+    else:
+        scaler = QuantileTransformer(n_quantiles=param["n_quantiles"], random_state=23)
+    return scaler
 
 
 class PreProcessing:
@@ -82,85 +134,145 @@ class PreProcessing:
     However we highly recommend GPU usage to heavily decrease model training times.
     """
 
-    def __init__(self, datasource, target_variable, date_columns=None, categorical_columns=None, num_columns=None, rarity_cols=None,
-                 unique_identifier=None, selected_feats=None, cat_encoded=None, cat_encoder_model=None, nlp_columns=None,
-                 nlp_transformer_columns=None, transformer_chosen='bert-base-uncased', transformer_model_load_from_path=None,
-                 transformer_model_save_states_path=None, transformer_epochs=25, prediction_mode=False, preferred_training_mode='auto',
-                 preprocess_decisions=None, tune_mode='accurate', trained_model=None, ml_task=None,
-                 logging_file_path=None, low_memory_mode=False, save_models_path=None, train_split_type='cross', rapids_acceleration=False):
+    def __init__(  # noqa: C901
+        self,
+        datasource,
+        target_variable,
+        date_columns=None,
+        categorical_columns=None,
+        num_columns=None,
+        rarity_cols=None,
+        unique_identifier=None,
+        selected_feats=None,
+        cat_encoded=None,
+        cat_encoder_model=None,
+        nlp_columns=None,
+        nlp_transformer_columns=None,
+        transformer_chosen="bert-base-uncased",
+        transformer_model_load_from_path=None,
+        transformer_model_save_states_path=None,
+        autoenc_outlier_model_load_from_path=None,
+        autoenc_outlier_save_states_path=None,
+        transformer_epochs=25,
+        tabular_nn_model_load_from_path=None,
+        tabular_nn_model_save_states_path=None,
+        gan_model_load_from_path=None,
+        gan_model_save_states_path=None,
+        tabular_nn_epochs=25,
+        max_tfidf_features=25000,
+        tfidf_ngrams=(1, 3),
+        prediction_mode=False,
+        preferred_training_mode="auto",
+        preprocess_decisions=None,
+        tune_mode="accurate",
+        trained_model=None,
+        ml_task=None,
+        logging_file_path=None,
+        low_memory_mode=False,
+        save_models_path=None,
+        train_split_type="cross",
+        rapids_acceleration=False,
+        shuffle_during_training=None,
+        train_size=0.80,
+        global_random_state=1000,
+    ):
 
         self.dataframe = datasource
         self.kfolds_column = None
         self.low_memory_mode = low_memory_mode
         self.save_models_path = save_models_path
         self.logging_file_path = logging_file_path
-        logging.basicConfig(filename=f'{self.logging_file_path}.log', format='%(asctime)s %(message)s',
-                            level=logging.DEBUG)
-        logging.info('Class instance created.')
+        logging.basicConfig(
+            filename=f"{self.logging_file_path}.log",
+            format="%(asctime)s %(message)s",
+            level=logging.DEBUG,
+        )
+        logging.info("Class instance created.")
 
         # check which type the data source is
         if isinstance(datasource, np.ndarray):
-            self.source_format = 'numpy array'
+            self.source_format = "numpy array"
         elif isinstance(datasource, pd.DataFrame):
-            self.source_format = 'Pandas dataframe'
+            self.source_format = "Pandas dataframe"
             self.dataframe.columns = self.dataframe.columns.astype(str)
         else:
-            self.source_format = 'Unknown, not recommened'
+            self.source_format = "Unknown, not recommened"
 
         # check if we face a classification problem and check how many classes we have
         if not ml_task:
             try:
                 if datasource[target_variable].nunique() > 10:
-                    self.class_problem = 'regression'
+                    self.class_problem = "regression"
                 elif datasource[target_variable].nunique() > 2:
-                    self.class_problem = 'multiclass'
+                    self.class_problem = "multiclass"
                     self.num_classes = datasource[target_variable].nunique()
                 elif datasource[target_variable].nunique() == 2:
-                    self.class_problem = 'binary'
+                    self.class_problem = "binary"
                     self.num_classes = 2
                 else:
-                    self.class_problem = 'regression'
+                    self.class_problem = "regression"
             except Exception:
                 if len(np.unique(np.array(target_variable))) > 2:
-                    self.class_problem = 'multiclass'
+                    self.class_problem = "multiclass"
                     self.num_classes = len(np.unique(np.array(target_variable)))
                 elif len(np.unique(np.array(target_variable))) == 2:
-                    self.class_problem = 'binary'
+                    self.class_problem = "binary"
                     self.num_classes = 2
                 else:
                     pass
         else:
             self.class_problem = ml_task
-            if ml_task == 'multiclass':
+            if ml_task == "multiclass":
                 self.num_classes = datasource[target_variable].nunique()
-            elif ml_task == 'binary':
+            elif ml_task == "binary":
                 self.num_classes = 2
         print(f"Ml task is {self.class_problem}")
 
         self.binary_unbalanced = False
 
-        if preferred_training_mode == 'cpu':
+        if preferred_training_mode == "cpu":
             message = """
             CPU mode has been chosen. Installing e2eml into an environment where LGBM and Xgboost have been installed with GPU acceleration
             is recommended to be able to use preferred_training_mode='gpu'. This will speed up model training and feature importance
-            via SHAP. 
+            via SHAP.
             """
-            logging.warning(f'{message}')
-            print(f'{message}')
+            logging.warning(f"{message}")
+            print(f"{message}")
             self.preferred_training_mode = preferred_training_mode
-        elif preferred_training_mode == 'gpu':
-            print('GPU acceleration chosen.')
+        elif preferred_training_mode == "gpu":
+            print("GPU acceleration chosen.")
             self.preferred_training_mode = preferred_training_mode
-        elif preferred_training_mode == 'auto':
-            print("Preferred training mode auto has been chosen. e2eml will automatically detect, if LGBM and Xgboost can "
-                  "use GPU acceleration and optimize the workflow accordingly.")
+        elif preferred_training_mode == "auto":
+            print(
+                "Preferred training mode auto has been chosen. e2eml will automatically detect, if LGBM and Xgboost can "
+                "use GPU acceleration and optimize the workflow accordingly."
+            )
             self.preferred_training_mode = preferred_training_mode
         else:
-            self.preferred_training_mode = 'cpu'
-            print('No preferred_training_mode chosen. Fallback to CPU.')
+            self.preferred_training_mode = "cpu"
+            print("No preferred_training_mode chosen. Fallback to CPU.")
         self.tune_mode = tune_mode
-        self.train_split_type = train_split_type
+        if self.class_problem in ["binary", "multiclass", "regression"]:
+            self.train_split_type = train_split_type
+        else:
+            self.train_split_type = "time"
         self.rapids_acceleration = rapids_acceleration
+
+        if not shuffle_during_training and self.class_problem in ["time_series"]:
+            self.shuffle_during_training = False
+        elif not shuffle_during_training:
+            self.shuffle_during_training = True
+        else:
+            self.shuffle_during_training = shuffle_during_training
+
+        self.train_size = train_size
+        if self.shuffle_during_training:
+            self.booster_random_state = None
+        else:
+            self.booster_random_state = global_random_state
+        self.global_random_state = global_random_state
+        self.kmeans_components_to_loop = [3, 5, 7, 9]
+        self.gaussian_components_to_loop = [2, 4, 6, 8, 10]
         self.date_columns = date_columns
         self.date_columns_created = None
         self.categorical_columns = categorical_columns
@@ -174,6 +286,9 @@ class PreProcessing:
         self.nlp_transformers = {}
         self.transformer_chosen = transformer_chosen
         self.transformer_epochs = transformer_epochs
+        self.tabular_nn_epochs = tabular_nn_epochs
+        self.max_tfidf_features = max_tfidf_features
+        self.tfidf_ngrams = tfidf_ngrams
         self.cat_columns_encoded = None
         self.num_columns_encoded = None
         self.unique_identifier = unique_identifier
@@ -191,21 +306,27 @@ class PreProcessing:
             "data_binning": True,
             "regex_clean_text_data": False,
             "handle_target_skewness": False,
+            "add_is_weekend_flag": True,
             "datetime_converter": True,
-            "pos_tagging_pca": False, # slow with many categories
+            "pos_tagging_pca": False,  # slow with many categories
             "append_text_sentiment_score": False,
-            "tfidf_vectorizer_to_pca": True, # slow with many categories
+            "tfidf_vectorizer_to_pca": False,  # slow with many categories
             "tfidf_vectorizer": False,
             "rare_feature_processing": True,
             "cardinality_remover": True,
-            "holistic_null_filling": True, # slow
+            "categorical_column_embeddings": False,
+            "holistic_null_filling": True,  # slow
             "numeric_binarizer_pca": True,
             "onehot_pca": True,
             "category_encoding": True,
             "fill_nulls_static": True,
+            "autoencoder_outlier_detection": True,
             "outlier_care": True,
-            "remove_collinearity": True,
+            "delete_outliers": False,
+            "remove_collinearity": False,
             "skewness_removal": True,
+            "automated_feature_transformation": False,
+            "random_trees_embedding": False,
             "clustering_as_a_feature_dbscan": True,
             "clustering_as_a_feature_kmeans_loop": True,
             "clustering_as_a_feature_gaussian_mixture_loop": True,
@@ -216,42 +337,73 @@ class PreProcessing:
             "scale_data": True,
             "smote": False,
             "automated_feature_selection": True,
-            "bruteforce_random_feature_selection": False, # slow
-            "delete_unpredictable_training_rows": False,
+            "bruteforce_random_feature_selection": False,  # slow
             "autoencoder_based_oversampling": False,
             "synthetic_data_augmentation": False,
             "final_pca_dimensionality_reduction": False,
             "final_kernel_pca_dimensionality_reduction": False,
-            "delete_low_variance_features": True,
-            "sort_columns_alphabetically": True
+            "delete_low_variance_features": False,
+            "shap_based_feature_selection": False,
+            "delete_unpredictable_training_rows": False,
+            "trained_tokenizer_embedding": False,
+            "sort_columns_alphabetically": True,
+            "use_tabular_gan": False,
         }
 
+        # correct for regression tasks
+        if self.class_problem in ["regression"]:
+            self.blueprint_step_selection_non_nlp["data_binning"] = False
+            self.blueprint_step_selection_non_nlp[
+                "early_numeric_only_feature_selection"
+            ] = False
+            self.blueprint_step_selection_non_nlp["numeric_binarizer_pca"] = False
+            self.blueprint_step_selection_non_nlp[
+                "clustering_as_a_feature_dbscan"
+            ] = False
+            self.blueprint_step_selection_non_nlp[
+                "clustering_as_a_feature_kmeans_loop"
+            ] = False
+            self.blueprint_step_selection_non_nlp[
+                "clustering_as_a_feature_gaussian_mixture_loop"
+            ] = False
+            self.blueprint_step_selection_non_nlp["pca_clustering_results"] = False
+            self.blueprint_step_selection_non_nlp[
+                "autoencoder_outlier_detection"
+            ] = False
+            self.blueprint_step_selection_non_nlp["outlier_care"] = False
+
         self.checkpoints = {
-            "automatic_type_detection_casting": False,
-            "early_numeric_only_feature_selection": False,
-            "remove_duplicate_column_names": False,
-            "reset_dataframe_index": False,
+            "automatic_type_detection_casting": True,
+            "early_numeric_only_feature_selection": True,
+            "remove_duplicate_column_names": True,
+            "reset_dataframe_index": True,
             "regex_clean_text_data": False,
-            "handle_target_skewness": False,
-            "holistic_null_filling": True, # slow
+            "handle_target_skewness": True,
+            "holistic_null_filling": True,  # slow
             "iterative_null_imputation": True,
             "fill_infinite_values": True,
+            "add_is_weekend_flag": True,
             "datetime_converter": True,
-            "pos_tagging_pca": True, # slow with many categories
+            "pos_tagging_pca": True,  # slow with many categories
             "append_text_sentiment_score": True,
-            "tfidf_vectorizer_to_pca": True, # slow with many categories
+            "tfidf_vectorizer_to_pca": True,  # slow with many categories
             "tfidf_vectorizer": True,
             "rare_feature_processing": True,
             "cardinality_remover": True,
+            "categorical_column_embeddings": False,
             "delete_high_null_cols": True,
             "numeric_binarizer_pca": True,
             "onehot_pca": True,
             "category_encoding": True,
             "fill_nulls_static": True,
             "data_binning": True,
+            "autoencoder_outlier_detection": True,
             "outlier_care": True,
+            "delete_outliers": True,
             "remove_collinearity": True,
             "skewness_removal": True,
+            "automated_feature_transformation": True,
+            "random_trees_embedding": False,
             "autotuned_clustering": True,
             "clustering_as_a_feature_dbscan": True,
             "clustering_as_a_feature_kmeans_loop": True,
@@ -260,19 +412,22 @@ class PreProcessing:
             "svm_outlier_detection_loop": True,
             "reduce_memory_footprint": True,
             "automated_feature_selection": True,
-            "bruteforce_random_feature_selection": True, # slow
+            "bruteforce_random_feature_selection": True,  # slow
             "sort_columns_alphabetically": True,
             "synthetic_data_augmentation": True,
-            "delete_unpredictable_training_rows": True,
             "scale_data": True,
             "smote": True,
             "autoencoder_based_oversampling": True,
-            "final_kernel_pca_dimensionality_reduction": False,
+            "final_kernel_pca_dimensionality_reduction": True,
             "final_pca_dimensionality_reduction": True,
-            "delete_low_variance_features": True
+            "delete_low_variance_features": True,
+            "shap_based_feature_selection": True,
+            "delete_unpredictable_training_rows": True,
+            "trained_tokenizer_embedding": True,
+            "use_tabular_gan": True,
         }
         self.checkpoint_reached = {}
-        for key, value in self.checkpoints.items():
+        for key in self.checkpoints.keys():
             self.checkpoint_reached[key] = False
 
         self.preprocessing_funcs = None
@@ -284,9 +439,9 @@ class PreProcessing:
             "sort_columns_alphabetically": True,
             "random_synonym_replacement": False,
             "oversampling": False,
-            "synonym_language": 'english'
+            "synonym_language": "english",
         }
-        self.feature_selection_backend = 'lgbm'
+        self.feature_selection_backend = "lgbm"
 
         self.pos_tagging_languages = {
             # https://spacy.io/models/es
@@ -295,7 +450,8 @@ class PreProcessing:
             "english": "en_core_web_sm",
             "italian": "it_core_news_sm",
             "portugese": "pt_core_news_sm",
-            "spanish": "es_core_news_sm"}
+            "spanish": "es_core_news_sm",
+        }
 
         """
         NLTK compatible languages
@@ -324,16 +480,36 @@ class PreProcessing:
          'french',
          'italian']
         """
-        self.special_blueprint_algorithms = {"ridge": True,
-                                             "elasticnet": True,
-                                             "catboost": True,
-                                             "xgboost": True,
-                                             "ngboost": True,
-                                             "lgbm": True,
-                                             "tabnet": False,
-                                             "vowpal_wabbit": True,
-                                             "sklearn_ensemble": True
-                                             }
+        self.special_blueprint_algorithms = {
+            "ridge": True,
+            "elasticnet": True,
+            "catboost": True,
+            "xgboost": True,
+            "ngboost": True,
+            "lgbm": True,
+            "tabnet": False,
+            "vowpal_wabbit": True,
+            "sklearn_ensemble": True,
+        }
+        self.get_feature_importance = {
+            "ridge": True,
+            "elasticnet": True,
+            "catboost": True,
+            "xgboost": True,
+            "ngboost": True,
+            "lgbm": True,
+            "lgbm_focal": True,
+            "sgd": True,
+            "vowpal_wabbit": True,
+            "sklearn_ensemble": True,
+            "svm": True,
+            "svm_regression": True,
+            "quadratic_discriminant_analysis": True,
+            "logistic_regression": True,
+            "linear_regression": True,
+            "ransac": True,
+            "multinomial_nb": True,
+        }
         # store chosen preprocessing settings
         if not preprocess_decisions:
             self.preprocess_decisions = {}
@@ -341,80 +517,212 @@ class PreProcessing:
             self.preprocess_decisions = preprocess_decisions
         self.transformer_model_load_from_path = transformer_model_load_from_path
         self.transformer_model_save_states_path = transformer_model_save_states_path
-        self.transformer_settings = {f"train_batch_size": 32,
-                                     "test_batch_size": 32,
-                                     "pred_batch_size": 32,
-                                     "num_workers": 4,
-                                     "epochs": self.transformer_epochs, # TODO: Change to 20 again
-                                     "transformer_model_path": self.transformer_model_load_from_path,
-                                     "model_save_states_path": {self.transformer_model_save_states_path},
-                                     "keep_best_model_only": False}
+        self.transformer_settings = {
+            "train_batch_size": 32,
+            "test_batch_size": 32,
+            "pred_batch_size": 32,
+            "num_workers": 4,
+            "epochs": self.transformer_epochs,
+            "nb_model_to_create": 1,
+            "transformer_model_path": self.transformer_model_load_from_path,
+            "model_save_states_path": {self.transformer_model_save_states_path},
+            "keep_best_model_only": False,
+        }
+        self.tabular_nn_model_load_from_path = tabular_nn_model_load_from_path
+        self.tabular_nn_model_save_states_path = tabular_nn_model_save_states_path
+        self.autoenc_outlier_model_load_from_path = autoenc_outlier_model_load_from_path
+        self.autoenc_outlier_save_states_path = autoenc_outlier_save_states_path
+        self.gan_model_load_from_path = gan_model_load_from_path
+        self.gan_model_save_states_path = gan_model_save_states_path
+        self.autotuned_nn_settings = {
+            "train_batch_size": 512,
+            "test_batch_size": 512,
+            "pred_batch_size": 512,
+            "drop_out": 0.3,
+            "num_workers": 4,
+            "learning_rate": 1e-3,
+            "weight_decay": 1e-5,
+            "nb_model_to_create": 1,
+            "architecture": "1d-cnn",
+            "regression_loss": "mse",
+            "quantiles": (0.2, 0.5, 0.8),
+            "epochs": self.tabular_nn_epochs,
+            "transformer_model_path": self.tabular_nn_model_load_from_path,
+            "model_save_states_path": {self.tabular_nn_model_save_states_path},
+            "keep_best_model_only": False,
+        }
+        self.quantile_nn_settings = {
+            "train_batch_size": 16,
+            "test_batch_size": 16,
+            "pred_batch_size": 16,
+            "num_workers": 4,
+            "learning_rate": 1e-5,
+            "weight_decay": 1e-5,
+            "drop_out": 0.3,
+            "nb_model_to_create": 1,
+            "architecture": "ann",
+            "quantiles": (0.2, 0.5, 0.8),
+            "epochs": 500,
+            "transformer_model_path": self.tabular_nn_model_load_from_path,
+            "model_save_states_path": {self.tabular_nn_model_save_states_path},
+        }
+        self.gan_settings = {
+            "batch_size": 512,
+            "num_workers": 4,
+            "generator_learning_rate": 0.0002,
+            "discriminator_learning_rate": 0.0002,
+            "generator_dropout_rate": 0.2,
+            "discriminator_dropout_rate": 0.2,
+            "max_epochs": 100,
+            "nb_synthetic_rows_to_create": 10000,
+            "concat_to_original_data": False,
+            "discriminator_extra_training_rounds": 5,
+            "early_stopping_rounds": 5,
+            "transformer_model_path": self.gan_model_load_from_path,
+            "model_save_states_path": {self.gan_model_save_states_path},
+        }
+        self.lstm_settings = {
+            "train_batch_size": 32,
+            "test_batch_size": 32,
+            "pred_batch_size": 32,
+            "drop_out": 0.2,
+            "layer_dim": 2,
+            "hidden_dim": 256,
+            "num_workers": 4,
+            "learning_rate": 0.01,
+            "weight_decay": 1e-5,
+            "seq_len": 5,
+            "regression_loss": "mse",
+            "epochs": 1000,
+            "quantiles": (0.2, 0.5, 0.8),
+            "nb_model_to_create": 1,
+            "transformer_model_path": self.tabular_nn_model_load_from_path,
+            "model_save_states_path": {self.tabular_nn_model_save_states_path},
+            "keep_best_model_only": False,
+        }
 
+        if self.dataframe.shape[1] > 50:
+            self.lstm_settings["hidden_dim"] = 512
+            self.lstm_settings["layer_dim"] = 3
+
+        self.rnn_settings = {
+            "train_batch_size": 32,
+            "test_batch_size": 32,
+            "pred_batch_size": 32,
+            "drop_out": 0.2,
+            "layer_dim": 2,
+            "hidden_dim": 256,
+            "num_workers": 4,
+            "learning_rate": 0.01,
+            "weight_decay": 1e-5,
+            "seq_len": 5,
+            "regression_loss": "mse",
+            "epochs": 100,
+            "nb_model_to_create": 1,
+            "transformer_model_path": self.tabular_nn_model_load_from_path,
+            "model_save_states_path": {self.tabular_nn_model_save_states_path},
+            "keep_best_model_only": False,
+        }
+        if self.dataframe.shape[1] > 50:
+            self.rnn_settings["hidden_dim"] = 512
+            self.rnn_settings["layer_dim"] = 3
+
+        self.deesc_settings = {
+            "learning_rate": 0.3,
+            "random_state": self.global_random_state,
+            "use_long_warmup": False,
+            "auto_select_features": False,
+            "no_stacking": False,
+            "max_tuning_time_h": 0.06,
+        }
         # automatically determine batch sizes for Tabnet
 
-        rec_batch_size = (len(self.dataframe.index)*0.8)/20
-        if int(rec_batch_size) % 2 == 0:
-            rec_batch_size = int(rec_batch_size)
+        if self.class_problem in ["binary", "multiclass", "regression"]:
+            rec_batch_size = (len(self.dataframe.index) * 0.8) / 20
+            if int(rec_batch_size) % 2 == 0:
+                rec_batch_size = int(rec_batch_size)
+            else:
+                rec_batch_size = int(rec_batch_size) + 1
+            if rec_batch_size > 16384:
+                rec_batch_size = 16384
+                virtual_batch_size = 4096
+            else:
+                virtual_batch_size = int(rec_batch_size / 4)
         else:
-            rec_batch_size = int(rec_batch_size)+1
-        if rec_batch_size > 16384:
-            rec_batch_size = 16384
-            virtual_batch_size = 4096
-        else:
-            virtual_batch_size = int(rec_batch_size/4)
+            rec_batch_size = 100
+            virtual_batch_size = 100
 
-        self.tabnet_settings = {f"batch_size": rec_batch_size,
-                                "virtual_batch_size": virtual_batch_size,
-                                "num_workers": 0,
-                                "max_epochs": 1000}
+        self.tabnet_settings = {
+            "batch_size": rec_batch_size,
+            "virtual_batch_size": virtual_batch_size,
+            "num_workers": 0,
+            "max_epochs": 1000,
+        }
 
-        self.hyperparameter_tuning_rounds = {"xgboost": 100,
-                                             "lgbm": 500,
-                                             "lgbm_focal": 50,
-                                             "tabnet": 25,
-                                             "ngboost": 25,
-                                             "sklearn_ensemble": 10,
-                                             "ridge": 500,
-                                             "elasticnet": 100,
-                                             "catboost": 25,
-                                             "sgd": 2000,
-                                             "svm": 50,
-                                             "svm_regression": 50,
-                                             "ransac": 50,
-                                             "multinomial_nb": 100,
-                                             "bruteforce_random": 400,
-                                             "synthetic_data_augmentation": 100,
-                                             "autoencoder_based_oversampling": 200,
-                                             "final_kernel_pca_dimensionality_reduction": 50,
-                                             "final_pca_dimensionality_reduction": 50}
+        self.auto_arima_settings = {
+            "plot_adf_kpss": False,
+            "max_p": 20,
+            "max_d": 3,
+            "max_q": 20,
+        }
 
-        self.hyperparameter_tuning_max_runtime_secs = {"xgboost": 2*60*60,
-                                                       "lgbm": 2*60*60,
-                                                       "lgbm_focal": 2*60*60,
-                                                       "tabnet": 2*60*60,
-                                                       "ngboost": 2*60*60,
-                                                       "sklearn_ensemble": 2*60*60,
-                                                       "ridge": 2*60*60,
-                                                       "elasticnet": 2*60*60,
-                                                       "catboost": 2*60*60,
-                                                       "sgd": 2*60*60,
-                                                       "svm": 2*60*60,
-                                                       "svm_regression": 2*60*60,
-                                                       "ransac": 2*60*60,
-                                                       "multinomial_nb": 2*60*60,
-                                                       "bruteforce_random": 2*60*60,
-                                                       "synthetic_data_augmentation": 1*60*60,
-                                                       "autoencoder_based_oversampling": 2*60*60,
-                                                       "final_kernel_pca_dimensionality_reduction": 4*60*60,
-                                                       "final_pca_dimensionality_reduction": 2*60*60}
+        self.hyperparameter_tuning_rounds = {
+            "xgboost": 100,
+            "lgbm": 500,
+            "lgbm_focal": 50,
+            "tabnet": 25,
+            "ngboost": 25,
+            "sklearn_ensemble": 10,
+            "ridge": 500,
+            "elasticnet": 100,
+            "catboost": 25,
+            "sgd": 2000,
+            "svm": 50,
+            "svm_regression": 50,
+            "ransac": 50,
+            "multinomial_nb": 100,
+            "bruteforce_random": 400,
+            "synthetic_data_augmentation": 100,
+            "autoencoder_based_oversampling": 200,
+            "final_kernel_pca_dimensionality_reduction": 50,
+            "final_pca_dimensionality_reduction": 50,
+            "auto_arima": 10,
+            "holt_winters": 50,
+        }
+
+        self.hyperparameter_tuning_max_runtime_secs = {
+            "xgboost": 2 * 60 * 60,
+            "lgbm": 2 * 60 * 60,
+            "lgbm_focal": 2 * 60 * 60,
+            "tabnet": 2 * 60 * 60,
+            "ngboost": 2 * 60 * 60,
+            "sklearn_ensemble": 2 * 60 * 60,
+            "ridge": 2 * 60 * 60,
+            "elasticnet": 2 * 60 * 60,
+            "catboost": 2 * 60 * 60,
+            "sgd": 2 * 60 * 60,
+            "svm": 2 * 60 * 60,
+            "svm_regression": 2 * 60 * 60,
+            "ransac": 2 * 60 * 60,
+            "multinomial_nb": 2 * 60 * 60,
+            "bruteforce_random": 2 * 60 * 60,
+            "synthetic_data_augmentation": 1 * 60 * 60,
+            "autoencoder_based_oversampling": 2 * 60 * 60,
+            "final_kernel_pca_dimensionality_reduction": 4 * 60 * 60,
+            "final_pca_dimensionality_reduction": 2 * 60 * 60,
+            "auto_arima": 2 * 60 * 60,
+            "holt_winters": 2 * 60 * 60,
+        }
 
         self.feature_selection_sample_size = 100000
         self.hyperparameter_tuning_sample_size = 10000
         self.brute_force_selection_sample_size = 15000
         self.final_pca_dimensionality_reduction_sample_size = 15000
-        self.brute_force_selection_base_learner = 'double' # 'lgbm', 'vowpal_wabbit', 'auto
+        self.brute_force_selection_base_learner = (
+            "double"  # 'lgbm', 'vowpal_wabbit', 'auto
+        )
 
-        if self.class_problem == 'regression':
+        if self.class_problem in ["regression", "time_series"]:
             skewness = datasource[self.target_variable].skew(axis=0, skipna=True)
             if skewness < -0.75 or skewness > 0.75:
                 self.target_is_skewed = True
@@ -423,6 +731,7 @@ class PreProcessing:
         else:
             self.target_is_skewed = False
         self.selected_feats = selected_feats
+        self.selected_shap_feats = None
         self.cat_encoded = cat_encoded
         self.cat_encoder_model = cat_encoder_model
         self.data_scaled = False
@@ -441,7 +750,15 @@ class PreProcessing:
         self.best_model = None
         self.excluded = None
         self.detected_col_types = {}
-        self.num_dtypes = ['int8', 'int16', 'int32', 'int64', 'float16', 'float32', 'float64']
+        self.num_dtypes = [
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "float16",
+            "float32",
+            "float64",
+        ]
         if not num_columns:
             num_col_list = []
             for vartype in self.num_dtypes:
@@ -451,12 +768,14 @@ class PreProcessing:
             self.num_columns = num_col_list
         else:
             self.num_columns = num_columns
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
 
     def __repr__(self):
-        return f"Central data class holding all information like dataframes, " \
-               f"columns of certain data types, saved models and predictions." \
-               f"Current target variable:'{self.target_variable}'"
+        return (
+            "Central data class holding all information like dataframes, "
+            "columns of certain data types, saved models and predictions."
+            f"Current target variable:'{self.target_variable}'"
+        )
 
     def __str__(self):
         return f"Current target: {self.target_variable}"
@@ -476,48 +795,48 @@ class PreProcessing:
             print(f"{current_time}")
         return current_time
 
-    def runtime_warnings(self, warn_about='shap_cpu'):
+    def runtime_warnings(self, warn_about="shap_cpu"):
         """
         This function returns custom warnings for a better user experience.
         :return: warning message
         """
-        if warn_about == 'shap_cpu':
+        if warn_about == "shap_cpu":
             warning_message = """Calculating SHAP values for feature importance on CPU might run a long time. To disable
             the calculation set the parameter 'feat_importance' to False. Alternatively the LGBM and Xgboost
             blueprints can be used as well. These run on GPU by default and usually yield better
             classification results as well."""
             return warnings.warn(warning_message, RuntimeWarning)
-        elif warn_about == 'long runtime':
+        elif warn_about == "long runtime":
             warning_message = """This blueprint has long runtimes. GPU acceleration is only possible for LGBM and Xgboost
             as of now. Also Ngboost is relatively fast even though it can only run on CPU."""
             return warnings.warn(warning_message, RuntimeWarning)
-        elif warn_about == 'wrong null algorithm':
-            warning_message = """The chosen option does not exist. Currently only "iterative_imputation" and "static" 
+        elif warn_about == "wrong null algorithm":
+            warning_message = """The chosen option does not exist. Currently only "iterative_imputation" and "static"
             exist. Any other declared option will result in not-handling of NULLs and are likely to fail later in the
              pipeline."""
             return warnings.warn(warning_message, RuntimeWarning)
-        elif warn_about == 'future_architecture_change':
+        elif warn_about == "future_architecture_change":
             warning_message = """The organization of blueprints will change in a future version to better separate NLP
             and non-NLP related preprocessing(!) blueprints. This change is likely to be live with e2eml version 2.0.0
             """
             return warnings.warn(warning_message, DeprecationWarning)
-        elif warn_about == 'no_nlp_transformer':
-            warning_message = """No nlp_transformer_columns have been provided during class instantiation. Some 
+        elif warn_about == "no_nlp_transformer":
+            warning_message = """No nlp_transformer_columns have been provided during class instantiation. Some
             NLP related functions only run with this information.."""
             return warnings.warn(warning_message, UserWarning)
-        elif warn_about == 'duplicate_column_names':
+        elif warn_about == "duplicate_column_names":
             warning_message = """Duplicate column names have been found and duplicate columns have been removed. Please
             make check, if these columns were fully duplicates or sharing an identical name only.
             """
             return warnings.warn(warning_message, UserWarning)
-        elif warn_about == 'not_enough_target_class_members':
+        elif warn_about == "not_enough_target_class_members":
             warning_message = """Some target classes have less members than allowed. You can ignore this message, if you
             are running a blueprint without NLP transformers.
-            
+
             In order to create a strong model e2eml splits the data into several folds. Please provide data with at least
-             6 class members for each target class. Otherwise the model is likely to fail to a CUDA error on runtime. 
+             6 class members for each target class. Otherwise the model is likely to fail to a CUDA error on runtime.
              You can use the following function on your dataframe before passing it to e2eml:
-            
+
             def handle_rarity(all_data, threshold=6, mask_as='miscellaneous', rarity_cols=None, normalize=False):
                 if isinstance(rarity_cols, list):
                     for col in rarity_cols:
@@ -530,10 +849,10 @@ class PreProcessing:
                 else:
                     pass
                 return all_data
-                
+
             Example usage:
             train_df = handle_rarity(train_df, rarity_cols=["your_target_column_name"])
-            
+
             Important:
             This function modifies the original data. It is recommended to create a copy of your data first.
             """
@@ -545,45 +864,43 @@ class PreProcessing:
         data = np.random.rand(50, 2)
         label = np.random.randint(2, size=50)
         try:
-            if not self.preprocess_decisions[f"gpu_support"]:
-                self.preprocess_decisions[f"gpu_support"] = {}
+            if not self.preprocess_decisions["gpu_support"]:
+                self.preprocess_decisions["gpu_support"] = {}
         except KeyError:
-            self.preprocess_decisions[f"gpu_support"] = {}
+            self.preprocess_decisions["gpu_support"] = {}
         else:
             pass
-        if algorithm == 'lgbm':
-            self.get_current_timestamp(task='Check LGBM for GPU acceleration.')
-            train_data = lightgbm.Dataset(data, label=label)
-            params = {'num_iterations': 1, 'device': 'gpu'}
+        if algorithm == "lgbm":
+            self.get_current_timestamp(task="Check LGBM for GPU acceleration.")
+            train_data = lightgbm.Dataset(data, label=label)  # noqa: F841
+            params = {"num_iterations": 1, "device": "gpu"}
             try:
-                gbm = lightgbm.train(params, train_set=train_data)
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'gpu'
-                print('LGBM uses GPU.')
+                lightgbm.train(params, train_set=train_data)
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "gpu"
+                print("LGBM uses GPU.")
             except Exception:
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'cpu'
-                print('LGBM uses CPU.')
-        elif algorithm == 'xgboost':
-            self.get_current_timestamp(task='Check Xgboost for GPU acceleration.')
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "cpu"
+                print("LGBM uses CPU.")
+        elif algorithm == "xgboost":
+            self.get_current_timestamp(task="Check Xgboost for GPU acceleration.")
             D_train = xgb.DMatrix(data, label=label)
-            params = {'tree_method': 'gpu_hist', 'steps': 2}
+            params = {"tree_method": "gpu_hist", "steps": 2}
             try:
-                model = xgb.train(params, D_train)
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'gpu_hist'
-                print('Xgboost uses GPU.')
+                xgb.train(params, D_train)
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "gpu_hist"
+                print("Xgboost uses GPU.")
             except Exception:
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'exact'
-                print('Xgboost uses CPU.')
-        elif algorithm == 'catboost':
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "exact"
+                print("Xgboost uses CPU.")
+        elif algorithm == "catboost":
             try:
-                model = CatBoostClassifier(iterations=2,
-                                               task_type="GPU",
-                                               devices='0:1')
+                model = CatBoostClassifier(iterations=2, task_type="GPU", devices="0:1")
                 model.fit(data, label)
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'GPU'
-                print('Catboost uses GPU.')
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "GPU"
+                print("Catboost uses GPU.")
             except Exception:
-                self.preprocess_decisions[f"gpu_support"][f"{algorithm}"] = 'CPU'
-                print('Catboost uses CPU.')
+                self.preprocess_decisions["gpu_support"][f"{algorithm}"] = "CPU"
+                print("Catboost uses CPU.")
         else:
             print("No algorithm has been checked for GPU acceleration.")
 
@@ -593,26 +910,30 @@ class PreProcessing:
         :return: Returns casted dataframe
         """
         if self.prediction_mode:
-            self.get_current_timestamp(task='Started column type detection and casting')
-            logging.info('Started column type detection and casting.')
+            self.get_current_timestamp(task="Started column type detection and casting")
+            logging.info("Started column type detection and casting.")
             for key in self.detected_col_types:
-                if self.detected_col_types[key] == 'datetime[ns]':
-                    self.dataframe[key] = pd.to_datetime(self.dataframe[key], yearfirst=True)
+                if self.detected_col_types[key] == "datetime[ns]":
+                    self.dataframe[key] = pd.to_datetime(
+                        self.dataframe[key], yearfirst=True
+                    )
                 else:
-                    self.dataframe[key] = self.dataframe[key].astype(self.detected_col_types[key])
-            logging.info('Finished column type detection and casting.')
+                    self.dataframe[key] = self.dataframe[key].astype(
+                        self.detected_col_types[key]
+                    )
+            logging.info("Finished column type detection and casting.")
             return self.dataframe
         else:
-            self.get_current_timestamp(task='Started column type detection and casting')
-            logging.info('Started column type detection and casting.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            self.get_current_timestamp(task="Started column type detection and casting")
+            logging.info("Started column type detection and casting.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             # detect and cast boolean columns
-            bool_cols = list(X_train.select_dtypes(['bool']))
+            bool_cols = list(X_train.select_dtypes(["bool"]))
             for col in bool_cols:
                 X_train[col] = X_train[col].astype(bool)
                 X_test[col] = X_test[col].astype(bool)
-                self.detected_col_types[col] = 'bool'
+                self.detected_col_types[col] = "bool"
 
             # detect and cast datetime columns
             try:
@@ -629,7 +950,7 @@ class PreProcessing:
                             X_train[col] = pd.to_datetime(X_train[col], yearfirst=True)
                             X_test[col] = pd.to_datetime(X_test[col], yearfirst=True)
                             date_columns.append(col)
-                            self.detected_col_types[col] = 'datetime[ns]'
+                            self.detected_col_types[col] = "datetime[ns]"
                         except Exception:
                             pass
                 self.date_columns = date_columns
@@ -642,13 +963,20 @@ class PreProcessing:
                 try:
                     X_train[col] = X_train[col].astype(float)
                     X_test[col] = X_test[col].astype(float)
-                    self.detected_col_types[col] = 'float'
+                    self.detected_col_types[col] = "float"
                 except Exception:
                     X_train[col] = X_train[col].astype(str)
                     X_test[col] = X_test[col].astype(str)
-                    self.detected_col_types[col] = 'object'
-            logging.info('Finished column type detection and casting.')
+                    self.detected_col_types[col] = "object"
+            logging.info("Finished column type detection and casting.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def get_nb_features(self):
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            self.preprocess_decisions["n_features"] = X_train.columns
 
     def binary_imbalance(self):
         """
@@ -659,12 +987,12 @@ class PreProcessing:
         if self.prediction_mode:
             pass
         else:
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 total_labels = len(Y_train.index)
                 majority_class = Y_train.value_counts().sum()
-                minority_class = total_labels-majority_class
-                if minority_class/total_labels < 0.03:
+                minority_class = total_labels - majority_class
+                if minority_class / total_labels < 0.03:
                     self.binary_unbalanced = True
                 else:
                     self.binary_unbalanced = False
@@ -678,15 +1006,15 @@ class PreProcessing:
         to break at later steps.
         :return: Updates class attributes
         """
-        self.get_current_timestamp(task='Checking for duplicate columns')
-        logging.info('Start checking for duplicate columns')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        self.get_current_timestamp(task="Checking for duplicate columns")
+        logging.info("Start checking for duplicate columns")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
             all_columns = self.dataframe.columns.to_list()
             cols_no_duplicates = list(set(all_columns))
             self.dataframe = self.dataframe[cols_no_duplicates].copy()
-            logging.info('Finished checking for duplicate columns')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished checking for duplicate columns")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -695,9 +1023,9 @@ class PreProcessing:
             X_train = X_train[cols_no_duplicates].copy()
             X_test = X_test[cols_no_duplicates].copy()
             if len(all_columns) != len(cols_no_duplicates):
-                self.runtime_warnings(warn_about='duplicate_column_names')
-            logging.info('Finished checking for duplicate columns')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                self.runtime_warnings(warn_about="duplicate_column_names")
+            logging.info("Finished checking for duplicate columns")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def reset_dataframe_index(self):
@@ -706,13 +1034,13 @@ class PreProcessing:
         in the intex (i.e. after concatinating multiples dataframes before).
         :return: Updates class instance.
         """
-        self.get_current_timestamp('Reset dataframe index.')
-        logging.info('Started resetting dataframe.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        self.get_current_timestamp("Reset dataframe index.")
+        logging.info("Started resetting dataframe.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
             self.dataframe = self.dataframe.reset_index(drop=True)
-            logging.info('Finished resetting dataframe.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished resetting dataframe.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -728,8 +1056,8 @@ class PreProcessing:
 
             X_train = X_train.drop(self.target_variable, axis=1)
             X_test = X_test.drop(self.target_variable, axis=1)
-            logging.info('Finished resetting dataframe.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished resetting dataframe.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def wrap_test_train_to_dict(self, X_train, X_test, Y_train, Y_test):
@@ -742,20 +1070,22 @@ class PreProcessing:
         :return: Class dictionary
         """
         if self.prediction_mode:
-            logging.info('Skipped wrapping dataframe dict due to prediction mode.')
+            logging.info("Skipped wrapping dataframe dict due to prediction mode.")
             pass
         else:
-            logging.info('Start wrapping dataframe dictionary')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            self.df_dict = {'X_train': X_train,
-                            'X_test': X_test,
-                            'Y_train': Y_train,
-                            'Y_test': Y_test}
-            logging.info('Finished wrapping dataframe dictionary')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            del X_train,
-            del X_test,
-            del Y_train,
+            logging.info("Start wrapping dataframe dictionary")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            self.df_dict = {
+                "X_train": X_train,
+                "X_test": X_test,
+                "Y_train": Y_train,
+                "Y_test": Y_test,
+            }
+            logging.info("Finished wrapping dataframe dictionary")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            del (X_train,)
+            del (X_test,)
+            del (Y_train,)
             del Y_test
             _ = gc.collect()
             return self.df_dict
@@ -765,11 +1095,15 @@ class PreProcessing:
         This function takes in the class dictionary holding test and train split and unpacks it.
         :return: X_train, X_test as dataframes. Y_train, Y_test as Pandas series.
         """
-        logging.info('Start unpacking data dictionary')
-        X_train, X_test, Y_train, Y_test = self.df_dict["X_train"], self.df_dict["X_test"], self.df_dict["Y_train"], \
-                                           self.df_dict["Y_test"]
-        logging.info('Unpacking of data dictionary finished.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Start unpacking data dictionary")
+        X_train, X_test, Y_train, Y_test = (
+            self.df_dict["X_train"],
+            self.df_dict["X_test"],
+            self.df_dict["Y_train"],
+            self.df_dict["Y_test"],
+        )
+        logging.info("Unpacking of data dictionary finished.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         return X_train, X_test, Y_train, Y_test
 
     def np_array_wrap_test_train_to_dict(self, Y_train, Y_test):
@@ -780,15 +1114,14 @@ class PreProcessing:
         :return: Class dictionary
         """
         if self.prediction_mode:
-            logging.info('Wrapping Numpy dict skipped due to prediction mode.')
+            logging.info("Wrapping Numpy dict skipped due to prediction mode.")
             pass
         else:
-            logging.info('Start wrapping Numpy dict.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            self.df_dict = {'Y_train': Y_train,
-                            'Y_test': Y_test}
-            logging.info('Finished wrapping Numpy dict.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Start wrapping Numpy dict.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            self.df_dict = {"Y_train": Y_train, "Y_test": Y_test}
+            logging.info("Finished wrapping Numpy dict.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.df_dict
 
     def np_array_unpack_test_train_dict(self):
@@ -796,14 +1129,22 @@ class PreProcessing:
         This function takes in the class dictionary holding test and train split and unpacks it.
         :return: X_train, X_test as dataframes. Y_train, Y_test as numpy array.
         """
-        logging.info('Start unpacking Numpy dict.')
+        logging.info("Start unpacking Numpy dict.")
         Y_train, Y_test = self.df_dict["Y_train"], self.df_dict["Y_test"]
-        logging.info('Finished unpacking Numpy dict.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Finished unpacking Numpy dict.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         return Y_train, Y_test
 
-    def save_load_model_file(self, model_object=None, model_path=None, algorithm=None, algorithm_variant='none',
-                             file_type='.dat', action='save', clean=True):
+    def save_load_model_file(
+        self,
+        model_object=None,
+        model_path=None,
+        algorithm=None,
+        algorithm_variant="none",
+        file_type=".dat",
+        action="save",
+        clean=True,
+    ):
         """
         Function to save and load class instances. This function shall be used to save whole blueprints and to
         reload them.
@@ -822,19 +1163,19 @@ class PreProcessing:
             path = model_path
         else:
             pass
-        full_path = path + '_' + algorithm + '_' + algorithm_variant + '_' + file_type
+        full_path = path + "_" + algorithm + "_" + algorithm_variant + "_" + file_type
 
-        if action == 'save':
-            self.get_current_timestamp(task='Save blueprint instance.')
-            filehandler = open(full_path, 'wb')
+        if action == "save":
+            self.get_current_timestamp(task="Save blueprint instance.")
+            filehandler = open(full_path, "wb")
             pickle.dump(model_object, filehandler)
             filehandler.close()
             if clean:
                 del model_object
                 _ = gc.collect()
-        elif action == 'load':
-            self.get_current_timestamp(task='Load blueprint instance.')
-            filehandler = open(full_path, 'rb')
+        elif action == "load":
+            self.get_current_timestamp(task="Load blueprint instance.")
+            filehandler = open(full_path, "rb")
             model_object = pickle.load(filehandler)
             filehandler.close()
             return model_object
@@ -849,7 +1190,7 @@ class PreProcessing:
         :return: Returns downcasted dataframe.
         """
         start_mem = df.memory_usage().sum() / 1024 ** 2
-        print('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
+        print("Memory usage of dataframe is {:.2f} MB".format(start_mem))
 
         for col in df.columns:
             col_type = df[col].dtype
@@ -857,28 +1198,43 @@ class PreProcessing:
             if col_type != object:
                 c_min = df[col].min()
                 c_max = df[col].max()
-                if str(col_type)[:3] == 'int':
+                if str(col_type)[:3] == "int":
                     if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
                         df[col] = df[col].astype(np.int8)
-                    elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
+                    elif (
+                        c_min > np.iinfo(np.int16).min
+                        and c_max < np.iinfo(np.int16).max
+                    ):
                         df[col] = df[col].astype(np.int16)
-                    elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
+                    elif (
+                        c_min > np.iinfo(np.int32).min
+                        and c_max < np.iinfo(np.int32).max
+                    ):
                         df[col] = df[col].astype(np.int32)
-                    elif c_min > np.iinfo(np.int64).min and c_max < np.iinfo(np.int64).max:
+                    elif (
+                        c_min > np.iinfo(np.int64).min
+                        and c_max < np.iinfo(np.int64).max
+                    ):
                         df[col] = df[col].astype(np.int64)
                 else:
-                    if c_min > np.finfo(np.float16).min and c_max < np.finfo(np.float16).max:
+                    if (
+                        c_min > np.finfo(np.float16).min
+                        and c_max < np.finfo(np.float16).max
+                    ):
                         df[col] = df[col].astype(np.float16)
-                    elif c_min > np.finfo(np.float32).min and c_max < np.finfo(np.float32).max:
+                    elif (
+                        c_min > np.finfo(np.float32).min
+                        and c_max < np.finfo(np.float32).max
+                    ):
                         df[col] = df[col].astype(np.float32)
                     else:
                         df[col] = df[col].astype(np.float64)
             else:
-                df[col] = df[col].astype('category')
+                df[col] = df[col].astype("category")
 
         end_mem = df.memory_usage().sum() / 1024 ** 2
-        print('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
-        print('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
+        print("Memory usage after optimization is: {:.2f} MB".format(end_mem))
+        print("Decreased by {:.1f}%".format(100 * (start_mem - end_mem) / start_mem))
         return df
 
     def reduce_memory_footprint(self):
@@ -886,18 +1242,32 @@ class PreProcessing:
         Takes a dataframe and downcasts columns if possible.
         :return: Returns downcasted dataframe.
         """
-        self.get_current_timestamp(task='Reduce memory footprint of dataframe')
-        logging.info('Started reducing memory footprint.')
+        self.get_current_timestamp(task="Reduce memory footprint of dataframe")
+        logging.info("Started reducing memory footprint.")
         if self.prediction_mode:
             self.dataframe = self.reduce_mem_usage(self.dataframe)
-            logging.info('Finished reducing memory footprint.')
+            logging.info("Finished reducing memory footprint.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train = self.reduce_mem_usage(X_train)
             X_test = self.reduce_mem_usage(X_test)
-            logging.info('Finished reducing memory footprint.')
+            logging.info("Finished reducing memory footprint.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def get_iloc_cat_columns(self):
+        logging.info("Started getting cat column indices.")
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            cat_columns = X_train.select_dtypes(include=["object"]).columns.to_list()
+            cat_col_map = {}
+            for col in cat_columns:
+                idx = X_train.columns.get_loc(col)
+                cat_col_map[col] = idx
+            self.preprocess_decisions["cat_columns_idx_map"] = cat_col_map
+            logging.info("Finished getting cat column indices.")
 
     def sort_columns_alphabetically(self):
         """
@@ -905,17 +1275,17 @@ class PreProcessing:
         where the input data might have been changed in order.
         :return: Updates class instance. Returns dictionary.
         """
-        self.get_current_timestamp(task='Sort columns alphabetically')
+        self.get_current_timestamp(task="Sort columns alphabetically")
         if self.prediction_mode:
-            logging.info('Started sorting columns alphabetically.')
+            logging.info("Started sorting columns alphabetically.")
             self.dataframe = self.dataframe.sort_index(axis=1)
-            logging.info('Finished sorting columns alphabetically.')
+            logging.info("Finished sorting columns alphabetically.")
         else:
-            logging.info('Started sorting columns alphabetically.')
+            logging.info("Started sorting columns alphabetically.")
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train = X_train.sort_index(axis=1)
             X_test = X_test.sort_index(axis=1)
-            logging.info('Finished sorting columns alphabetically.')
+            logging.info("Finished sorting columns alphabetically.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def calc_scale_pos_weight(self):
@@ -926,14 +1296,14 @@ class PreProcessing:
             pos_labels = np.sum(Y_train)
 
         try:
-            neg_labels = len(X_train.index)-pos_labels
+            neg_labels = len(X_train.index) - pos_labels
         except Exception:
-            neg_labels = len(Y_train)-np.sum(Y_train)
+            neg_labels = len(Y_train) - np.sum(Y_train)
 
-        scale_pos_weight = neg_labels/pos_labels
+        scale_pos_weight = neg_labels / pos_labels
         return scale_pos_weight
 
-    def label_encoder_decoder(self, target, mode='fit'):
+    def label_encoder_decoder(self, target, mode="fit"):
         """
         Takes a Pandas series and encodes string-based labels to numeric values. Flags previously unseen
         values with -1.
@@ -942,12 +1312,12 @@ class PreProcessing:
         to encode labels based on already created dictionary.
         :return: Returns Pandas Series.
         """
-        self.get_current_timestamp(task='Execute label encoding')
-        logging.info('Started label encoding.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        self.get_current_timestamp(task="Execute label encoding")
+        logging.info("Started label encoding.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
 
         def label_encoder_fit(pandas_series):
-            pandas_series = pandas_series.astype('category')
+            pandas_series = pandas_series.astype("category")
             col = pandas_series.name
             try:
                 pandas_series = pandas_series.to_frame()
@@ -960,7 +1330,7 @@ class PreProcessing:
             return cat_mapping
 
         def label_encoder_transform(pandas_series, mapping):
-            pandas_series = pandas_series.astype('category')
+            pandas_series = pandas_series.astype("category")
             col = pandas_series.name
             try:
                 pandas_series = pandas_series.to_frame()
@@ -968,24 +1338,28 @@ class PreProcessing:
                 pass
             mapping = self.preprocess_decisions["label_encoder_mapping"]
             pandas_series[col] = pandas_series[col].apply(lambda x: mapping.get(x, 999))
-            #pandas_series = pandas_series[col]
+            # pandas_series = pandas_series[col]
             return pandas_series
 
         if self.prediction_mode:
-            target = label_encoder_transform(target, self.preprocess_decisions["label_encoder_mapping"])
+            target = label_encoder_transform(
+                target, self.preprocess_decisions["label_encoder_mapping"]
+            )
         else:
-            if mode == 'fit':
+            if mode == "fit":
                 cat_mapping = label_encoder_fit(target)
                 self.preprocess_decisions["label_encoder_mapping"] = cat_mapping
             else:
                 pass
-            target = label_encoder_transform(target, self.preprocess_decisions["label_encoder_mapping"])
+            target = label_encoder_transform(
+                target, self.preprocess_decisions["label_encoder_mapping"]
+            )
         self.labels_encoded = True
-        if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+        if self.class_problem == "binary" or self.class_problem == "multiclass":
             target = target[self.target_variable].astype(int)
-        elif self.class_problem == 'regression':
+        elif self.class_problem in ["regression", "time_series"]:
             target = target[self.target_variable].astype(float)
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         return target
 
     def label_encoder_reverse_transform(self, pandas_series):
@@ -994,7 +1368,10 @@ class PreProcessing:
             pandas_series = pandas_series.to_frame()
         except Exception:
             pass
-        reverse_mapping = {value: key for key, value in self.preprocess_decisions["label_encoder_mapping"].items()}
+        reverse_mapping = {
+            value: key
+            for key, value in self.preprocess_decisions["label_encoder_mapping"].items()
+        }
         pandas_series = pandas_series.replace({col: reverse_mapping})
         return pandas_series
 
@@ -1004,53 +1381,185 @@ class PreProcessing:
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             text_columns = self.nlp_transformer_columns
-            sentence_length = X_train[text_columns].apply(lambda x: np.max([len(w) for w in x.split()]))
+            sentence_length = X_train[text_columns].apply(
+                lambda x: np.max([len(w) for w in x.split()])
+            )
             if "nlp_transformers" in self.preprocess_decisions:
                 pass
             else:
-                self.preprocess_decisions[f"nlp_transformers"] = {}
-            self.preprocess_decisions[f"nlp_transformers"][f"max_sentence_len"] = sentence_length.max()
+                self.preprocess_decisions["nlp_transformers"] = {}
+            self.preprocess_decisions["nlp_transformers"][
+                "max_sentence_len"
+            ] = sentence_length.max()
 
-    def data_scaling(self, scaling='minmax'):
+    def zscore_scaling(self):
+        self.get_current_timestamp(task="Zscore data scaling")
+        if self.prediction_mode:
+            for vartype in self.num_dtypes:
+                num_cols = self.dataframe.select_dtypes(include=[vartype]).columns
+                for col in num_cols:
+                    self.dataframe[col] = (
+                        self.dataframe[col] - self.dataframe[col].mean()
+                    ) / self.dataframe[col].std()
+        else:
+            logging.info("Started data scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            for vartype in self.num_dtypes:
+                num_cols = X_train.select_dtypes(include=[vartype]).columns
+                for col in num_cols:
+                    X_train[col] = (X_train[col] - X_train[col].mean()) / X_train[
+                        col
+                    ].std()
+                    X_test[col] = (X_test[col] - X_test[col].mean()) / X_test[col].std()
+
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+        logging.info("Finished Zscore data scaling.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+    def data_scaling(self, scaling="minmax"):
         """
         Scales the data using the chosen scaling algorithm.
         :param scaling: Chose 'minmax'.
         :return: Returns scaled dataframes
         """
-        self.get_current_timestamp(task='Scale data')
+        self.get_current_timestamp(task="Scale data")
         if self.prediction_mode:
-            logging.info('Started data scaling.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Started data scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             dataframe_cols = self.dataframe.columns
-            if scaling == 'minmax':
+            if scaling == "minmax":
                 scaler = self.preprocess_decisions["scaling"]
-                scaler.fit(self.dataframe)
-                scaler.transform(self.dataframe)
+                self.dataframe = scaler.transform(self.dataframe)
             self.dataframe = pd.DataFrame(self.dataframe, columns=dataframe_cols)
             self.data_scaled = True
-            logging.info('Finished data scaling.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished data scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe, self.data_scaled
         else:
-            logging.info('Started data scaling.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Started data scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train_cols = X_train.columns
-            if scaling == 'minmax':
+            if scaling == "minmax":
                 scaler = MinMaxScaler()
                 scaler.fit(X_train)
-                scaler.transform(X_train)
-                scaler.transform(X_test)
+                X_train = scaler.transform(X_train)
+                X_test = scaler.transform(X_test)
                 self.preprocess_decisions["scaling"] = scaler
             X_train = pd.DataFrame(X_train, columns=X_train_cols)
             X_test = pd.DataFrame(X_test, columns=X_train_cols)
             self.data_scaled = True
-            logging.info('Finished data scaling.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished data scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             del scaler
             _ = gc.collect()
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train,
-                                                Y_test), self.data_scaled, self.preprocess_decisions
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            return (
+                self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test),
+                self.data_scaled,
+                self.preprocess_decisions,
+            )
+
+    def data_scaling_target_only(self, mode="fit", to_scale=None):
+        """
+        Scales the data using the chosen scaling algorithm.
+        :param scaling: Chose 'minmax'.
+        :return: Returns scaled dataframes
+        """
+        self.get_current_timestamp(task="Scale target only")
+        if mode == "reverse" and self.blueprint_step_selection_non_nlp["scale_data"]:
+            logging.info("Started target scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            scaler = self.preprocess_decisions["target_scaling"]
+            to_scale = scaler.inverse_transform(
+                pd.DataFrame(to_scale.values, columns=[self.target_variable])
+            )
+            to_scale = pd.DataFrame(to_scale, columns=[self.target_variable])
+            to_scale = pd.Series(to_scale[self.target_variable])
+            logging.info("Finished target scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            return to_scale
+
+        elif mode == "fit" and not self.prediction_mode:
+            logging.info("Started target scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            scaler = MinMaxScaler(feature_range=(0.01, 1))
+            scaler.fit(pd.DataFrame(Y_train, columns=[self.target_variable]))
+            Y_train = scaler.transform(
+                pd.DataFrame(Y_train, columns=[self.target_variable])
+            )
+            Y_test = scaler.transform(
+                pd.DataFrame(Y_test, columns=[self.target_variable])
+            )
+            self.preprocess_decisions["target_scaling"] = scaler
+            Y_train = pd.DataFrame(Y_train, columns=[self.target_variable])
+            Y_test = pd.DataFrame(Y_test, columns=[self.target_variable])
+
+            Y_train = pd.Series(Y_train[self.target_variable])
+            Y_test = pd.Series(Y_test[self.target_variable])
+            logging.info("Finished target scaling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            del scaler
+            _ = gc.collect()
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            return (
+                self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test),
+                self.data_scaled,
+                self.preprocess_decisions,
+            )
+
+    def scale_with_target(self, mode="fit", drop_target=False):
+        if mode == "reverse" and self.prediction_mode:
+            scaler = self.preprocess_decisions["scaler_with_target"]
+            self.dataframe[
+                self.preprocess_decisions["scaling_with_target_cols"]
+            ] = scaler.inverse_transform(
+                self.dataframe[self.preprocess_decisions["scaling_with_target_cols"]]
+            )
+            self.dataframe = pd.DataFrame(
+                self.dataframe,
+                columns=self.preprocess_decisions["scaling_with_target_cols"],
+            )
+            if drop_target:
+                self.dataframe = self.dataframe.drop(self.target_variable, axis=1)
+        elif mode == "reverse" and not self.prediction_mode:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            scaler = self.preprocess_decisions["scaler_with_target"]
+            X_test[
+                self.preprocess_decisions["scaling_with_target_cols"]
+            ] = scaler.inverse_transform(
+                X_test[self.preprocess_decisions["scaling_with_target_cols"]]
+            )
+            self.dataframe = pd.DataFrame(
+                X_test,
+                columns=self.preprocess_decisions["scaling_with_target_cols"],
+            )
+            if drop_target:
+                X_test = X_test.drop(self.target_variable, axis=1)
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+        elif mode == "fit" and not self.prediction_mode:
+            from sklearn.preprocessing import MinMaxScaler
+
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            X_train[self.target_variable] = Y_train
+            X_test[self.target_variable] = Y_test
+            X_train_cols = X_train.columns
+            scaler = MinMaxScaler()
+            scaler.fit(X_train)
+            X_train = scaler.transform(X_train)
+            X_test = scaler.transform(X_test)
+            X_train = pd.DataFrame(X_train, columns=X_train_cols)
+            X_test = pd.DataFrame(X_test, columns=X_train_cols)
+            Y_train = X_train[self.target_variable]
+            Y_test = X_test[self.target_variable]
+            if drop_target:
+                X_train = X_train.drop(self.target_variable, axis=1)
+                X_test = X_test.drop(self.target_variable, axis=1)
+            self.preprocess_decisions["scaler_with_target"] = scaler
+            self.preprocess_decisions["scaling_with_target_cols"] = X_train_cols
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def skewness_removal(self, overwrite_orig_col=False):
         """
@@ -1060,48 +1569,48 @@ class PreProcessing:
         an unskewed counterpart as new column to the dataframe.
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Remove skewness')
+        self.get_current_timestamp(task="Remove skewness")
         if self.prediction_mode:
-            logging.info('Started skewness removal.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Started skewness removal.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             for col in self.preprocess_decisions["skewed_columns"]:
                 log_array = np.log1p(self.dataframe[col])
-                log_array[np.isfinite(log_array) == False] = 0
+                log_array[np.isfinite(log_array) == False] = 0  # noqa: E712
                 if overwrite_orig_col:
                     self.dataframe[col] = log_array
                 else:
                     self.dataframe[f"{col}_unskewed"] = log_array
-            logging.info('Finished skewness removal.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished skewness removal.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
-            logging.info('Started skewness removal.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Started skewness removal.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             skewness = X_train.skew(axis=0, skipna=True)
             left_skewed = skewness[skewness < -0.5].index.to_list()
             right_skewed = skewness[skewness > 0.5].index.to_list()
-            skewed = left_skewed+right_skewed
+            skewed = left_skewed + right_skewed
             for col in X_train[skewed].columns:
                 log_array = np.log1p(X_train[col])
-                log_array[np.isfinite(log_array) == False] = 0
+                log_array[np.isfinite(log_array) == False] = 0  # noqa: E712
                 if overwrite_orig_col:
                     X_train[col] = log_array
                 else:
                     X_train[f"{col}_unskewed"] = log_array
 
                 log_array = np.log1p(X_test[col])
-                log_array[np.isfinite(log_array) == False] = 0
+                log_array[np.isfinite(log_array) == False] = 0  # noqa: E712
                 if overwrite_orig_col:
                     X_test[col] = log_array
                 else:
                     X_test[f"{col}_unskewed"] = log_array
-            logging.info('Finished skewness removal.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished skewness removal.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             self.preprocess_decisions["skewed_columns"] = skewed
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def target_skewness_handling(self, mode='fit', preds_to_reconvert=None):
+    def target_skewness_handling(self, mode="fit", preds_to_reconvert=None):
         """
         Loops through the in-class stored dataframe columns and checks the skewness. If skewness exceeds a certain threshold,
         executes log transformation.
@@ -1109,43 +1618,57 @@ class PreProcessing:
         an unskewed counterpart as new column to the dataframe.
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Target skewness handling')
-        logging.info('Started target skewness handling.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-        if self.prediction_mode:
-            if self.target_is_skewed and self.blueprint_step_selection_non_nlp["handle_target_skewness"]:
-                if mode == 'fit':
-                    pass
-                else:
-                    preds_to_reconvert_reverted = np.expm1(preds_to_reconvert)
-                    return preds_to_reconvert_reverted
+        self.get_current_timestamp(task="Target skewness handling")
+        logging.info("Started target skewness handling.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        if self.prediction_mode and mode != "fit":
+            if (
+                self.target_is_skewed
+                and self.blueprint_step_selection_non_nlp["handle_target_skewness"]
+            ):
+                preds_to_reconvert_reverted = np.expm1(preds_to_reconvert.astype(float))
+                return preds_to_reconvert_reverted
             else:
-                pass
-            return preds_to_reconvert
-        else:
-            if self.target_is_skewed and self.blueprint_step_selection_non_nlp["handle_target_skewness"]:
+                return preds_to_reconvert
+        elif not self.prediction_mode:
+            if (
+                self.target_is_skewed
+                and self.blueprint_step_selection_non_nlp["handle_target_skewness"]
+            ):
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-                if mode == 'fit':
+                if mode == "fit":
                     skewness = Y_train.skew(axis=0, skipna=True)
                     if skewness < -0.5 or skewness > 0.5:
                         Y_train = np.log1p(Y_train)
-                        Y_train[np.isfinite(Y_train) == False] = 0
+                        Y_train[np.isfinite(Y_train) == False] = 0  # noqa: E712
                         Y_test = np.log1p(Y_test)
-                        Y_test[np.isfinite(Y_test) == False] = 0
+                        Y_test[np.isfinite(Y_test) == False] = 0  # noqa: E712
+                        logging.info("Finished target skewness handling.")
+                        logging.info(
+                            f"RAM memory {psutil.virtual_memory()[2]} percent used."
+                        )
+                        return self.wrap_test_train_to_dict(
+                            X_train, X_test, Y_train, Y_test
+                        )
                 else:
-                    Y_train = np.expm1(Y_train)
-                    Y_test = np.expm1(Y_test)
-                logging.info('Finished target skewness handling.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-                return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+                    preds_to_reconvert_reverted = np.expm1(
+                        preds_to_reconvert.astype(float)
+                    )
+                    logging.info("Finished target skewness handling.")
+                    logging.info(
+                        f"RAM memory {psutil.virtual_memory()[2]} percent used."
+                    )
+                    return preds_to_reconvert_reverted
             else:
-                pass
+                return preds_to_reconvert
+        else:
+            pass
 
-    def create_folds(self, data, target, num_splits=5, mode='advanced'):
+    def create_folds(self, data, target, num_splits=5, mode="advanced"):
         if self.prediction_mode:
             pass
         else:
-            if mode == 'simple':
+            if mode == "simple":
                 data["kfold"] = data.index % num_splits
             else:
                 # we create a new column called kfold and fill it with -1
@@ -1160,18 +1683,20 @@ class PreProcessing:
                 # just round it
                 num_bins = int(np.floor(1 + np.log2(len(data))))
                 # bin targets
-                data.loc[:, "bins"] = pd.cut(
-                    data[target], bins=num_bins, labels=False
-                )
+                data.loc[:, "bins"] = pd.cut(data[target], bins=num_bins, labels=False)
                 print(data.info())
                 # initiate the kfold class from model_selection module
                 kf = model_selection.StratifiedKFold(n_splits=num_splits)
                 # fill the new kfold column
                 # note that, instead of targets, we use bins!
-                for f, (t_, v_) in enumerate(kf.split(X=data, y=data.bins.values)):
-                    data.loc[v_, 'kfold'] = f
+                for f, (_t, v_) in enumerate(kf.split(X=data, y=data.bins.values)):
+                    data.loc[v_, "kfold"] = f
                 # drop the bins column
                 data = data.drop("bins", axis=1)
+                try:
+                    del data["bins"]
+                except Exception:
+                    pass
                 # return dataframe with folds
             return data
 
@@ -1185,20 +1710,36 @@ class PreProcessing:
             X_test[self.target_variable] = Y_test
             all_data = pd.concat([X_train, X_test])
             all_data = self.create_folds(all_data, self.target_variable)
-            X_train = all_data[all_data["kfold"] != 0].reset_index(drop=True)
-            X_test = all_data[all_data["kfold"] == 0].reset_index(drop=True)
+            X_train = all_data[all_data["kfold"] != 0].copy()
+            X_test = all_data[all_data["kfold"] == 0].copy()
+
+            X_train = X_train.reset_index(drop=True)
+            X_test = X_test.reset_index(drop=True)
+
             Y_train = X_train[self.target_variable]
             Y_test = X_test[self.target_variable]
-            X_train.drop("kfold", axis=1)
-            X_test.drop("kfold", axis=1)
+            X_train = X_train.drop("kfold", axis=1)
+            X_test = X_test.drop("kfold", axis=1)
             if drop_target:
-                X_train.drop(self.target_variable, axis=1)
-                X_test.drop(self.target_variable, axis=1)
+                X_train = X_train.drop(self.target_variable, axis=1)
+                X_test = X_test.drop(self.target_variable, axis=1)
+
+                try:
+                    del X_test[self.target_variable]
+                    del X_train[self.target_variable]
+                except KeyError:
+                    pass
             else:
                 pass
+
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def train_test_split(self, how='cross', split_by_col=None, split_date=None, train_size=0.70):
+    def get_training_df_length(self, df: pd.DataFrame, identifier: str = "X_train"):
+        self.preprocess_decisions["identifier_length"] = len(df.index)
+
+    def train_test_split(
+        self, how="cross", split_by_col=None, split_date=None, train_size=0.70
+    ):
         """
         This method splits the dataframe either as a simple or as a time split.
         :param how: 'cross' for cross validation, 'time' for time validation.
@@ -1207,51 +1748,59 @@ class PreProcessing:
         :param train_size: Chose how much percentage the train dataframe will have. For cross validation only.
         :return: X_train, X_test, Y_train, Y_test
         """
-        self.get_current_timestamp(task='Execute test train split')
+        self.get_current_timestamp(task="Execute test train split")
         if self.prediction_mode:
-            logging.info('Skipped test train split due to prediction mode.')
-        elif how == 'cross':
-            logging.info('Started test train split.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Skipped test train split due to prediction mode.")
+        elif how == "cross":
+            logging.info("Started test train split.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             self.check_target_class_distribution()
 
             try:
-                X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
-                                                                                self.dataframe[self.target_variable],
-                                                                                train_size=train_size,
-                                                                                random_state=42,
-                                                                                stratify=self.dataframe[self.target_variable])
+                X_train, X_test, Y_train, Y_test = model_selection.train_test_split(
+                    self.dataframe,
+                    self.dataframe[self.target_variable],
+                    train_size=self.train_size,
+                    random_state=self.global_random_state,
+                    stratify=self.dataframe[self.target_variable],
+                )
             except Exception:
-                X_train, X_test, Y_train, Y_test = model_selection.train_test_split(self.dataframe,
-                                                                                    self.dataframe[self.target_variable],
-                                                                                    train_size=train_size,
-                                                                                    random_state=42)
+                X_train, X_test, Y_train, Y_test = model_selection.train_test_split(
+                    self.dataframe,
+                    self.dataframe[self.target_variable],
+                    train_size=self.train_size,
+                    random_state=self.global_random_state,
+                )
             try:
                 Y_train = Y_train.astype(float)
                 Y_test = Y_test.astype(float)
             except Exception:
-                Y_train = self.label_encoder_decoder(Y_train, mode='fit')
-                Y_test = self.label_encoder_decoder(Y_test, mode='transform')
+                Y_train = self.label_encoder_decoder(Y_train, mode="fit")
+                Y_test = self.label_encoder_decoder(Y_test, mode="transform")
             del X_train[self.target_variable]
             del X_test[self.target_variable]
             _ = gc.collect()
-            logging.info('Finished test train split.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished test train split.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            self.get_training_df_length(X_train)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
-        elif how == 'time':
-            logging.info('Started test train split.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            if self.source_format == 'numpy array':
+        elif how == "time":
+            logging.info("Started test train split.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            if self.source_format == "numpy array":
                 length = self.dataframe.size
-                train_length = int(length * train_size)
+                train_length = int(length * self.train_size)
                 test_length = length - train_length
-                Y_train, Y_test = self.dataframe[:train_length], self.dataframe[:test_length]
-                logging.info('Finished test train split.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                Y_train, Y_test = (
+                    self.dataframe[:train_length],
+                    self.dataframe[:test_length],
+                )
+                logging.info("Finished test train split.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.np_array_wrap_test_train_to_dict(Y_train, Y_test)
-            elif self.source_format == 'Pandas dataframe':
+            elif self.source_format == "Pandas dataframe":
                 length = len(self.dataframe.index)
-                train_length = int(length * 0.80)
+                train_length = int(length * self.train_size)
                 test_length = length - train_length
                 if not split_by_col:
                     self.dataframe = self.dataframe.sort_index()
@@ -1269,11 +1818,12 @@ class PreProcessing:
                 Y_test = X_test[self.target_variable]
                 del X_train[self.target_variable]
                 del X_test[self.target_variable]
-                logging.info('Finished test train split.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                self.get_training_df_length(X_train)
+                logging.info("Finished test train split.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
         else:
-            logging.warning('No split method provided.')
+            logging.warning("No split method provided.")
             raise Exception("Please provide a split method.")
 
     def check_target_class_distribution(self):
@@ -1282,13 +1832,14 @@ class PreProcessing:
         else:
             min_target_train = self.dataframe[self.target_variable].value_counts().min()
             if min_target_train < 7:
-                self.runtime_warnings(warn_about='not_enough_target_class_members')
+                self.runtime_warnings(warn_about="not_enough_target_class_members")
             else:
                 pass
 
-    def set_random_seed(self, seed=42):
+    def set_random_seed(self, random_state_starter=0):
+        seed = self.global_random_state + random_state_starter
         random.seed(seed)
-        os.environ['PYTHONHASHSEED'] = str(seed)
+        os.environ["PYTHONHASHSEED"] = str(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
@@ -1311,31 +1862,44 @@ class PreProcessing:
         :param nb_bins: Takes a positive integer.
         :return: Updates class instance.
         """
-        self.get_current_timestamp(task='Execute numerical binning')
+        self.get_current_timestamp(task="Execute numerical binning")
 
         def random_noise(a_series, noise_reduction=1000000):
-            return (np.random.random(len(a_series))*a_series.std()/noise_reduction)-(a_series.std()/(2*noise_reduction))
+            return (
+                np.random.random(len(a_series)) * a_series.std() / noise_reduction
+            ) - (a_series.std() / (2 * noise_reduction))
 
         def binning_on_data(dataframe, cols_to_bin=None):
-            num_columns = cols_to_bin.select_dtypes(include=[vartype]).columns
+            num_columns = cols_to_bin.select_dtypes(  # noqa: F821
+                include=[vartype]  # noqa: F821
+            ).columns  # noqa: F821
             for col in num_columns:
-                dataframe[str(col) + '_binned'] = pd.cut(dataframe[col].replace(np.inf, np.nan).dropna(), bins=nb_bins, labels=False)
-                dataframe[str(col) + '_equal_binned'] = pd.cut(dataframe[col]+random_noise(dataframe[col]),
-                                                              nb_bins, labels=False)
-                self.new_sin_cos_col_names.append(str(col) + '_binned')
-                self.new_sin_cos_col_names.append(str(col) + '_equal_binned')
+                dataframe[str(col) + "_binned"] = pd.cut(
+                    dataframe[col].replace(np.inf, np.nan).dropna(),
+                    bins=nb_bins,
+                    labels=False,
+                )
+                dataframe[str(col) + "_equal_binned"] = pd.cut(
+                    dataframe[col] + random_noise(dataframe[col]), nb_bins, labels=False
+                )
+                self.new_sin_cos_col_names.append(str(col) + "_binned")
+                self.new_sin_cos_col_names.append(str(col) + "_equal_binned")
             del num_columns
             _ = gc.collect()
             return dataframe
 
-        logging.info('Start numerical binning.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Start numerical binning.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            for vartype in self.num_dtypes:
-                filtered_columns = self.dataframe.loc[:, ~self.dataframe.columns.isin(self.new_sin_cos_col_names)]
-                self.dataframe = binning_on_data(self.dataframe, cols_to_bin=filtered_columns)
-            logging.info('Finished numerical binning.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            for _vartype in self.num_dtypes:
+                filtered_columns = self.dataframe.loc[
+                    :, ~self.dataframe.columns.isin(self.new_sin_cos_col_names)
+                ]
+                self.dataframe = binning_on_data(
+                    self.dataframe, cols_to_bin=filtered_columns
+                )
+            logging.info("Finished numerical binning.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
 
         else:
@@ -1343,13 +1907,15 @@ class PreProcessing:
             if len(self.num_dtypes) > 0:
                 self.blueprint_step_selection_non_nlp["data_binning"] = False
             else:
-                for vartype in self.num_dtypes:
-                    filtered_columns = X_train.loc[:, ~X_train.columns.isin(self.new_sin_cos_col_names)]
+                for _vartype in self.num_dtypes:
+                    filtered_columns = X_train.loc[
+                        :, ~X_train.columns.isin(self.new_sin_cos_col_names)
+                    ]
 
                     X_train = binning_on_data(X_train, cols_to_bin=filtered_columns)
                     X_test = binning_on_data(X_test, cols_to_bin=filtered_columns)
-                logging.info('Finished numerical binning.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                logging.info("Finished numerical binning.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def cardinality_remover(self, threshold=100):
@@ -1358,46 +1924,134 @@ class PreProcessing:
         :param threshold: integer of any size
         :return:Cleaned dataframe.
         """
-        self.get_current_timestamp(task='Remove cardinality')
+        self.get_current_timestamp(task="Remove cardinality")
 
-        def remove_high_cardinality(df, threshold=threshold, cols_to_delete=None):
-            if not cols_to_delete:
+        def remove_high_cardinality(
+            df, threshold=threshold, cols_to_delete=None, mode="fit"
+        ):
+            to_check = df.copy()
+            if mode == "fit":
                 deleted_columns = []
-                cat_columns = df.select_dtypes(include=['object']).columns
+                cat_columns = to_check.select_dtypes(include=["object"]).columns
                 for col in cat_columns:
-                    cardinality = df[col].nunique()
+                    cardinality = to_check[col].nunique()
                     if cardinality >= threshold:
-                        df = df.drop([col], axis=1)
+                        to_check = to_check.drop(col, axis=1)
+                        try:
+                            del to_check[col]
+                        except Exception:
+                            pass
                         deleted_columns.append(col)
                     else:
                         pass
+                self.preprocess_decisions[
+                    "cardinality_deleted_columns"
+                ] = deleted_columns
             else:
-                deleted_columns = cols_to_delete
+                deleted_columns = self.preprocess_decisions[
+                    "cardinality_deleted_columns"
+                ]
+                to_check = to_check.drop(deleted_columns, axis=1)
                 for col in deleted_columns:
-                    df = df.drop([col], axis=1)
-            return df, deleted_columns
+                    try:
+                        del to_check[col]
+                    except Exception:
+                        pass
+            return to_check
 
-        logging.info('Start cardinality removal.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Start cardinality removal.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            threshold = self.preprocess_decisions["cardinality_threshold"]
-            self.dataframe, self.preprocess_decisions["cardinality_deleted_columns"] = remove_high_cardinality(self.dataframe, cols_to_delete=self.preprocess_decisions[
-                "cardinality_deleted_columns"])
-            logging.info('Finished cardinality removal.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            self.dataframe = remove_high_cardinality(
+                self.dataframe,
+                cols_to_delete=self.preprocess_decisions["cardinality_deleted_columns"],
+                mode="predict",
+            )
+            logging.info("Finished cardinality removal.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train, self.preprocess_decisions["cardinality_deleted_columns"] = remove_high_cardinality(X_train,
-                                                                                                        threshold=threshold)
-            X_test, self.preprocess_decisions["cardinality_deleted_columns"] = remove_high_cardinality(df=X_test,
-                                             cols_to_delete=self.preprocess_decisions["cardinality_deleted_columns"])
+            X_train = remove_high_cardinality(X_train, threshold=threshold, mode="fit")
+            X_test = remove_high_cardinality(
+                df=X_test,
+                cols_to_delete=self.preprocess_decisions["cardinality_deleted_columns"],
+                mode="predict",
+            )
             self.preprocess_decisions["cardinality_threshold"] = threshold
-            logging.info('Finished cardinality removal.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished cardinality removal.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def rare_feature_processor(self, threshold=0.005, mask_as='miscellaneous', rarity_cols=None, normalize=True):
+    def categorical_column_embeddings(self):
+        self.get_current_timestamp(task="Create categorical column embeddings.")
+        logging.info("Start categorical column embeddings.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+        import spacy
+
+        try:
+            nlp = spacy.load("en_core_web_sm")
+        except OSError:
+            print(
+                "Downloading language model for the spaCy POS tagger\n"
+                "(don't worry, this will only happen once)"
+            )
+            from spacy.cli import download
+
+            download("en_core_web_sm")
+            nlp = spacy.load("en_core_web_sm")
+
+        def get_spacy_embeddings(df, text_col):
+            df[text_col] = df[text_col].astype(str)
+            df["tokenized"] = df[text_col].apply(nlp)
+            df["sent_vectors"] = df["tokenized"].apply(
+                lambda sent: np.mean(
+                    [token.vector for token in sent if not token.is_stop]
+                )
+            )
+            return df["sent_vectors"]
+
+        if self.prediction_mode:
+            cat_columns = self.preprocess_decisions["spacy_embedding_cols"]
+            for col in cat_columns:
+                self.dataframe[col] = self.dataframe[col] + ". "
+                self.dataframe[f"Spacy_embeddings_{col}"] = get_spacy_embeddings(
+                    self.dataframe, col
+                )
+
+            self.dataframe["Spacy_embeddings"] = self.dataframe[cat_columns].sum(axis=1)
+            self.dataframe["Spacy_embeddings"] = get_spacy_embeddings(
+                self.dataframe, "Spacy_embeddings"
+            )
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            cat_columns = X_train.select_dtypes(include=["object"]).columns.to_list()
+            for col in cat_columns:
+                X_train[col] = X_train[col] + ". "
+                X_test[col] = X_test[col] + ". "
+                X_train[f"Spacy_embeddings_{col}"] = get_spacy_embeddings(X_train, col)
+                X_test[f"Spacy_embeddings_{col}"] = get_spacy_embeddings(X_test, col)
+
+            X_train["Spacy_embeddings"] = X_train[cat_columns].sum(axis=1)
+            X_test["Spacy_embeddings"] = X_test[cat_columns].sum(axis=1)
+
+            X_train["Spacy_embeddings"] = get_spacy_embeddings(
+                X_train, "Spacy_embeddings"
+            )
+            X_test["Spacy_embeddings"] = get_spacy_embeddings(
+                X_test, "Spacy_embeddings"
+            )
+
+            self.preprocess_decisions["spacy_embedding_cols"] = cat_columns
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            logging.info("Finished categorical column embeddings.")
+
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+    def rare_feature_processor(
+        self, threshold=0.005, mask_as="miscellaneous", rarity_cols=None, normalize=True
+    ):
         """
         Loops through categorical columns and identifies categories, which occur less than the
         given threshold. These features will be grouped together as defined by mask_as parameter.
@@ -1405,64 +2059,81 @@ class PreProcessing:
         :param mask_as: Group name of grouped rare features.
         :return: Updates class attributes
         """
-        self.get_current_timestamp('Handle rare features')
+        self.get_current_timestamp("Handle rare features")
 
-        def handle_rarity(all_data, threshold=threshold, mask_as=mask_as, rarity_cols=rarity_cols, normalize=normalize):
+        def handle_rarity(
+            all_data,
+            threshold=threshold,
+            mask_as=mask_as,
+            rarity_cols=rarity_cols,
+            normalize=normalize,
+        ):
             if isinstance(rarity_cols, list):
                 for col in rarity_cols:
                     frequencies = all_data[col].value_counts(normalize=normalize)
                     condition = frequencies < threshold
                     mask_obs = frequencies[condition].index
                     mask_dict = dict.fromkeys(mask_obs, mask_as)
-                    all_data[col] = all_data[col].replace(mask_dict)  # or you could make a copy not to modify original data
+                    all_data[col] = all_data[col].replace(
+                        mask_dict
+                    )  # or you could make a copy not to modify original data
                 del rarity_cols
                 _ = gc.collect()
             return all_data
 
-        logging.info('Start rare feature processing.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Start rare feature processing.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
             threshold = self.preprocess_decisions["rare_feature_threshold"]
-            self.dataframe = handle_rarity(self.dataframe, threshold, mask_as, rarity_cols, normalize)
-            logging.info('Finished rare feature processing.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            self.dataframe = handle_rarity(
+                self.dataframe, threshold, mask_as, rarity_cols, normalize
+            )
+            logging.info("Finished rare feature processing.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train = handle_rarity(X_train, threshold, mask_as, rarity_cols, normalize)
             X_test = handle_rarity(X_test, threshold, mask_as, rarity_cols, normalize)
             self.preprocess_decisions["rare_feature_threshold"] = threshold
-            logging.info('Finished rare feature processing.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished rare feature processing.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def auto_tuned_clustering(self):
+    def auto_tuned_clustering(self):  # noqa: C901
         """
         Takes a dataframe and optimizes for best clustering hyperparameters and columns to be used.
         :return: Updates class attributes/dataframes.
         """
-        from sklearn.metrics import silhouette_score
-        algorithm = 'autotuned_clustering'
-        logging.info('Start adding autotuned clusters as additional features.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        self.get_current_timestamp("Start autotuned kmeans clustering.")
+
+        algorithm = "autotuned_clustering"
+        logging.info("Start adding autotuned clusters as additional features.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
         if not self.data_scaled:
             self.data_scaling()
 
+        if self.rapids_acceleration:
+            import cudf
+            from cuml import KMeans as RapidsKMeans
+            from cuml.metrics.cluster import silhouette_score
+        else:
+            from sklearn.metrics import silhouette_score
+
         if self.prediction_mode:
             chosen_cols = self.preprocess_decisions["autotuned_cluster_pcolumns"]
-            kmeans_parameters = self.preprocess_decisions["autotuned_cluster_hyperparameters"]
-
-            #cluster based on all data
-            kmeans = KMeans(n_clusters=kmeans_parameters["clusters"],
-                            n_init=kmeans_parameters["n_init"],
-                            tol=kmeans_parameters["tol"],
-                            max_iter=kmeans_parameters["max_iter"])
-            kmeans.fit(self.dataframe[chosen_cols])
-            y_kmeans = kmeans.predict(self.dataframe[chosen_cols])
+            kmeans = self.preprocess_decisions["autotuned_cluster_model"]
+            if self.rapids_acceleration:
+                datafarme_cudf = cudf.from_pandas(self.dataframe[chosen_cols])
+                y_kmeans = kmeans.predict(datafarme_cudf)
+            else:
+                y_kmeans = kmeans.predict(self.dataframe[chosen_cols])
             self.dataframe[algorithm] = y_kmeans
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            optuna.logging.set_verbosity(optuna.logging.WARNING)
 
             if self.hyperparameter_tuning_sample_size > len(X_train.index):
                 cluster_sample_size = len(X_train.index)
@@ -1474,8 +2145,16 @@ class PreProcessing:
             else:
                 eval_sample_size = 2000
 
-            X_train_cluster_sample = X_train.sample(cluster_sample_size, random_state=42)
-            X_train_eval_sample = X_train.sample(eval_sample_size, random_state=42)
+            X_train_cluster_sample = X_train.sample(
+                cluster_sample_size, random_state=self.global_random_state
+            )
+            X_train_eval_sample = X_train.sample(
+                eval_sample_size, random_state=self.global_random_state
+            )
+
+            if self.rapids_acceleration:
+                X_train_cluster_sample = cudf.from_pandas(X_train_cluster_sample)
+                X_train_eval_sample = cudf.from_pandas(X_train_eval_sample)
 
             try:
                 del X_train[self.target_variable]
@@ -1492,28 +2171,49 @@ class PreProcessing:
                         temp_features.append(k)
                     else:
                         pass
-                param['clusters'] =  trial.suggest_int('clusters', 2, 30),
-                param['max_iter'] = trial.suggest_int('max_iter', 10, 20),
-                param['n_init'] = trial.suggest_int('n_init', 10, 500),
-                param['tol'] = trial.suggest_loguniform('tol', 1e-5, 1e-1)
-                kmeans = KMeans(n_clusters=param["clusters"][0],
-                                n_init=param["n_init"][0],
-                                tol=param["tol"],
-                                max_iter=param["max_iter"][0])
+                param["clusters"] = (trial.suggest_int("clusters", 2, 30),)
+                param["max_iter"] = (trial.suggest_int("max_iter", 10, 20),)
+                param["n_init"] = (trial.suggest_int("n_init", 10, 500),)
+                param["tol"] = trial.suggest_loguniform("tol", 1e-5, 1e-1)
+
+                if self.rapids_acceleration:
+                    kmeans = RapidsKMeans(
+                        n_clusters=param["clusters"][0],
+                        random_state=self.global_random_state,
+                        n_init=param["n_init"][0],
+                        max_iter=param["max_iter"][0],
+                        output_type="numpy",
+                    )
+                else:
+                    kmeans = KMeans(
+                        n_clusters=param["clusters"][0],
+                        random_state=self.global_random_state,
+                        n_init=param["n_init"][0],
+                        tol=param["tol"],
+                        max_iter=param["max_iter"][0],
+                    )
                 try:
                     kmeans.fit(X_train_cluster_sample[temp_features])
                     y_kmeans = kmeans.predict(X_train_eval_sample[temp_features])
-                    s_score = silhouette_score(X_train_eval_sample[temp_features], y_kmeans)
+                    s_score = silhouette_score(
+                        X_train_eval_sample[temp_features], y_kmeans
+                    )
                 except Exception:
                     s_score = 0
                 return s_score
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"autotuned kmeans")
-            study.optimize(objective, n_trials=50, gc_after_trial=True, show_progress_bar=True)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name="autotuned kmeans"
+            )
+            study.optimize(
+                objective, n_trials=50, gc_after_trial=True, show_progress_bar=True
+            )
             try:
-                #fig = optuna.visualization.plot_optimization_history(study)
-                #fig.show()
+                # fig = optuna.visualization.plot_optimization_history(study)
+                # fig.show()
                 fig = optuna.visualization.plot_param_importances(study)
                 fig.show()
             except ZeroDivisionError:
@@ -1529,22 +2229,48 @@ class PreProcessing:
                 else:
                     pass
             self.preprocess_decisions["autotuned_cluster_pcolumns"] = chosen_cols
-            self.preprocess_decisions["autotuned_cluster_hyperparameters"] = kmeans_parameters
+            self.preprocess_decisions[
+                "autotuned_cluster_hyperparameters"
+            ] = kmeans_parameters
 
-            #cluster based on all data
-            kmeans = KMeans(n_clusters=kmeans_parameters["clusters"],
-                            n_init=kmeans_parameters["n_init"],
-                            tol=kmeans_parameters["tol"],
-                            max_iter=kmeans_parameters["max_iter"])
-            kmeans.fit(X_train[chosen_cols])
-            y_kmeans = kmeans.predict(X_train[chosen_cols])
-            X_train[algorithm] = y_kmeans
-            kmeans.fit(X_test[chosen_cols])
-            y_kmeans = kmeans.predict(X_test[chosen_cols])
-            X_test[algorithm] = y_kmeans
+            # cluster based on all data
+            if self.rapids_acceleration:
+                X_train_cudf = cudf.from_pandas(X_train)
+                X_test_cudf = cudf.from_pandas(X_test)
+                kmeans = RapidsKMeans(
+                    n_clusters=kmeans_parameters["clusters"],
+                    random_state=self.global_random_state,
+                    n_init=kmeans_parameters["n_init"],
+                    tol=kmeans_parameters["tol"],
+                    max_iter=kmeans_parameters["max_iter"],
+                    output_type="numpy",
+                )
+                kmeans.fit(X_train_cudf[chosen_cols])
+                y_kmeans = kmeans.predict(X_train_cudf[chosen_cols])
+                X_train[algorithm] = y_kmeans
+                kmeans.predict(X_test_cudf[chosen_cols])
+                y_kmeans = kmeans.predict(X_test_cudf[chosen_cols])
+                X_test[algorithm] = y_kmeans
+            else:
+                kmeans = KMeans(
+                    n_clusters=kmeans_parameters["clusters"],
+                    random_state=self.global_random_state,
+                    n_init=kmeans_parameters["n_init"],
+                    tol=kmeans_parameters["tol"],
+                    max_iter=kmeans_parameters["max_iter"],
+                )
+                kmeans.fit(X_train[chosen_cols])
+                y_kmeans = kmeans.predict(X_train[chosen_cols])
+                X_train[algorithm] = y_kmeans
+                kmeans.predict(X_test[chosen_cols])
+                y_kmeans = kmeans.predict(X_test[chosen_cols])
+                X_test[algorithm] = y_kmeans
 
-            logging.info('Finished adding autotuned clusters as additional features.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            self.preprocess_decisions["autotuned_cluster_model"] = kmeans
+
+            logging.info("Finished adding autotuned clusters as additional features.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            optuna.logging.set_verbosity(optuna.logging.INFO)
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def delete_low_variance_features(self):
@@ -1552,14 +2278,16 @@ class PreProcessing:
         Takes a dataframe removes columns with very low variance.
         :return: Updates class attributes/dataframes.
         """
-        self.get_current_timestamp('Start deleting low variance features')
-        logging.info('Start deleting low variance features.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        self.get_current_timestamp("Start deleting low variance features")
+        logging.info("Start deleting low variance features.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if not self.data_scaled:
             self.data_scaling()
 
         if self.prediction_mode:
-            variable = self.preprocess_decisions[f"delete_low_variance_features_columns_left"]
+            variable = self.preprocess_decisions[
+                "delete_low_variance_features_columns_left"
+            ]
             self.dataframe = self.dataframe[variable]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -1569,7 +2297,7 @@ class PreProcessing:
             variable = []
 
             for i in range(0, len(variance)):
-                if variance[i] >= 0.006: #setting the threshold as 1%
+                if variance[i] >= 0.006:  # setting the threshold as 1%
                     variable.append(columns[i])
 
             X_train = X_train[variable]
@@ -1577,13 +2305,21 @@ class PreProcessing:
 
             print(f"Features before low variance deletion: {len(variable)}")
 
-            self.preprocess_decisions[f"delete_low_variance_features_columns_left"] = variable
+            self.preprocess_decisions[
+                "delete_low_variance_features_columns_left"
+            ] = variable
+
+            features_dropped = list(set(columns) - set(variable))
+            print("The following features have been dropped....:")
+            for col in features_dropped:
+                print(col)
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
-            logging.info('Finished deleting low variance features.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished deleting low variance features.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
 
-
-    def clustering_as_a_feature(self, algorithm='dbscan', nb_clusters=2, eps=0.3, n_jobs=-1, min_samples=50):
+    def clustering_as_a_feature(  # noqa: C901
+        self, algorithm="dbscan", nb_clusters=2, eps=0.3, n_jobs=-1, min_samples=50
+    ):
         """
         Takes the numerical columns of a dataframe and performs clustering via the chosen algorithm.
         Appends the clusters as a new column.
@@ -1594,62 +2330,138 @@ class PreProcessing:
         :param min_samples: Minimum number of samples required to form a cluster.
         :return: Returns the modified dataframe.
         """
-        self.get_current_timestamp('Execute clustering as a feature')
+        self.get_current_timestamp("Execute clustering as a feature")
 
         if self.rapids_acceleration:
             import cudf
-            from cuml import KMeans as RapidsKMeans
             from cuml import DBSCAN as RapidsDBSCAN
+            from cuml import KMeans as RapidsKMeans
 
-            def add_dbscan_clusters(dataframe, eps=eps, n_jobs=n_jobs, min_samples=min_samples):
-                dataframe_red = dataframe.loc[:, dataframe.columns.isin(self.num_columns)].copy()
+            def add_dbscan_clusters(
+                dataframe, eps=eps, n_jobs=n_jobs, min_samples=min_samples
+            ):
+                dataframe_red = dataframe.loc[
+                    :, dataframe.columns.isin(self.num_columns)
+                ].copy()
                 dataframe_red = cudf.from_pandas(dataframe_red)
-                db = RapidsDBSCAN(eps=eps, min_samples=min_samples).fit(dataframe_red)
+                db = RapidsDBSCAN(
+                    eps=eps, min_samples=min_samples, output_type="numpy"
+                ).fit(dataframe_red)
                 labels = db.labels_
-                dataframe[f'dbscan_cluster_{eps}'] = labels
+                try:
+                    dataframe[f"dbscan_cluster_{eps}"] = labels.to_numpy()
+                except Exception:
+                    try:
+                        dataframe[f"dbscan_cluster_{eps}"] = labels
+                    except Exception:
+                        dataframe[f"dbscan_cluster_{eps}"] = 1
                 del db
                 del labels
                 _ = gc.collect()
                 dataframe = dataframe_red.to_pandas()
                 return dataframe
 
-            def add_gaussian_mixture_clusters(dataframe, n_components=nb_clusters):
+            def add_gaussian_mixture_clusters(
+                dataframe, n_components=nb_clusters, mode="fit"
+            ):
                 dataframe = cudf.from_pandas(dataframe)
-                kmeans = RapidsKMeans(n_clusters=n_components, random_state=42, n_init=20, max_iter=500)
-                kmeans.fit(dataframe)
+                if mode == "fit":
+                    kmeans = RapidsKMeans(
+                        n_clusters=n_components,
+                        random_state=self.global_random_state,
+                        n_init=20,
+                        max_iter=500,
+                        output_type="numpy",
+                    )
+                    kmeans.fit(dataframe)
+                    self.preprocess_decisions[
+                        f"clustering_gaussian_mixture_model_{n_components}"
+                    ] = kmeans
+                else:
+                    kmeans = self.preprocess_decisions[
+                        f"clustering_gaussian_mixture_model_{n_components}"
+                    ]
+
                 kmeans_clusters = kmeans.predict(dataframe)
-                dataframe[f"gaussian_clusters_{n_components}"] = kmeans_clusters
+                try:
+                    dataframe[
+                        f"gaussian_clusters_{n_components}"
+                    ] = kmeans_clusters.to_numpy()
+                except AttributeError:
+                    dataframe[f"gaussian_clusters_{n_components}"] = kmeans_clusters
                 del kmeans
                 del kmeans_clusters
                 _ = gc.collect()
                 dataframe = dataframe.to_pandas()
                 return dataframe
 
-            def add_kmeans_clusters(dataframe, n_components=nb_clusters):
+            def add_kmeans_clusters(dataframe, n_components=nb_clusters, mode="fit"):
                 dataframe = cudf.from_pandas(dataframe)
-                kmeans = RapidsKMeans(n_clusters=n_components, random_state=42, n_init=20, max_iter=500)
-                kmeans.fit(dataframe)
+                if mode == "fit":
+                    kmeans = RapidsKMeans(
+                        n_clusters=n_components,
+                        random_state=self.global_random_state,
+                        n_init=20,
+                        max_iter=500,
+                        output_type="numpy",
+                    )
+                    kmeans.fit(dataframe)
+                    self.preprocess_decisions[
+                        f"kmeans_clusters_{n_components}"
+                    ] = kmeans
+                else:
+                    kmeans = self.preprocess_decisions[
+                        f"kmeans_clusters_{n_components}"
+                    ]
+
                 kmeans_clusters = kmeans.predict(dataframe)
-                dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
+                try:
+                    dataframe[
+                        f"kmeans_clusters_{n_components}"
+                    ] = kmeans_clusters.to_numpy()
+                except AttributeError:
+                    dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
                 del kmeans
                 del kmeans_clusters
                 _ = gc.collect()
                 dataframe = dataframe.to_pandas()
                 return dataframe
+
         else:
-            def add_dbscan_clusters(dataframe, eps=eps, n_jobs=n_jobs, min_samples=min_samples):
-                dataframe_red = dataframe.loc[:, dataframe.columns.isin(self.num_columns)].copy()
+
+            def add_dbscan_clusters(
+                dataframe, eps=eps, n_jobs=n_jobs, min_samples=min_samples
+            ):
+                dataframe_red = dataframe.loc[
+                    :, dataframe.columns.isin(self.num_columns)
+                ].copy()
                 db = DBSCAN(eps=eps, min_samples=min_samples).fit(dataframe_red)
                 labels = db.labels_
-                dataframe[f'dbscan_cluster_{eps}'] = labels
+                try:
+                    dataframe[f"dbscan_cluster_{eps}"] = labels
+                except AttributeError:
+                    dataframe[f"dbscan_cluster_{eps}"] = 1
                 del db
                 del labels
                 _ = gc.collect()
                 return dataframe
 
-            def add_gaussian_mixture_clusters(dataframe, n_components=nb_clusters):
-                gaussian = GaussianMixture(n_components=n_components)
-                gaussian.fit(dataframe)
+            def add_gaussian_mixture_clusters(
+                dataframe, n_components=nb_clusters, mode="fit"
+            ):
+                if mode == "fit":
+                    gaussian = GaussianMixture(
+                        n_components=n_components, random_state=self.global_random_state
+                    )
+                    gaussian.fit(dataframe)
+                    self.preprocess_decisions[
+                        f"clustering_gaussian_mixture_model_{n_components}"
+                    ] = gaussian
+                else:
+                    gaussian = self.preprocess_decisions[
+                        f"clustering_gaussian_mixture_model_{n_components}"
+                    ]
+
                 gaussian_clusters = gaussian.predict(dataframe)
                 dataframe[f"gaussian_clusters_{n_components}"] = gaussian_clusters
                 del gaussian
@@ -1657,9 +2469,22 @@ class PreProcessing:
                 _ = gc.collect()
                 return dataframe
 
-            def add_kmeans_clusters(dataframe, n_components=nb_clusters):
-                kmeans = KMeans(n_clusters=n_components, random_state=42, n_init=20, max_iter=500)
-                kmeans.fit(dataframe)
+            def add_kmeans_clusters(dataframe, n_components=nb_clusters, mode="fit"):
+                if mode == "fit":
+                    kmeans = KMeans(
+                        n_clusters=n_components,
+                        random_state=self.global_random_state,
+                        n_init=20,
+                        max_iter=500,
+                    )
+                    kmeans.fit(dataframe)
+                    self.preprocess_decisions[
+                        f"clustering_kmeans_model_{n_components}"
+                    ] = kmeans
+                else:
+                    kmeans = self.preprocess_decisions[
+                        f"clustering_kmeans_model_{n_components}"
+                    ]
                 kmeans_clusters = kmeans.predict(dataframe)
                 dataframe[f"kmeans_clusters_{n_components}"] = kmeans_clusters
                 del kmeans
@@ -1667,18 +2492,19 @@ class PreProcessing:
                 _ = gc.collect()
                 return dataframe
 
-        logging.info('Start adding clusters as additional features.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Start adding clusters as additional features.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if not self.data_scaled:
-            self.data_scaling()
-        if algorithm == 'dbscan':
+            pass
+            # self.data_scaling()
+        if algorithm == "dbscan":
             if self.prediction_mode:
                 try:
                     self.dataframe = add_dbscan_clusters(self.dataframe)
                 except ValueError:
-                    self.dataframe[f"dbscan_clusters_{nb_clusters}"] = 0
-                logging.info('Finished adding clusters as additional features.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                    self.dataframe[f"dbscan_clusters_{eps}"] = 1
+                logging.info("Finished adding clusters as additional features.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.dataframe
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -1686,53 +2512,68 @@ class PreProcessing:
                     X_train = add_dbscan_clusters(X_train)
                     X_test = add_dbscan_clusters(X_test)
                 except ValueError:
-                    X_train[f"dbscan_clusters_{nb_clusters}"] = 0
-                    X_test[f"dbscan_clusters_{nb_clusters}"] = 0
-                logging.info('Finished adding clusters as additional features.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                    X_train[f"dbscan_clusters_{eps}"] = 1
+                    X_test[f"dbscan_clusters_{eps}"] = 1
+                except KeyError:
+                    X_train[f"dbscan_clusters_{eps}"] = 1
+                    X_test[f"dbscan_clusters_{eps}"] = 1
+                logging.info("Finished adding clusters as additional features.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
-        elif algorithm == 'gaussian':
+        elif algorithm == "gaussian":
             if self.prediction_mode:
                 try:
-                    self.dataframe = add_gaussian_mixture_clusters(self.dataframe)
+                    self.dataframe = add_gaussian_mixture_clusters(
+                        self.dataframe, mode="predict"
+                    )
                 except ValueError:
                     self.dataframe[f"gaussian_clusters_{nb_clusters}"] = 0
-                logging.info('Finished adding clusters as additional features.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                except KeyError:
+                    self.dataframe[f"gaussian_clusters_{nb_clusters}"] = 0
+                logging.info("Finished adding clusters as additional features.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.dataframe
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 try:
-                    X_train = add_gaussian_mixture_clusters(X_train)
-                    X_test = add_gaussian_mixture_clusters(X_test)
+                    X_train = add_gaussian_mixture_clusters(X_train, mode="fit")
+                    X_test = add_gaussian_mixture_clusters(X_test, mode="predict")
                 except ValueError:
                     X_train[f"gaussian_clusters_{nb_clusters}"] = 0
                     X_test[f"gaussian_clusters_{nb_clusters}"] = 0
-                logging.info('Finished adding clusters as additional features.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                except KeyError:
+                    X_train[f"gaussian_clusters_{nb_clusters}"] = 0
+                    X_test[f"gaussian_clusters_{nb_clusters}"] = 0
+                logging.info("Finished adding clusters as additional features.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
-        elif algorithm == 'kmeans':
+        elif algorithm == "kmeans":
             if self.prediction_mode:
                 try:
-                    self.dataframe = add_kmeans_clusters(self.dataframe)
+                    self.dataframe = add_kmeans_clusters(self.dataframe, mode="predict")
                 except ValueError:
                     self.dataframe[f"kmeans_clusters_{nb_clusters}"] = 0
-                logging.info('Finished adding clusters as additional features.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                except KeyError:
+                    self.dataframe[f"kmeans_clusters_{nb_clusters}"] = 0
+                logging.info("Finished adding clusters as additional features.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.dataframe
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 try:
-                    X_train = add_kmeans_clusters(X_train)
-                    X_test = add_kmeans_clusters(X_test)
+                    X_train = add_kmeans_clusters(X_train, mode="fit")
+                    X_test = add_kmeans_clusters(X_test, mode="predict")
                 except ValueError:
                     X_train[f"kmeans_clusters_{nb_clusters}"] = 0
                     X_test[f"kmeans_clusters_{nb_clusters}"] = 0
-                logging.info('Finished adding clusters as additional features.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                except KeyError:
+                    X_train[f"kmeans_clusters_{nb_clusters}"] = 0
+                    X_test[f"kmeans_clusters_{nb_clusters}"] = 0
+                logging.info("Finished adding clusters as additional features.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def pca_clustering(self, df, mode='fit'):
+    def pca_clustering(self, df, mode="fit"):
         """
         Takes a Dataframe and searchs for features containing "clustering". Reduces these to two PCA dimensions, but keeps
         the original colum,ns as well.
@@ -1740,28 +2581,32 @@ class PreProcessing:
         :param mode: "fit" and "transform"
         :return: Returns extended Dataframe
         """
-        if mode == 'transform':
+        if mode == "transform":
             all_cols = df.columns
             cluster_columns = [x for x in all_cols if "cluster" not in x]
             cluster_df = df[cluster_columns].copy()
-            pca = self.preprocess_decisions[f"cluster_pca"]
+            pca = self.preprocess_decisions["cluster_pca"]
             comps = pca.transform(cluster_df.values)
-            self.preprocess_decisions[f"cluster_pca"] = pca
-            cluster_pca_cols = [f'Cluster PC-1', f'Cluster PC-2']
+            self.preprocess_decisions["cluster_pca"] = pca
+            cluster_pca_cols = ["Cluster PC-1", "Cluster PC-2"]
             pos_df = pd.DataFrame(comps, columns=cluster_pca_cols)
             tfidf_df_pca = pos_df[cluster_pca_cols]
-            df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
-        elif mode == 'fit':
+            df = pd.merge(
+                df, tfidf_df_pca, left_index=True, right_index=True, how="left"
+            )
+        elif mode == "fit":
             all_cols = df.columns
             cluster_columns = [x for x in all_cols if "cluster" not in x]
             cluster_df = df[cluster_columns].copy()
-            pca = PCA(n_components=2)
+            pca = PCA(n_components=2, random_state=self.global_random_state)
             comps = pca.fit_transform(cluster_df.values)
-            self.preprocess_decisions[f"cluster_pca"] = pca
-            cluster_pca_cols = [f'Cluster PC-1', f'Cluster PC-2']
+            self.preprocess_decisions["cluster_pca"] = pca
+            cluster_pca_cols = ["Cluster PC-1", "Cluster PC-2"]
             pos_df = pd.DataFrame(comps, columns=cluster_pca_cols)
             tfidf_df_pca = pos_df[cluster_pca_cols]
-            df = pd.merge(df, tfidf_df_pca, left_index=True, right_index=True, how='left')
+            df = pd.merge(
+                df, tfidf_df_pca, left_index=True, right_index=True, how="left"
+            )
         return df
 
     def pca_clustering_results(self):
@@ -1769,20 +2614,20 @@ class PreProcessing:
         Adds PCA of clusterings as part of the blueprint pipeline.
         :return: Modifies class attributes.
         """
-        self.get_current_timestamp('PCA the clustering results.')
-        logging.info(f'Started to PCA the clustering results.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        self.get_current_timestamp("PCA the clustering results.")
+        logging.info("Started to PCA the clustering results.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            self.dataframe = self.pca_clustering(self.dataframe, mode='transform')
-            logging.info(f'Finished to PCA the clustering results.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            self.dataframe = self.pca_clustering(self.dataframe, mode="transform")
+            logging.info("Finished to PCA the clustering results.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            X_train = self.pca_clustering(X_train, mode='fit')
-            X_test = self.pca_clustering(X_test, mode='transform')
-            logging.info(f'Finished to PCA the clustering results.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            X_train = self.pca_clustering(X_train, mode="fit")
+            X_test = self.pca_clustering(X_test, mode="transform")
+            logging.info("Finished to PCA the clustering results.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def delete_high_null_cols(self, threshold=0.05):
@@ -1791,32 +2636,39 @@ class PreProcessing:
         :param threshold: Maximum percentage of NULLs in a column allowed.
         :return: Updates test and train class attributes.
         """
-        self.get_current_timestamp('Delete columns with high share of NULLs')
+        self.get_current_timestamp("Delete columns with high share of NULLs")
         if self.prediction_mode:
             for high_null_col in self.preprocess_decisions["deleted_high_null_cols"]:
                 del self.dataframe[high_null_col]
-            logging.info('Finished deleting columns with many NULLs.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished deleting columns with many NULLs.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         else:
-            logging.info('Started deleting columns with many NULLs.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Started deleting columns with many NULLs.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             columns_before = X_train.columns.to_list()
-            X_train.dropna(axis=1, thresh=int(threshold * len(X_train.index)), inplace=True)
+            X_train.dropna(
+                axis=1, thresh=int(threshold * len(X_train.index)), inplace=True
+            )
             columns_after = X_train.columns.to_list()
             X_test = X_test[columns_after].copy()
-            deleted_columns = (set(columns_before).difference(columns_after))
+            deleted_columns = set(columns_before).difference(columns_after)
             deleted = []
             for key in deleted_columns:
                 deleted.append(key)
             self.preprocess_decisions["deleted_high_null_cols"] = deleted
-            logging.info(f'Finished deleting columns with many NULLs: {deleted}.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info(f"Finished deleting columns with many NULLs: {deleted}.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def iterative_imputation(self, dataframe, imputer=None):
-        dataframe_cols = dataframe.columns#[dataframe.isna().any()].tolist()
-        imp_mean = IterativeImputer(random_state=0, estimator=BayesianRidge(), imputation_order='ascending', max_iter=1000)
+        dataframe_cols = dataframe.columns  # [dataframe.isna().any()].tolist()
+        imp_mean = IterativeImputer(
+            random_state=self.global_random_state,
+            estimator=BayesianRidge(),
+            imputation_order="ascending",
+            max_iter=1000,
+        )
         if not imputer:
             imp_mean.fit(dataframe)
         else:
@@ -1824,12 +2676,14 @@ class PreProcessing:
             imp_mean.fit(dataframe)
         dataframe = imp_mean.transform(dataframe)
         dataframe_final = pd.DataFrame(dataframe, columns=dataframe_cols)
-        self.preprocess_decisions[f"fill_nulls_imputer"] = imp_mean
+        self.preprocess_decisions["fill_nulls_imputer"] = imp_mean
         del imp_mean
         _ = gc.collect()
         return dataframe_final
 
-    def static_filling(self, dataframe, fill_with=0, fill_cat_col_with='No words have been found'):
+    def static_filling(
+        self, dataframe, fill_with=0, fill_cat_col_with="No words have been found"
+    ):
         """
         Loop through dataframe and fill categorical and numeric columns seperately with predefined values.
         :param dataframe: Pandas Dataframe
@@ -1837,20 +2691,27 @@ class PreProcessing:
         :param fill_cat_col_with: String to fill categorical NULLs.
         :return:
         """
-        cat_columns = dataframe.select_dtypes(include=['object']).columns.to_list()
+        cat_columns = dataframe.select_dtypes(include=["object"]).columns.to_list()
         for col in cat_columns:
             dataframe[col] = dataframe[col].fillna(fill_cat_col_with, inplace=False)
 
         for vartype in self.num_dtypes:
             try:
-                filtered_columns = dataframe.select_dtypes(include=[vartype]).columns.to_list()
+                filtered_columns = dataframe.select_dtypes(
+                    include=[vartype]
+                ).columns.to_list()
                 for col in filtered_columns:
                     dataframe[col] = dataframe[col].fillna(fill_with, inplace=False)
             except ValueError:
                 pass
         return dataframe
 
-    def fill_nulls(self, how='iterative_imputation', fill_with=0, fill_cat_col_with='No words have been found'):
+    def fill_nulls(
+        self,
+        how="iterative_imputation",
+        fill_with=0,
+        fill_cat_col_with="No words have been found",
+    ):
         """
         Takes in a dataframe and fills all NULLs with chosen value.
         :param fill_with: Define value to replace NULLs with.
@@ -1858,83 +2719,122 @@ class PreProcessing:
         imputer.
         :return: Returns modified dataframe
         """
-        self.get_current_timestamp('Fill nulls')
+        self.get_current_timestamp("Fill nulls")
 
-        logging.info('Started filling NULLs.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Started filling NULLs.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         algorithms = ["iterative_imputation", "static"]
         if how not in algorithms:
-            self.runtime_warnings(warn_about='wrong null algorithm')
+            self.runtime_warnings(warn_about="wrong null algorithm")
         else:
             pass
 
         if self.prediction_mode:
             if not how:
-                how = self.preprocess_decisions[f"fill_nulls_how"]
+                how = self.preprocess_decisions["fill_nulls_how"]
             else:
                 pass
 
-            if how == 'static':
-                self.dataframe = self.static_filling(self.dataframe, fill_with=fill_with, fill_cat_col_with=fill_cat_col_with)
-            elif how == 'iterative_imputation':
-                self.dataframe = self.iterative_imputation(self.dataframe, imputer=self.preprocess_decisions[f"fill_nulls_imputer"])
-            logging.info('Finished filling NULLs.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            if how == "static":
+                self.dataframe = self.static_filling(
+                    self.dataframe,
+                    fill_with=fill_with,
+                    fill_cat_col_with=fill_cat_col_with,
+                )
+            elif how == "iterative_imputation":
+                self.dataframe = self.iterative_imputation(
+                    self.dataframe,
+                    imputer=self.preprocess_decisions["fill_nulls_imputer"],
+                )
+            logging.info("Finished filling NULLs.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
-            if how == 'static':
-                X_train = self.static_filling(X_train, fill_with=fill_with, fill_cat_col_with=fill_cat_col_with)
-                X_test = self.static_filling(X_test, fill_with=fill_with, fill_cat_col_with=fill_cat_col_with)
-                self.preprocess_decisions[f"fill_nulls_how"] = how
-            elif how == 'iterative_imputation':
+            if how == "static":
+                X_train = self.static_filling(
+                    X_train, fill_with=fill_with, fill_cat_col_with=fill_cat_col_with
+                )
+                X_test = self.static_filling(
+                    X_test, fill_with=fill_with, fill_cat_col_with=fill_cat_col_with
+                )
+                self.preprocess_decisions["fill_nulls_how"] = how
+            elif how == "iterative_imputation":
                 # TODO: Test, if it woks + revert LGBM + test model ensemble
                 X_train = self.iterative_imputation(X_train)
-                X_test = self.iterative_imputation(X_test, imputer=self.preprocess_decisions[f"fill_nulls_imputer"])
-                self.preprocess_decisions[f"fill_nulls_how"] = how
-            logging.info('Finished filling NULLs.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                X_test = self.iterative_imputation(
+                    X_test, imputer=self.preprocess_decisions["fill_nulls_imputer"]
+                )
+                self.preprocess_decisions["fill_nulls_how"] = how
+            logging.info("Finished filling NULLs.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def holistic_null_filling(self, iterative=False):
-        self.get_current_timestamp('Holistic NULL filling')
-        logging.info('Started holistic NULL filling.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        self.get_current_timestamp("Holistic NULL filling")
+        logging.info("Started holistic NULL filling.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            for col in self.preprocess_decisions[f"holistically_filled_cols"]:
-                if self.dataframe[col].dtype in self.num_dtypes: #checking if col is numeric
-                    algorithm = 'mean_filling'
-                    imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
-                    self.dataframe[col+"_"+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1)).reshape(-1, 1)
+            for col in self.preprocess_decisions["holistically_filled_cols"]:
+                if (
+                    self.dataframe[col].dtype in self.num_dtypes
+                ):  # checking if col is numeric
+                    algorithm = "mean_filling"
+                    imp = self.preprocess_decisions[
+                        f"fill_nulls_{algorithm}_imputer_{col}"
+                    ]
+                    self.dataframe[col + "_" + algorithm] = imp.transform(
+                        self.dataframe[col].values.reshape(-1, 1)
+                    ).reshape(-1, 1)
 
-                    algorithm = 'static_filling'
-                    self.dataframe[col+"_"+algorithm] = self.dataframe[col].fillna(0, inplace=False)
+                    algorithm = "static_filling"
+                    self.dataframe[col + "_" + algorithm] = self.dataframe[col].fillna(
+                        0, inplace=False
+                    )
 
-                    algorithm = 'most_frequent'
-                    imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
-                    self.dataframe[col+"_"+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1)).reshape(-1, 1)
+                    algorithm = "most_frequent"
+                    imp = self.preprocess_decisions[
+                        f"fill_nulls_{algorithm}_imputer_{col}"
+                    ]
+                    self.dataframe[col + "_" + algorithm] = imp.transform(
+                        self.dataframe[col].values.reshape(-1, 1)
+                    ).reshape(-1, 1)
 
                 else:
-                    algorithm = 'most_frequent'
-                    imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"]
-                    self.dataframe[col+"_"+algorithm] = imp.transform(self.dataframe[col].values.reshape(-1, 1)).reshape(-1, 1)
+                    algorithm = "most_frequent"
+                    imp = self.preprocess_decisions[
+                        f"fill_nulls_{algorithm}_imputer_{col}"
+                    ]
+                    self.dataframe[col + "_" + algorithm] = imp.transform(
+                        self.dataframe[col].values.reshape(-1, 1)
+                    ).reshape(-1, 1)
 
-                    algorithm = 'static_filling'
-                    self.dataframe[col+"_"+algorithm] = self.dataframe[col].fillna('None', inplace=False)
+                    algorithm = "static_filling"
+                    self.dataframe[col + "_" + algorithm] = self.dataframe[col].fillna(
+                        "None", inplace=False
+                    )
 
                     # fill original column as prep for iterative filling
-                    self.dataframe[col] = self.dataframe[col].fillna('None', inplace=False)
+                    self.dataframe[col] = self.dataframe[col].fillna(
+                        "None", inplace=False
+                    )
 
             if iterative:
-                algorithm = 'iterative_filling'
-                imp = self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_all_cols"]
-                cat_columns = self.dataframe.select_dtypes(include=['object']).columns.to_list()
-                no_cat_cols = self.dataframe.loc[:, ~self.dataframe.columns.isin(cat_columns)].columns.to_list()
+                algorithm = "iterative_filling"
+                imp = self.preprocess_decisions[
+                    f"fill_nulls_{algorithm}_imputer_all_cols"
+                ]
+                cat_columns = self.dataframe.select_dtypes(
+                    include=["object"]
+                ).columns.to_list()
+                no_cat_cols = self.dataframe.loc[
+                    :, ~self.dataframe.columns.isin(cat_columns)
+                ].columns.to_list()
                 imp.transform(self.dataframe[no_cat_cols])
             else:
                 pass
-            logging.info('Finished holistic NULL filling.')
+            logging.info("Finished holistic NULL filling.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -1943,57 +2843,102 @@ class PreProcessing:
             for col in X_train.columns.to_list():
                 if X_train[col].isna().sum() > 0:
                     print(f"Impute column {col}...")
-                    if X_train[col].dtype in self.num_dtypes: #checking if col is numeric
-                        algorithm = 'mean_filling'
-                        imp = SimpleImputer(missing_values=np.nan, strategy='mean', copy=True)
+                    if (
+                        X_train[col].dtype in self.num_dtypes
+                    ):  # checking if col is numeric
+                        algorithm = "mean_filling"
+                        imp = SimpleImputer(
+                            missing_values=np.nan, strategy="mean", copy=True
+                        )
                         imp.fit(X_train[col].values.reshape(-1, 1))
-                        X_train[col+"_"+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1)).reshape(-1, 1)
-                        X_test[col+"_"+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1)).reshape(-1, 1)
-                        self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
+                        X_train[col + "_" + algorithm] = imp.transform(
+                            X_train[col].values.reshape(-1, 1)
+                        ).reshape(-1, 1)
+                        X_test[col + "_" + algorithm] = imp.transform(
+                            X_test[col].values.reshape(-1, 1)
+                        ).reshape(-1, 1)
+                        self.preprocess_decisions[
+                            f"fill_nulls_{algorithm}_imputer_{col}"
+                        ] = imp
 
-                        algorithm = 'static_filling'
-                        X_train[col+"_"+algorithm] = X_train[col].fillna(0, inplace=False)
-                        X_test[col+"_"+algorithm] = X_test[col].fillna(0, inplace=False)
+                        algorithm = "static_filling"
+                        X_train[col + "_" + algorithm] = X_train[col].fillna(
+                            0, inplace=False
+                        )
+                        X_test[col + "_" + algorithm] = X_test[col].fillna(
+                            0, inplace=False
+                        )
 
                         # most frequent filling
-                        algorithm = 'most_frequent'
-                        imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent', copy=True)
+                        algorithm = "most_frequent"
+                        imp = SimpleImputer(
+                            missing_values=np.nan, strategy="most_frequent", copy=True
+                        )
                         imp.fit(X_train[col].values.reshape(-1, 1))
-                        X_train[col+"_"+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1)).reshape(-1, 1)
-                        X_test[col+"_"+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1)).reshape(-1, 1)
-                        self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
+                        X_train[col + "_" + algorithm] = imp.transform(
+                            X_train[col].values.reshape(-1, 1)
+                        ).reshape(-1, 1)
+                        X_test[col + "_" + algorithm] = imp.transform(
+                            X_test[col].values.reshape(-1, 1)
+                        ).reshape(-1, 1)
+                        self.preprocess_decisions[
+                            f"fill_nulls_{algorithm}_imputer_{col}"
+                        ] = imp
                     else:
                         # most frequent filling
-                        algorithm = 'most_frequent'
-                        imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent', copy=True)
+                        algorithm = "most_frequent"
+                        imp = SimpleImputer(
+                            missing_values=np.nan, strategy="most_frequent", copy=True
+                        )
                         imp.fit(X_train[col].values.reshape(-1, 1))
-                        X_train[col+"_"+algorithm] = imp.transform(X_train[col].values.reshape(-1, 1)).reshape(-1, 1)
-                        X_test[col+"_"+algorithm] = imp.transform(X_test[col].values.reshape(-1, 1)).reshape(-1, 1)
-                        self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_{col}"] = imp
+                        X_train[col + "_" + algorithm] = imp.transform(
+                            X_train[col].values.reshape(-1, 1)
+                        ).reshape(-1, 1)
+                        X_test[col + "_" + algorithm] = imp.transform(
+                            X_test[col].values.reshape(-1, 1)
+                        ).reshape(-1, 1)
+                        self.preprocess_decisions[
+                            f"fill_nulls_{algorithm}_imputer_{col}"
+                        ] = imp
 
-                        algorithm = 'static_filling'
-                        X_train[col+"_"+algorithm] = X_train[col].fillna('None', inplace=False)
-                        X_test[col+"_"+algorithm] = X_test[col].fillna('None', inplace=False)
+                        algorithm = "static_filling"
+                        X_train[col + "_" + algorithm] = X_train[col].fillna(
+                            "None", inplace=False
+                        )
+                        X_test[col + "_" + algorithm] = X_test[col].fillna(
+                            "None", inplace=False
+                        )
 
                         # fill original column as prep for iterative filling
-                        X_train[col] = X_train[col].fillna('None', inplace=False)
-                        X_test[col] = X_test[col].fillna('None', inplace=False)
+                        X_train[col] = X_train[col].fillna("None", inplace=False)
+                        X_test[col] = X_test[col].fillna("None", inplace=False)
 
                     filled_cols.append(col)
             if iterative:
-                algorithm = 'iterative_filling'
+                algorithm = "iterative_filling"
                 model = lgb.LGBMRegressor()
-                cat_columns = X_train.select_dtypes(include=['object']).columns.to_list()
-                no_cat_cols = X_train.loc[:, ~X_train.columns.isin(cat_columns)].columns.to_list()
-                imp = IterativeImputer(random_state=0, estimator=model, imputation_order='ascending', max_iter=1000)
+                cat_columns = X_train.select_dtypes(
+                    include=["object"]
+                ).columns.to_list()
+                no_cat_cols = X_train.loc[
+                    :, ~X_train.columns.isin(cat_columns)
+                ].columns.to_list()
+                imp = IterativeImputer(
+                    random_state=self.global_random_state,
+                    estimator=model,
+                    imputation_order="ascending",
+                    max_iter=1000,
+                )
                 imp.fit(X_train[no_cat_cols])
                 imp.transform(X_test[no_cat_cols])
-                self.preprocess_decisions[f"fill_nulls_{algorithm}_imputer_all_cols"] = imp
+                self.preprocess_decisions[
+                    f"fill_nulls_{algorithm}_imputer_all_cols"
+                ] = imp
             else:
                 pass
 
-            self.preprocess_decisions[f"holistically_filled_cols"] = filled_cols
-            logging.info('Finished holistic NULL filling.')
+            self.preprocess_decisions["holistically_filled_cols"] = filled_cols
+            logging.info("Finished holistic NULL filling.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def fill_infinite_values(self, fill_with_zero=True):
@@ -2015,35 +2960,35 @@ class PreProcessing:
         :param nu: Float between >0 and <1. Indicates how much of the values in percent shall be flagged as outliers.
         :return: Updates class attributes.
         """
-        self.get_current_timestamp('Started SVM outlier detection.')
-        logging.info('Started outlier handling.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        self.get_current_timestamp("Started SVM outlier detection.")
+        logging.info("Started outlier handling.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            onesvm = OneClassSVM(kernel='rbf', nu=nu)
+            onesvm = OneClassSVM(kernel="rbf", nu=nu)
             onesvm.fit(self.dataframe)
             outlier_flags = onesvm.predict(self.dataframe)
             self.dataframe[f"svm_outlier_score_nu_{nu}"] = outlier_flags
-            logging.info('Started outlier handling.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            self.get_current_timestamp('Finished SVM outlier detection.')
+            logging.info("Started outlier handling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            self.get_current_timestamp("Finished SVM outlier detection.")
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            onesvm = OneClassSVM(kernel='rbf', nu=nu)
+            onesvm = OneClassSVM(kernel="rbf", nu=nu)
             onesvm.fit(X_train)
             outlier_flags = onesvm.predict(X_train)
             X_train[f"svm_outlier_score_nu_{nu}"] = outlier_flags
 
-            onesvm = OneClassSVM(kernel='rbf', nu=nu)
+            onesvm = OneClassSVM(kernel="rbf", nu=nu)
             onesvm.fit(X_test)
             outlier_flags = onesvm.predict(X_test)
             X_test[f"svm_outlier_score_nu_{nu}"] = outlier_flags
 
-            logging.info('Started outlier handling.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            self.get_current_timestamp('Finished SVM outlier detection.')
+            logging.info("Started outlier handling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            self.get_current_timestamp("Finished SVM outlier detection.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def isolation_forest_identifier(self, how='append', threshold=0):
+    def isolation_forest_identifier(self, how="append", threshold=0):
         """
         Takes a dataframe and runs isolation forest to either flag or delete outliers.
         :param how: Chose if outlier scores shall be 'append' or 'delete'.
@@ -2051,8 +2996,13 @@ class PreProcessing:
         :return: Returns modified dataframe.
         """
         if self.prediction_mode:
-            if self.preprocess_decisions[f"isolation_forest"]["how"] == 'append':
-                outlier_detector = self.preprocess_decisions[f"isolation_forest"]["model"]
+            if (
+                self.preprocess_decisions["isolation_forest"]["how"] == "append"
+                and how == "append"
+            ):
+                outlier_detector = self.preprocess_decisions["isolation_forest"][
+                    "model"
+                ]
                 outlier_predictions = outlier_detector.decision_function(self.dataframe)
                 outlier_predictions_class = outlier_predictions * -1
                 self.dataframe["isolation_probs"] = outlier_predictions
@@ -2062,13 +3012,27 @@ class PreProcessing:
                 pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            try:
+                del X_train[self.target_variable]
+            except KeyError:
+                pass
+
+            try:
+                del X_test[self.target_variable]
+            except KeyError:
+                pass
+
             outlier_detector = IsolationForest(contamination="auto")
-            if how == 'append':
+            if how == "append":
                 outlier_detector.fit(X_train)
                 outlier_predictions_train = outlier_detector.decision_function(X_train)
+
                 outlier_predictions_class_train = outlier_predictions_train * -1
                 X_train["isolation_probs"] = outlier_predictions_train
                 X_train["isolation_class"] = outlier_predictions_class_train
+                for col in X_test.columns.to_list():
+                    if col not in X_train.columns.to_list():
+                        print(col)
                 outlier_predictions_test = outlier_detector.decision_function(X_test)
                 outlier_predictions_class_test = outlier_predictions_test * -1
                 X_test["isolation_probs"] = outlier_predictions_test
@@ -2077,17 +3041,27 @@ class PreProcessing:
                 del outlier_predictions_test
                 del outlier_predictions_class_train
                 del outlier_predictions_class_test
-                self.preprocess_decisions[f"isolation_forest"] = {}
-                self.preprocess_decisions[f"isolation_forest"]["model"] = outlier_detector
-                self.preprocess_decisions[f"isolation_forest"]["how"] = how
-            elif how == 'delete':
+                self.preprocess_decisions["isolation_forest"] = {}
+                self.preprocess_decisions["isolation_forest"][
+                    "model"
+                ] = outlier_detector
+                self.preprocess_decisions["isolation_forest"]["how"] = how
+            elif how == "delete":
+                original_len = len(X_train.index)
                 outlier_detector.fit(X_train)
                 outlier_predictions_train = outlier_detector.decision_function(X_train)
-                X_train["isolation_probs"] = outlier_predictions_train
-                X_train = X_train[(X_train["isolation_probs"] < threshold)]
-                self.preprocess_decisions[f"isolation_forest"] = {}
-                self.preprocess_decisions[f"isolation_forest"]["model"] = outlier_detector
-                self.preprocess_decisions[f"isolation_forest"]["how"] = how
+                X_train["isolation_probs_for_deletion"] = outlier_predictions_train
+
+                X_train[self.target_variable] = Y_train
+                X_train = X_train[
+                    (X_train["isolation_probs_for_deletion"] > threshold)
+                ].copy()
+                X_train = X_train.reset_index(drop=True)
+                Y_train = X_train[self.target_variable].copy()
+                X_train = X_train.drop(self.target_variable, axis=1)
+                X_train = X_train.drop("isolation_probs_for_deletion", axis=1)
+                new_len = len(X_train.index)
+                print(f"Training data size reduced from {original_len} to {new_len}.")
                 del outlier_predictions_train
             del outlier_detector
             _ = gc.collect()
@@ -2106,7 +3080,9 @@ class PreProcessing:
         else:
             whisker_width = threshold
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            dataframe_red = X_train.loc[:, X_train.columns.isin(self.num_columns)].copy()
+            dataframe_red = X_train.loc[
+                :, X_train.columns.isin(self.num_columns)
+            ].copy()
             dataframe_red[self.target_variable] = Y_train
             for col in dataframe_red.columns:
                 # Calculate Q1, Q2 and IQR
@@ -2115,7 +3091,8 @@ class PreProcessing:
                 iqr = q3 - q1
                 # Apply filter with respect to IQR, including optional whiskers
                 filter = (dataframe_red[col] > q1 - whisker_width * iqr) & (
-                            dataframe_red[col] < q3 + whisker_width * iqr)
+                    dataframe_red[col] < q3 + whisker_width * iqr
+                )
                 dataframe_red = dataframe_red.loc[filter]
             X_train = dataframe_red
             Y_train = dataframe_red[self.target_variable]
@@ -2124,7 +3101,7 @@ class PreProcessing:
             _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def outlier_care(self, method='isolation', how='append', threshold=None):
+    def outlier_care(self, method="isolation", how="append", threshold=None):
         """
         This method handles outliers isolation forest only currently.
         :param method: Chose the method of outlier detection. Either 'IQR', 'z_avg or 'iqr_avg'.
@@ -2133,23 +3110,46 @@ class PreProcessing:
         :param threshold: Define by how many range an outlier has to be off to be interpreted as outlier.
         :return: Returns instantiated dataframe object.
         """
-        self.get_current_timestamp('Handle outliers')
-        logging.info('Started outlier handling.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-        if method == 'isolation' and how == 'append':
-            logging.info('Finished outlier handling.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        self.get_current_timestamp("Handle outliers")
+        logging.info("Started outlier handling.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        if method == "isolation" and how == "append":
+            logging.info("Finished outlier handling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.isolation_forest_identifier(how=how, threshold=threshold)
-        elif method == 'isolation' and how == 'delete':
-            logging.info('Finished outlier handling.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        elif method == "isolation" and how == "delete":
+            logging.info("Finished outlier handling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.isolation_forest_identifier(how=how, threshold=threshold)
-        elif method == 'iqr':
-            logging.info('Finished outlier handling.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        elif method == "iqr":
+            logging.info("Finished outlier handling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.iqr_remover(threshold=1.5)
 
-    def datetime_converter(self, datetime_handling='all', force_conversion=False):
+    def add_weekend_flag(self):
+        if self.prediction_mode:
+            for key in self.detected_col_types:
+                try:
+                    if self.detected_col_types[key] == "datetime[ns]":
+                        self.dataframe[f"{key} is weekend"] = (
+                            self.dataframe[key].dt.dayofweek > 4
+                        )
+                except KeyError:
+                    pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            for key in self.detected_col_types:
+                try:
+                    if self.detected_col_types[key] == "datetime[ns]":
+                        X_train[f"{key} is weekend"] = X_train[key].dt.dayofweek > 4
+                        X_test[f"{key} is weekend"] = X_test[key].dt.dayofweek > 4
+                except KeyError:
+                    pass
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def datetime_converter(  # noqa: C901
+        self, datetime_handling="all", force_conversion=False
+    ):
         """
         Takes in a dataframe and processes date and datetime columns by categorical and/or cyclic transformation.
         Tries to identify datetime columns automatically, if no date columns have been provided during class
@@ -2159,35 +3159,40 @@ class PreProcessing:
         """
         if self.prediction_mode:
             if not self.date_columns:
-                logging.info('Started automatic datetime column detection.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                logging.info("Started automatic datetime column detection.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 date_columns = []
                 # convert date columns from object to datetime type
                 for col in self.dataframe.columns:
                     if col not in self.num_columns:
                         try:
-                            self.dataframe[col] = pd.to_datetime(self.dataframe[col], yearfirst=True)
+                            self.dataframe[col] = pd.to_datetime(
+                                self.dataframe[col], yearfirst=True
+                            )
                             date_columns.append(col)
                         except Exception:
                             if force_conversion:
-                                self.dataframe[col] = pd.to_datetime(self.dataframe[col], yearfirst=True,
-                                                                     errors='coerce')
+                                self.dataframe[col] = pd.to_datetime(
+                                    self.dataframe[col], yearfirst=True, errors="coerce"
+                                )
                                 date_columns.append(col)
-                logging.info('Finished automatic datetime column detection.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                logging.info("Finished automatic datetime column detection.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             else:
                 date_columns = self.date_columns
                 for col in date_columns:
                     try:
-                        self.dataframe[col] = pd.to_datetime(self.dataframe[col], yearfirst=True)
+                        self.dataframe[col] = pd.to_datetime(
+                            self.dataframe[col], yearfirst=True
+                        )
                     except KeyError:
                         pass
 
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             if not self.date_columns:
-                logging.info('Started automatic datetime column detection.')
-                logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+                logging.info("Started automatic datetime column detection.")
+                logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
                 date_columns = []
                 # convert date columns from object to datetime type
                 for col in X_train.columns:
@@ -2198,20 +3203,28 @@ class PreProcessing:
                             date_columns.append(col)
                         except Exception:
                             if force_conversion:
-                                X_train[col] = pd.to_datetime(X_train[col], yearfirst=True, errors='coerce')
-                                X_test[col] = pd.to_datetime(X_test[col], yearfirst=True, errors='coerce')
+                                X_train[col] = pd.to_datetime(
+                                    X_train[col], yearfirst=True, errors="coerce"
+                                )
+                                X_test[col] = pd.to_datetime(
+                                    X_test[col], yearfirst=True, errors="coerce"
+                                )
                                 date_columns.append(col)
             else:
                 date_columns = self.date_columns
                 for col in date_columns:
                     try:
-                        X_train[col] = pd.to_datetime(X_train[col], yearfirst=True, errors='coerce')
-                        X_test[col] = pd.to_datetime(X_test[col], yearfirst=True, errors='coerce')
+                        X_train[col] = pd.to_datetime(
+                            X_train[col], yearfirst=True, errors="coerce"
+                        )
+                        X_test[col] = pd.to_datetime(
+                            X_test[col], yearfirst=True, errors="coerce"
+                        )
                     except KeyError:
                         # might happen if deleted due to high nulls
                         pass
-            logging.info('Finished automatic datetime column detection.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished automatic datetime column detection.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
 
         self.date_columns_created = {}
         self.new_sin_cos_col_names = []  # used to filter out these columns from binning
@@ -2223,20 +3236,20 @@ class PreProcessing:
             :param dataframe:
             :return: Returns modified dataframe.
             """
-            for c in date_columns:
+            for c in self.date_columns:
                 if c in dataframe.columns:
                     if dataframe[c].dt.month.nunique() > 0:
-                        dataframe[c + '_month'] = dataframe[c].dt.month
-                        self.date_columns_created[c + '_month'] = 'month'
+                        dataframe[c + "_month"] = dataframe[c].dt.month
+                        self.date_columns_created[c + "_month"] = "month"
                     if dataframe[c].dt.day.nunique() > 0:
-                        dataframe[c + '_day'] = dataframe[c].dt.day
-                        self.date_columns_created[c + '_day'] = 'day'
+                        dataframe[c + "_day"] = dataframe[c].dt.day
+                        self.date_columns_created[c + "_day"] = "day"
                     if dataframe[c].dt.dayofweek.nunique() > 0:
-                        dataframe[c + '_dayofweek'] = dataframe[c].dt.dayofweek
-                        self.date_columns_created[c + '_dayofweek'] = 'dayofweek'
+                        dataframe[c + "_dayofweek"] = dataframe[c].dt.dayofweek
+                        self.date_columns_created[c + "_dayofweek"] = "dayofweek"
                     if dataframe[c].dt.hour.nunique() > 0:
-                        dataframe[c + '_hour'] = dataframe[c].dt.hour
-                        self.date_columns_created[c + '_hour'] = 'hour'
+                        dataframe[c + "_hour"] = dataframe[c].dt.hour
+                        self.date_columns_created[c + "_hour"] = "hour"
             return dataframe
 
         def cos_sin_transformation(dataframe):
@@ -2248,61 +3261,81 @@ class PreProcessing:
             """
             for c in self.date_columns_created:
                 if c in dataframe.columns:
-                    if self.date_columns_created[c] == 'month':
-                        dataframe[c + '_sin'] = np.sin(dataframe[c] * (2. * np.pi / 12))
-                        dataframe[c + '_cos'] = np.cos(dataframe[c] * (2. * np.pi / 12))
-                        self.new_sin_cos_col_names.append(c + '_sin')
-                        self.new_sin_cos_col_names.append(c + '_cos')
-                        dataframe.drop(c, axis=1, inplace=True)
-                    elif self.date_columns_created[c] == 'day':
-                        dataframe[c + '_sin'] = np.sin(dataframe[c] * (2. * np.pi / 31))
-                        dataframe[c + '_cos'] = np.cos(dataframe[c] * (2. * np.pi / 31))
-                        self.new_sin_cos_col_names.append(c + '_sin')
-                        self.new_sin_cos_col_names.append(c + '_cos')
-                        dataframe.drop(c, axis=1, inplace=True)
-                    elif self.date_columns_created[c] == 'dayofweek':
-                        dataframe[c + '_sin'] = np.sin((dataframe[c] + 1) * (2. * np.pi / 7))
-                        dataframe[c + '_cos'] = np.cos((dataframe[c] + 1) * (2. * np.pi / 7))
-                        self.new_sin_cos_col_names.append(c + '_sin')
-                        self.new_sin_cos_col_names.append(c + '_cos')
-                        dataframe.drop(c, axis=1, inplace=True)
-                    elif self.date_columns_created[c] == 'hour':
-                        dataframe[c + '_sin'] = np.sin(dataframe[c] * (2. * np.pi / 24))
-                        dataframe[c + '_cos'] = np.cos(dataframe[c] * (2. * np.pi / 24))
-                        self.new_sin_cos_col_names.append(c + '_sin')
-                        self.new_sin_cos_col_names.append(c + '_cos')
-                        dataframe.drop(c, axis=1, inplace=True)
-                    elif self.date_columns_created[c] == 'dayofyear':
-                        dataframe[c + '_sin'] = np.sin(dataframe[c] * (2. * np.pi / 365))
-                        dataframe[c + '_cos'] = np.cos(dataframe[c] * (2. * np.pi / 365))
-                        self.new_sin_cos_col_names.append(c + '_sin')
-                        self.new_sin_cos_col_names.append(c + '_cos')
-                        dataframe.drop(c, axis=1, inplace=True)
+                    if self.date_columns_created[c] == "month":
+                        dataframe[c + "_sin"] = np.sin(
+                            dataframe[c] * (2.0 * np.pi / 12)
+                        )
+                        dataframe[c + "_cos"] = np.cos(
+                            dataframe[c] * (2.0 * np.pi / 12)
+                        )
+                        self.new_sin_cos_col_names.append(c + "_sin")
+                        self.new_sin_cos_col_names.append(c + "_cos")
+                        # dataframe.drop(c, axis=1, inplace=True)
+                    elif self.date_columns_created[c] == "day":
+                        dataframe[c + "_sin"] = np.sin(
+                            dataframe[c] * (2.0 * np.pi / 31)
+                        )
+                        dataframe[c + "_cos"] = np.cos(
+                            dataframe[c] * (2.0 * np.pi / 31)
+                        )
+                        self.new_sin_cos_col_names.append(c + "_sin")
+                        self.new_sin_cos_col_names.append(c + "_cos")
+                        # dataframe.drop(c, axis=1, inplace=True)
+                    elif self.date_columns_created[c] == "dayofweek":
+                        dataframe[c + "_sin"] = np.sin(
+                            (dataframe[c] + 1) * (2.0 * np.pi / 7)
+                        )
+                        dataframe[c + "_cos"] = np.cos(
+                            (dataframe[c] + 1) * (2.0 * np.pi / 7)
+                        )
+                        self.new_sin_cos_col_names.append(c + "_sin")
+                        self.new_sin_cos_col_names.append(c + "_cos")
+                        # dataframe.drop(c, axis=1, inplace=True)
+                    elif self.date_columns_created[c] == "hour":
+                        dataframe[c + "_sin"] = np.sin(
+                            dataframe[c] * (2.0 * np.pi / 24)
+                        )
+                        dataframe[c + "_cos"] = np.cos(
+                            dataframe[c] * (2.0 * np.pi / 24)
+                        )
+                        self.new_sin_cos_col_names.append(c + "_sin")
+                        self.new_sin_cos_col_names.append(c + "_cos")
+                        # dataframe.drop(c, axis=1, inplace=True)
+                    elif self.date_columns_created[c] == "dayofyear":
+                        dataframe[c + "_sin"] = np.sin(
+                            dataframe[c] * (2.0 * np.pi / 365)
+                        )
+                        dataframe[c + "_cos"] = np.cos(
+                            dataframe[c] * (2.0 * np.pi / 365)
+                        )
+                        self.new_sin_cos_col_names.append(c + "_sin")
+                        self.new_sin_cos_col_names.append(c + "_cos")
+                        # dataframe.drop(c, axis=1, inplace=True)
             return dataframe
 
-        self.get_current_timestamp(task='Apply datetime transformation')
-        logging.info('Started datetime column handling.')
+        self.get_current_timestamp(task="Apply datetime transformation")
+        logging.info("Started datetime column handling.")
         if self.prediction_mode:
             datetime_handling = self.preprocess_decisions["datetime_handling"]
-            if datetime_handling == 'cyclic':
+            if datetime_handling == "cyclic":
                 self.dataframe = cos_sin_transformation(self.dataframe)
-            elif datetime_handling == 'categorical':
+            elif datetime_handling == "categorical":
                 self.dataframe = date_converter(self.dataframe)
-            elif datetime_handling == 'all':
+            elif datetime_handling == "all":
                 self.dataframe = date_converter(self.dataframe)
                 self.dataframe = cos_sin_transformation(self.dataframe)
             else:
                 pass
 
-        elif datetime_handling == 'cyclic':
+        elif datetime_handling == "cyclic":
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train = cos_sin_transformation(X_train)
             X_test = cos_sin_transformation(X_test)
-        elif datetime_handling == 'categorical':
+        elif datetime_handling == "categorical":
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train = date_converter(X_train)
             X_test = date_converter(X_test)
-        elif datetime_handling == 'all':
+        elif datetime_handling == "all":
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train = date_converter(X_train)
             X_train = cos_sin_transformation(X_train)
@@ -2317,8 +3350,8 @@ class PreProcessing:
                 if dates in self.dataframe.columns:
                     # safe_copy = all_data[dates].copy()
                     self.dataframe.drop(dates, axis=1, inplace=True)
-            logging.info('Finished datetime column handling.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished datetime column handling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
             # drop initial date columns
@@ -2328,28 +3361,31 @@ class PreProcessing:
                     X_train.drop(dates, axis=1, inplace=True)
                     X_test.drop(dates, axis=1, inplace=True)
             self.preprocess_decisions["datetime_handling"] = datetime_handling
-            logging.info('Finished datetime column handling.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.date_columns_created
+            logging.info("Finished datetime column handling.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            return (
+                self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test),
+                self.date_columns_created,
+            )
 
     def onehot_pca(self):
         """
         Takes categorical columns, executes onehot encoding on them and reduces dimensionality with PCA.
         :return: Updates class attributes.
         """
-        self.get_current_timestamp(task='Onehot + PCA categorical features')
-        logging.info('Started Onehot + PCA categorical features.')
+        self.get_current_timestamp(task="Onehot + PCA categorical features")
+        logging.info("Started Onehot + PCA categorical features.")
         if self.prediction_mode:
             if len(self.cat_columns_encoded) > 0:
                 df_branch = self.dataframe[self.cat_columns_encoded].copy()
-                enc = self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"]
+                enc = self.preprocess_decisions["onehot_pca"]["onehot_encoder"]
                 df_branch = enc.transform(df_branch[self.cat_columns_encoded])
                 df_branch.fillna(0, inplace=True)
                 onehot_cols = df_branch.columns
-                # pca = self.preprocess_decisions[f"onehot_pca"]["pca_encoder"]
-                pca = PCA(n_components=2)
-                pred_comps = pca.fit_transform(df_branch[onehot_cols])
-                df_branch = pd.DataFrame(pred_comps, columns=['PC-1', 'PC-2'])
+                # pca = self.preprocess_decisions["onehot_pca"]["pca_encoder"]
+                pca = self.preprocess_decisions["onehot_pca"]["pca_encoder"]
+                pred_comps = pca.transform(df_branch[onehot_cols])
+                df_branch = pd.DataFrame(pred_comps, columns=["PC-1", "PC-2"])
                 for col in df_branch.columns:
                     self.dataframe[f"{col}_pca"] = df_branch[col]
                 del df_branch
@@ -2359,19 +3395,21 @@ class PreProcessing:
                 _ = gc.collect()
             else:
                 pass
-            logging.info('Finished Onehot + PCA categorical features.')
+            logging.info("Finished Onehot + PCA categorical features.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            self.preprocess_decisions[f"onehot_pca"] = {}
+            self.preprocess_decisions["onehot_pca"] = {}
             if self.cat_columns_encoded:
                 cat_columns = self.cat_columns_encoded
             else:
-                cat_columns = X_train.select_dtypes(include=['object']).columns.to_list()
+                cat_columns = X_train.select_dtypes(
+                    include=["object"]
+                ).columns.to_list()
                 self.cat_columns_encoded = cat_columns
 
             if len(self.cat_columns_encoded) > 0:
-                enc = OneHotEncoder(handle_unknown='ignore')
+                enc = OneHotEncoder(handle_unknown="ignore")
                 X_train_branch = X_train[cat_columns].copy()
                 X_test_branch = X_test[cat_columns].copy()
                 X_train_branch = enc.fit_transform(X_train_branch[cat_columns], Y_train)
@@ -2379,20 +3417,19 @@ class PreProcessing:
                 onehot_cols = X_train_branch.columns
                 X_train_branch.fillna(0, inplace=True)
                 X_test_branch.fillna(0, inplace=True)
-                pca = PCA(n_components=2)
-                #pac = pacmap.PaCMAP(n_dims=2)
+                pca = PCA(n_components=2, random_state=self.global_random_state)
                 train_comps = pca.fit_transform(X_train_branch[onehot_cols])
-                X_train_branch = pd.DataFrame(train_comps, columns=['PC-1', 'PC-2'])
+                X_train_branch = pd.DataFrame(train_comps, columns=["PC-1", "PC-2"])
                 test_comps = pca.transform(X_test_branch[onehot_cols])
-                X_test_branch = pd.DataFrame(test_comps, columns=['PC-1', 'PC-2'])
+                X_test_branch = pd.DataFrame(test_comps, columns=["PC-1", "PC-2"])
                 pca_cols = []
                 for col in X_train_branch.columns:
                     X_train[f"{col}_pca"] = X_train_branch[col]
                     X_test[f"{col}_pca"] = X_test_branch[col]
                     pca_cols.append(f"{col}_pca")
-                self.preprocess_decisions[f"onehot_pca"]["pca_cols"] = pca_cols
-                self.preprocess_decisions[f"onehot_pca"]["onehot_encoder"] = enc
-                self.preprocess_decisions[f"onehot_pca"]["pca_encoder"] = pca
+                self.preprocess_decisions["onehot_pca"]["pca_cols"] = pca_cols
+                self.preprocess_decisions["onehot_pca"]["onehot_encoder"] = enc
+                self.preprocess_decisions["onehot_pca"]["pca_encoder"] = pca
                 del X_train_branch
                 del X_test_branch
                 del pca
@@ -2401,22 +3438,26 @@ class PreProcessing:
                 _ = gc.collect()
             else:
                 pass
-            logging.info('Finished Onehot + PCA categorical features.')
+            logging.info("Finished Onehot + PCA categorical features.")
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def numeric_binarizer_pca(self):
-        self.get_current_timestamp(task='Binarize numeric columns + PCA binarized features')
-        logging.info('Started to binarize numeric columns + PCA binarized features.')
+        self.get_current_timestamp(
+            task="Binarize numeric columns + PCA binarized features"
+        )
+        logging.info("Started to binarize numeric columns + PCA binarized features.")
         if self.prediction_mode:
             if len(self.num_columns_encoded) > 0:
                 num_cols_binarized_created = []
                 for num_col in self.num_columns_encoded:
-                    self.dataframe[num_col+"_binarized"] = self.dataframe[num_col].apply(lambda x: 1 if x > 0 else 0)
-                    num_cols_binarized_created.append(num_col+"_binarized")
-                pca = PCA(n_components=2)
+                    self.dataframe[num_col + "_binarized"] = self.dataframe[
+                        num_col
+                    ].apply(lambda x: 1 if x > 0 else 0)
+                    num_cols_binarized_created.append(num_col + "_binarized")
+                pca = self.preprocess_decisions["numeric_binarizer_pca"]["pca_model"]
                 df_branch = self.dataframe.copy()
-                pred_comps = pca.fit_transform(df_branch[num_cols_binarized_created])
-                df_branch = pd.DataFrame(pred_comps, columns=['Num_PC-1', 'Num_PC-2'])
+                pred_comps = pca.transform(df_branch[num_cols_binarized_created])
+                df_branch = pd.DataFrame(pred_comps, columns=["Num_PC-1", "Num_PC-2"])
                 for col in df_branch.columns:
                     self.dataframe[f"{col}_num_pca"] = df_branch[col]
                 del df_branch
@@ -2425,158 +3466,238 @@ class PreProcessing:
                 _ = gc.collect()
             else:
                 pass
-            logging.info('Finished to binarize numeric columns + PCA binarized features.')
+            logging.info(
+                "Finished to binarize numeric columns + PCA binarized features."
+            )
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            self.preprocess_decisions[f"numeric_binarizer_pca"] = {}
+            self.preprocess_decisions["numeric_binarizer_pca"] = {}
 
             encoded_num_cols = []
+            all_filtered_columns = []
             for vartype in self.num_dtypes:
-                try:
-                    filtered_columns = X_train.select_dtypes(include=[vartype]).columns.to_list()
-                    for pcas in filtered_columns:
-                        try:
-                            filtered_columns.remove("Num_PC-1_num_pca")
-                            filtered_columns.remove("Num_PC-2_num_pca")
-                        except Exception:
-                            pass
-                    for i in filtered_columns:
-                        try:
-                            encoded_num_cols.remove(i)
-                        except Exception:
-                            pass
-
-                    filtered_columns = [x for x in filtered_columns if "tfids_" not in x]
-                    #filtered_columns = [ x for x in filtered_columns if "POS PC-" not in x]
-                    #filtered_columns = [ x for x in filtered_columns if "textblob_sentiment_score" not in x]
-                    #filtered_columns = [ x for x in filtered_columns if "TFIDF PC" not in x]
-                    #filtered_columns = [ x for x in filtered_columns if "tfid_bayes_" not in x]
-
-                    if len(filtered_columns) > 0:
-                        num_cols_binarized_created = []
-                        for num_col in filtered_columns:
-                            X_train[num_col+"_binarized"] = X_train[num_col].apply(lambda x: 1 if x > 0 else 0)
-                            X_test[num_col+"_binarized"] = X_test[num_col].apply(lambda x: 1 if x > 0 else 0)
-                            num_cols_binarized_created.append(num_col+"_binarized")
-                            encoded_num_cols.append(num_col)
-                        pca = PCA(n_components=2)
-                        X_train_branch = X_train.copy()
-                        X_test_branch = X_test.copy()
-                        train_comps = pca.fit_transform(X_train_branch[num_cols_binarized_created])
-                        test_comps = pca.fit_transform(X_test_branch[num_cols_binarized_created])
-                        X_train_branch = pd.DataFrame(train_comps, columns=['Num_PC-1', 'Num_PC-2'])
-                        X_test_branch = pd.DataFrame(test_comps, columns=['Num_PC-1', 'Num_PC-2'])
-                        pca_cols = []
-                        for col in X_train_branch.columns:
-                            X_train[f"{col}_num_pca"] = X_train_branch[col]
-                            X_test[f"{col}_num_pca"] = X_test_branch[col]
-                            pca_cols.append(f"{col}_num_pca")
-                        self.preprocess_decisions[f"numeric_binarizer_pca"][f"pca_cols_{vartype}"] = pca_cols
-                        del X_train_branch
-                        del X_test_branch
-                        del train_comps
-                        del test_comps
-                        del pca
-                        _ = gc.collect()
-                    else:
+                filtered_columns = X_train.select_dtypes(
+                    include=[vartype]
+                ).columns.to_list()
+                for _pcas in filtered_columns:
+                    try:
+                        filtered_columns.remove("Num_PC-1_num_pca")
+                        filtered_columns.remove("Num_PC-2_num_pca")
+                    except Exception:
                         pass
-                except ValueError:
+                for i in filtered_columns:
+                    try:
+                        encoded_num_cols.remove(i)
+                    except Exception:
+                        pass
+
+                filtered_columns = [x for x in filtered_columns if "tfids_" not in x]
+                for col in filtered_columns:
+                    all_filtered_columns.append(col)
+                # filtered_columns = [ x for x in filtered_columns if "POS PC-" not in x]
+                # filtered_columns = [ x for x in filtered_columns if "textblob_sentiment_score" not in x]
+                # filtered_columns = [ x for x in filtered_columns if "TFIDF PC" not in x]
+                # filtered_columns = [ x for x in filtered_columns if "tfid_bayes_" not in x]
+            try:
+                if len(all_filtered_columns) > 0:
+                    num_cols_binarized_created = []
+                    for num_col in all_filtered_columns:
+                        X_train[num_col + "_binarized"] = X_train[num_col].apply(
+                            lambda x: 1 if x > 0 else 0
+                        )
+                        X_test[num_col + "_binarized"] = X_test[num_col].apply(
+                            lambda x: 1 if x > 0 else 0
+                        )
+                        num_cols_binarized_created.append(num_col + "_binarized")
+                        encoded_num_cols.append(num_col)
+                    pca = PCA(n_components=2, random_state=self.global_random_state)
+                    X_train_branch = X_train.copy()
+                    X_test_branch = X_test.copy()
+                    train_comps = pca.fit_transform(
+                        X_train_branch[num_cols_binarized_created]
+                    )
+                    test_comps = pca.transform(
+                        X_test_branch[num_cols_binarized_created]
+                    )
+                    X_train_branch = pd.DataFrame(
+                        train_comps, columns=["Num_PC-1", "Num_PC-2"]
+                    )
+                    X_test_branch = pd.DataFrame(
+                        test_comps, columns=["Num_PC-1", "Num_PC-2"]
+                    )
+                    pca_cols = []
+                    for col in X_train_branch.columns:
+                        X_train[f"{col}_num_pca"] = X_train_branch[col]
+                        X_test[f"{col}_num_pca"] = X_test_branch[col]
+                        pca_cols.append(f"{col}_num_pca")
+                    self.preprocess_decisions["numeric_binarizer_pca"][
+                        "pca_model"
+                    ] = pca
+                    del X_train_branch
+                    del X_test_branch
+                    del train_comps
+                    del test_comps
+                    del pca
+                    _ = gc.collect()
+                else:
                     pass
+            except ValueError:
+                pass
             self.num_columns_encoded = encoded_num_cols
-            logging.info('Finished to binarize numeric columns + PCA binarized features.')
+            logging.info(
+                "Finished to binarize numeric columns + PCA binarized features."
+            )
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def target_encode_multiclass(self, X, y=None, mode='fit'):
-        algorithm = 'multiclass_target_encoding_onehotter'
-        if mode == 'transform':
-            enc = self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"]
-            class_names = self.preprocess_decisions[f"category_encoders"][f"seen_targets"]
+    def target_encode_multiclass(self, X, y=None, mode="fit"):
+        algorithm = "multiclass_target_encoding_onehotter"
+        if mode == "transform":
+            enc = self.preprocess_decisions["category_encoders"][
+                f"{algorithm}_all_cols"
+            ]
+            class_names = self.preprocess_decisions["category_encoders"]["seen_targets"]
         else:
             enc = OneHotEncoder()
             enc.fit(y)
             y_onehot = enc.transform(y)
             class_names = y_onehot.columns
-            self.preprocess_decisions[f"category_encoders"][f"seen_targets"] = class_names
-        X_obj = X.select_dtypes('object').copy()
-        X = X.select_dtypes(exclude='object')
+            self.preprocess_decisions["category_encoders"]["seen_targets"] = class_names
+        X_obj = X.select_dtypes("object").copy()
+        X = X.select_dtypes(exclude="object")
         for class_ in class_names:
-            if mode == 'transform':
-                target_enc = self.preprocess_decisions[f"category_encoders"][f"multiclass_target_encoder_all_cols_{class_}"]
+            if mode == "transform":
+                target_enc = self.preprocess_decisions["category_encoders"][
+                    f"multiclass_target_encoder_all_cols_{class_}"
+                ]
             else:
                 target_enc = TargetEncoder()
                 target_enc.fit(X_obj, y_onehot[class_])
-                self.preprocess_decisions[f"category_encoders"][f"multiclass_target_encoder_all_cols_{class_}"] = target_enc
+                self.preprocess_decisions["category_encoders"][
+                    f"multiclass_target_encoder_all_cols_{class_}"
+                ] = target_enc
             temp = target_enc.transform(X_obj)
-            temp.columns = [str(x)+'_'+str(class_) for x in temp.columns]
+            temp.columns = [str(x) + "_" + str(class_) for x in temp.columns]
             X = pd.concat([X, temp], axis=1)
-        self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
+        self.preprocess_decisions["category_encoders"][f"{algorithm}_all_cols"] = enc
         return X
 
-    def category_encoding(self, algorithm='target'):
+    def category_encoding(self, algorithm="target"):
         """
         Takes in a dataframe and applies the chosen category encoding algorithm to categorical columns.
         :param algorithm: Chose type of encoding as 'target' (default), 'onehot', 'woee', 'ordinal', 'leaveoneout' and 'GLMM'.
         :return: Returns modified dataframe.
         """
-        self.get_current_timestamp('Execute categorical encoding')
-        logging.info('Started category encoding.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        self.get_current_timestamp("Execute categorical encoding")
+        logging.info("Started category encoding.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+        if self.cat_encoder_model:
+            algorithm = self.cat_encoder_model
+        else:
+            algorithm = "target"
+
         if self.prediction_mode:
-            cat_columns = self.cat_columns_encoded
-            if algorithm == 'target' and self.class_problem == 'multiclass':
-                self.dataframe[cat_columns] = self.target_encode_multiclass(self.dataframe[cat_columns], mode='transform')
-            else:
-                enc = self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"]
-                self.dataframe[cat_columns] = enc.transform(self.dataframe[cat_columns])
-            logging.info('Finished category encoding.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            try:
+                cat_columns = self.cat_columns_encoded
+                if algorithm == "target" and self.class_problem == "multiclass":
+                    self.dataframe[cat_columns] = self.target_encode_multiclass(
+                        self.dataframe[cat_columns], mode="transform"
+                    )
+                elif algorithm == "onehot":
+                    enc = self.preprocess_decisions["category_encoders"][
+                        f"{algorithm}_all_cols"
+                    ]
+                    df_onehot = enc.transform(self.dataframe[cat_columns])
+                    self.dataframe = self.dataframe.merge(
+                        df_onehot, left_index=True, right_index=True, how="left"
+                    )
+                    self.dataframe = self.dataframe.drop(cat_columns, axis=1)
+                else:
+                    enc = self.preprocess_decisions["category_encoders"][
+                        f"{algorithm}_all_cols"
+                    ]
+                    self.dataframe[cat_columns] = enc.transform(
+                        self.dataframe[cat_columns]
+                    )
+            except KeyError:  # is expected when no cat columns existed during training
+                pass
+            logging.info("Finished category encoding.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            cat_columns = X_train.select_dtypes(include=['object']).columns.to_list()
+            cat_columns = X_train.select_dtypes(include=["object"]).columns.to_list()
             self.cat_columns_encoded = cat_columns
-            self.preprocess_decisions[f"category_encoders"] = {}
-            if algorithm == 'target':
-                if self.class_problem in ['binary', 'regression']:
+            self.preprocess_decisions["category_encoders"] = {}
+
+            if algorithm == "target":
+                if self.class_problem in ["binary", "regression", "time_series"]:
                     enc = TargetEncoder(cols=cat_columns)
-                    X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
+                    X_train[cat_columns] = enc.fit_transform(
+                        X_train[cat_columns], Y_train
+                    )
                     X_test[cat_columns] = enc.transform(X_test[cat_columns])
-                    self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
+                    self.preprocess_decisions["category_encoders"][
+                        f"{algorithm}_all_cols"
+                    ] = enc
                 else:
-                    X_train[cat_columns] = self.target_encode_multiclass(X_train[cat_columns], Y_train, mode='fit')
-                    X_test[cat_columns] = self.target_encode_multiclass(X_test[cat_columns], mode='transform')
-            elif algorithm == 'onehot':
-                enc = OneHotEncoder(handle_unknown='ignore')
-                X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
-                X_test[cat_columns] = enc.transform(X_test[cat_columns])
-                self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
-            elif algorithm == 'woee':
+                    X_train[cat_columns] = self.target_encode_multiclass(
+                        X_train[cat_columns], Y_train, mode="fit"
+                    )
+                    X_test[cat_columns] = self.target_encode_multiclass(
+                        X_test[cat_columns], mode="transform"
+                    )
+            elif algorithm == "onehot":
+                enc = OneHotEncoder(handle_unknown="ignore")
+                or_cols = X_train.columns.to_list()
+                for col in cat_columns:
+                    or_cols.remove(col)
+                X_train_onehot = enc.fit_transform(X_train[cat_columns], Y_train)
+                X_test_onehot = enc.transform(X_test[cat_columns])
+                X_train = X_train.merge(
+                    X_train_onehot, left_index=True, right_index=True, how="left"
+                )
+                X_test = X_test.merge(
+                    X_test_onehot, left_index=True, right_index=True, how="left"
+                )
+                self.preprocess_decisions["category_encoders"][
+                    f"{algorithm}_all_cols"
+                ] = enc
+                X_train = X_train.drop(cat_columns, axis=1)
+                X_test = X_test.drop(cat_columns, axis=1)
+            elif algorithm == "woee":
                 enc = WOEEncoder(cols=cat_columns)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
-                self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
-            elif algorithm == 'GLMM':
+                self.preprocess_decisions["category_encoders"][
+                    f"{algorithm}_all_cols"
+                ] = enc
+            elif algorithm == "GLMM":
                 enc = GLMMEncoder(cols=cat_columns)
-                #enc = NestedCVWrapper(enc_enc, random_state=42)
+                # enc = NestedCVWrapper(enc_enc, random_state=self.global_random_state)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
-                self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
-            elif algorithm == 'ordinal':
+                self.preprocess_decisions["category_encoders"][
+                    f"{algorithm}_all_cols"
+                ] = enc
+            elif algorithm == "ordinal":
                 enc = OrdinalEncoder(cols=cat_columns)
                 X_train = enc.fit_transform(X_train, Y_train)
                 X_test = enc.transform(X_test)
-                self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
-            elif algorithm == 'leaveoneout':
+                self.preprocess_decisions["category_encoders"][
+                    f"{algorithm}_all_cols"
+                ] = enc
+            elif algorithm == "leaveoneout":
                 enc = LeaveOneOutEncoder(cols=cat_columns)
-                #enc = NestedCVWrapper(enc_enc, random_state=42)
+                # enc = NestedCVWrapper(enc_enc, random_state=self.global_random_state)
                 X_train[cat_columns] = enc.fit_transform(X_train[cat_columns], Y_train)
                 X_test[cat_columns] = enc.transform(X_test[cat_columns])
-                self.preprocess_decisions[f"category_encoders"][f"{algorithm}_all_cols"] = enc
-            logging.info('Finished category encoding.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            X_train.drop(cat_columns, axis=1)
-            X_test.drop(cat_columns, axis=1)
+                self.preprocess_decisions["category_encoders"][
+                    f"{algorithm}_all_cols"
+                ] = enc
+            logging.info("Finished category encoding.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             try:
                 del enc
                 _ = gc.collect()
@@ -2591,14 +3712,16 @@ class PreProcessing:
         :param threshold: Maximum allowed correlation. Expects a float from -1 to +1.
         :return: Returns modified dataframe.
         """
-        self.get_current_timestamp('Remove collinearity')
+        self.get_current_timestamp("Remove collinearity")
 
         def correlation(dataset, threshold=threshold):
             col_corr = set()  # Set of all the names of deleted columns
             corr_matrix = dataset.corr()
             for i in range(len(corr_matrix.columns)):
                 for j in range(i):
-                    if (corr_matrix.iloc[i, j] >= threshold) and (corr_matrix.columns[j] not in col_corr):
+                    if (corr_matrix.iloc[i, j] >= threshold) and (
+                        corr_matrix.columns[j] not in col_corr
+                    ):
                         colname = corr_matrix.columns[i]  # getting the name of column
                         col_corr.add(colname)
                         del_corr.append(colname)
@@ -2608,42 +3731,45 @@ class PreProcessing:
             _ = gc.collect()
             return dataset
 
-        logging.info('Started removing collinearity.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Started removing collinearity.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            threshold = self.preprocess_decisions[f"remove_collinearity_threshold"]
+            threshold = self.preprocess_decisions["remove_collinearity_threshold"]
             self.dataframe = self.dataframe.drop(self.excluded, axis=1)
-            logging.info('Finished removing collinearity.')
+            logging.info("Finished removing collinearity.")
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             del_corr = []
             X_train = correlation(X_train, 0.8)
             X_test = X_test.drop(del_corr, axis=1)
             self.excluded = del_corr
-            self.preprocess_decisions[f"remove_collinearity_threshold"] = threshold
-            logging.info('Finished removing collinearity.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.excluded
+            self.preprocess_decisions["remove_collinearity_threshold"] = threshold
+            logging.info("Finished removing collinearity.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            return (
+                self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test),
+                self.excluded,
+            )
 
     def smote_data(self):
         """
         Applies vanilla form of Synthetical Minority Over-Sampling Technique.
         :return: Returns modified dataframe.
         """
-        self.get_current_timestamp('Smote data')
+        self.get_current_timestamp("Smote data")
         if self.prediction_mode:
-            logging.info('Skipped SMOTE due to prediction mode.')
+            logging.info("Skipped SMOTE due to prediction mode.")
             pass
         else:
-            logging.info('Started SMOTE.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Started SMOTE.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             oversample = SMOTE(n_jobs=-1)
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             X_train_cols = X_train.columns
             X_train, Y_train = oversample.fit_resample(X_train, Y_train)
             X_train = pd.DataFrame(X_train, columns=X_train_cols)
-            logging.info('Finished SMOTE.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished SMOTE.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             del oversample
             _ = gc.collect()
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
@@ -2662,8 +3788,12 @@ class PreProcessing:
         for key in classes:
             classes_list.append(df[df[target_name] == key])
         classes_sample = []
-        for i in range(0, len(classes_list)-1):
-            classes_sample.append(classes_list[i].sample(least_class_amount, random_state=50))
+        for i in range(0, len(classes_list) - 1):
+            classes_sample.append(
+                classes_list[i].sample(
+                    least_class_amount, random_state=self.global_random_state
+                )
+            )
         df_maybe = pd.concat(classes_sample)
         final_df = pd.concat([df_maybe, classes_list[-1]], axis=0)
         final_df = final_df.reset_index(drop=True)
@@ -2677,7 +3807,11 @@ class PreProcessing:
             classes_list.append(df[df[target_name] == key])
         classes_sample = []
         for i in range(1, len(classes_list)):
-            classes_sample.append(classes_list[i].sample(most, replace=True, random_state=50))
+            classes_sample.append(
+                classes_list[i].sample(
+                    most, replace=True, random_state=self.global_random_state
+                )
+            )
         df_maybe = pd.concat(classes_sample)
         final_df = pd.concat([df_maybe, classes_list[0]], axis=0)
         final_df = final_df.reset_index(drop=True)
@@ -2687,7 +3821,7 @@ class PreProcessing:
         if self.prediction_mode:
             pass
         else:
-            if self.class_problem == 'regression':
+            if self.class_problem in ["regression", "time_series"]:
                 pass
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -2701,38 +3835,48 @@ class PreProcessing:
         if self.prediction_mode:
             pass
         else:
-            if self.class_problem == 'regression':
+            if self.class_problem in ["regression", "time_series"]:
                 pass
             else:
                 X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
                 X_train[self.target_variable] = Y_train
                 X_train = self.naive_oversampling(X_train, self.target_variable)
-                #X_train = X_train.sample(frac=0.50)
+                # X_train = X_train.sample(frac=0.50)
                 Y_train = X_train[self.target_variable]
                 X_train.drop(self.target_variable, axis=1)
                 return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
     def create_trainers(self):
-        if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+        if self.class_problem == "binary" or self.class_problem == "multiclass":
             if self.rapids_acceleration:
                 from cuml.ensemble import RandomForestClassifier
-                model_2 = RandomForestClassifier(max_features=1.0,
-                                                 max_depth=8,
-                                                 output_type='numpy',
-                                                 random_state=self.preprocess_decisions["random_state_counter"])
+
+                model_2 = RandomForestClassifier(
+                    max_features=1.0,
+                    max_depth=3,
+                    output_type="numpy",
+                    random_state=self.preprocess_decisions["random_state_counter"],
+                )
             else:
-                model_1 = VWClassifier()
-                model_2 = lgb.LGBMClassifier(random_state=self.preprocess_decisions["random_state_counter"])
+                # model_1 = VWClassifier()
+                model_2 = lgb.LGBMClassifier(
+                    random_state=self.preprocess_decisions["random_state_counter"]
+                )
         else:
             if self.rapids_acceleration:
                 from cuml.ensemble import RandomForestRegressor
-                model_2 = RandomForestRegressor(max_features=1.0,
-                                                 max_depth=8,
-                                                 output_type='numpy',
-                                                 random_state=self.preprocess_decisions["random_state_counter"])
+
+                model_2 = RandomForestRegressor(
+                    max_features=1.0,
+                    max_depth=3,
+                    output_type="numpy",
+                    random_state=self.preprocess_decisions["random_state_counter"],
+                )
             else:
                 # model_1 = VWRegressor()
-                model_2 = lgb.LGBMRegressor(random_state=self.preprocess_decisions["random_state_counter"])
+                model_2 = lgb.LGBMRegressor(
+                    random_state=self.preprocess_decisions["random_state_counter"]
+                )
         return model_2
 
     def meissner_cv_score(self, matthew_scores, penality_is_deducted=True):
@@ -2747,63 +3891,101 @@ class PreProcessing:
         """
         mean_matthew_corr = np.array(matthew_scores) * 100
         if penality_is_deducted:
-            meissner_cv = np.power(np.mean(mean_matthew_corr) ** 3 - (
-            np.sum(abs(mean_matthew_corr - mean_matthew_corr - np.std(mean_matthew_corr)))) ** 3, 1 / 3)
+            meissner_cv = np.power(
+                np.mean(mean_matthew_corr) ** 3
+                - (
+                    np.sum(
+                        abs(
+                            mean_matthew_corr
+                            - mean_matthew_corr
+                            - np.std(mean_matthew_corr)
+                        )
+                    )
+                )
+                ** 3,
+                1 / 3,
+            )
         else:
-            meissner_cv = np.power(np.mean(mean_matthew_corr) ** 3 + (
-            np.sum(abs(mean_matthew_corr - mean_matthew_corr - np.std(mean_matthew_corr)))) ** 3, 1 / 3)
+            meissner_cv = np.power(
+                np.mean(mean_matthew_corr) ** 3
+                + (
+                    np.sum(
+                        abs(
+                            mean_matthew_corr
+                            - mean_matthew_corr
+                            - np.std(mean_matthew_corr)
+                        )
+                    )
+                )
+                ** 3,
+                1 / 3,
+            )
         return meissner_cv
 
-    def synthetic_floating_data_generator(self, column_name=None, metric=None, sample_size=None):
-        self.get_current_timestamp('Synthetic data augmentation')
+    def synthetic_floating_data_generator(  # noqa: C901
+        self, column_name=None, metric=None, sample_size=None
+    ):
+        self.get_current_timestamp("Synthetic data augmentation")
 
         if self.prediction_mode:
             pass
         else:
-            logging.info('Start creating synthetic data.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Start creating synthetic data.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            float_cols = [x for x, y in self.detected_col_types.items() if y in ['float', 'int', 'bool'] if x in X_train.columns.to_list()]
+            float_cols = [
+                x
+                for x, y in self.detected_col_types.items()
+                if y in ["float", "int", "bool"]
+                if x in X_train.columns.to_list()
+            ]
             X_train = X_train[float_cols].copy()
             X_test = X_test[float_cols].copy()
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
-            X_train_sample = X_train_sample.sample(sample_size, random_state=self.preprocess_decisions["random_state_counter"])
+            X_train_sample = X_train_sample.sample(
+                sample_size,
+                random_state=self.preprocess_decisions["random_state_counter"],
+            )
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
             if self.rapids_acceleration:
-                X_train = X_train.astype('float32')
-                X_train_sample = X_train_sample.astype('float32')
-                X_test = X_test.astype('float32')
-
+                X_train = X_train.astype("float32")
+                X_train_sample = X_train_sample.astype("float32")
+                X_test = X_test.astype("float32")
 
             if metric:
                 metric = metric
-            elif self.class_problem == 'binary':
+            elif self.class_problem == "binary":
                 metric = make_scorer(matthews_corrcoef)
-                problem = 'binary'
+                problem = "binary"
                 class_cats = Y_train_sample.unique()
-            elif self.class_problem == 'multiclass':
+            elif self.class_problem == "multiclass":
                 metric = make_scorer(matthews_corrcoef)
-                problem = 'multiclass'
+                problem = "multiclass"
                 class_cats = Y_train_sample.unique()
-            elif self.class_problem == 'regression':
-                metric = 'neg_mean_squared_error'
-                problem = 'regression'
+            elif self.class_problem in ["regression", "time_series"]:
+                metric = "neg_mean_squared_error"
+                problem = "regression"
 
             model_2 = self.create_trainers()
             model_2_copy = model_2
             model_3_copy = model_2
 
-            if self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] == 0:
+            if (
+                self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"]
+                == 0
+            ):
                 # get benchmark
                 try:
                     # train scores
-                    scores_2 = cross_val_score(model_2, X_train, Y_train, cv=10, scoring=metric)
+                    scores_2 = cross_val_score(
+                        model_2, X_train, Y_train, cv=10, scoring=metric
+                    )
                     mae_2 = np.mean(scores_2)
-                    train_mae = mae_2*100
+                    train_mae = mae_2 * 100
                     # test scores
                     model_2.fit(X_train, Y_train)
                     scores_2_test = model_2.predict(X_test)
@@ -2811,25 +3993,31 @@ class PreProcessing:
                         matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
                     except Exception:
                         matthew_2 = 0
-                    test_mae = matthew_2*100
-                    self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
+                    test_mae = matthew_2 * 100
+                    self.preprocess_decisions[
+                        "synthetic_augmentation_parameters_benchmark"
+                    ] = (train_mae + test_mae) / 2 - (abs(train_mae - test_mae)) ** 3
                 except Exception:
-                    self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = 0
+                    self.preprocess_decisions[
+                        "synthetic_augmentation_parameters_benchmark"
+                    ] = 0
                 else:
                     pass
 
-            print(f"The benchmark score is {self.preprocess_decisions['synthetic_augmentation_parameters_benchmark']}.")
+            print(
+                f"The benchmark score is {self.preprocess_decisions['synthetic_augmentation_parameters_benchmark']}."
+            )
 
             # get core characteristics
-            dist_max = int(X_train_sample[column_name].max()*1.2)
-            dist_min = int(X_train_sample[column_name].min()/1.2)
-            dist_median = X_train_sample[column_name].median()
+            dist_max = int(X_train_sample[column_name].max() * 1.2)
+            dist_min = int(X_train_sample[column_name].min() / 1.2)
+            # dist_median = X_train_sample[column_name].median()
             dist_median_lowq = X_train_sample[column_name].quantile(0.25)
             dist_median_high = X_train_sample[column_name].quantile(0.75)
 
-            if dist_max-dist_min <= 1:
+            if dist_max - dist_min <= 1:
                 dist_max += 2
-            if dist_median_high-dist_median_lowq <= 1:
+            if dist_median_high - dist_median_lowq <= 1:
                 dist_median_high += 2
 
             if dist_median_lowq < 0 and dist_median_high <= 0:
@@ -2860,21 +4048,23 @@ class PreProcessing:
                 dist_min_inv = dist_min
                 dist_max_inv = dist_max
 
-            if dist_max_inv-dist_min_inv <= 1:
+            if dist_max_inv - dist_min_inv <= 1:
                 dist_max_inv += 2
-            if dist_median_high_inv-dist_median_lowq_inv <= 1:
+            if dist_median_high_inv - dist_median_lowq_inv <= 1:
                 dist_median_high_inv += 2
 
-            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+            if self.class_problem == "binary" or self.class_problem == "multiclass":
                 pass
             else:
                 X_train_sample[self.target_variable] = Y_train
                 # sort on A
                 X_train_sample.sort_values(self.target_variable, inplace=True)
                 # create bins
-                X_train_sample['bin'] = pd.cut(X_train_sample[self.target_variable], 10, include_lowest=True)
+                X_train_sample["bin"] = pd.cut(
+                    X_train_sample[self.target_variable], 10, include_lowest=True
+                )
                 # group on bin
-                group = X_train_sample.groupby('bin')
+                group = X_train_sample.groupby("bin")
                 # list comprehension to split groups into list of dataframes
                 dfs = [group.get_group(x) for x in group.groups]
 
@@ -2884,37 +4074,47 @@ class PreProcessing:
             def objective(trial):
                 param = {}
 
-                sample_distribution = trial.suggest_categorical("sample_distribution", ["Uniform",
-                                                                                        "Binomial",
-                                                                                        "Poisson",
-                                                                                        "Exponential",
-                                                                                        "Gamma",
-                                                                                        "Normal",
-                                                                                        "Uniform",
-                                                                                        "Pareto",
-                                                                                        "Levy",
-                                                                                        "dweibull",
-                                                                                        "halfcauchy",
-                                                                                        "halfnorm",
-                                                                                        "powernorm",
-                                                                                        "semicircular",
-                                                                                        "tukeylambda",
-                                                                                        "rdist"])
-                random_or_control_factor = trial.suggest_categorical("random_or_control_factor",
-                                                                     ["Random",
-                                                                      "Random pos",
-                                                                      "Controlled"])
-                p_value = trial.suggest_loguniform('p_value', 0.05, 0.95)
-                mu = trial.suggest_uniform('mu', dist_median_lowq_inv, dist_median_high_inv)
-                scale = trial.suggest_int('scale', dist_min_inv, dist_max_inv)
-                parteo_b = trial.suggest_uniform('parteo_b', dist_min_inv, dist_max_inv)
-                uniformity = trial.suggest_uniform('uniformity', dist_min_inv, dist_max_inv)
-                location = trial.suggest_int('location', dist_median_lowq_inv, dist_median_high_inv)
-                lambda_value = trial.suggest_uniform('lambda_value', 1e-3, 10)
-                c_value = trial.suggest_uniform('c_value', 1e-3, 10)
-                pos_only_location = trial.suggest_uniform('pos_only_location', 0, 100)
+                sample_distribution = trial.suggest_categorical(
+                    "sample_distribution",
+                    [
+                        "Uniform",
+                        "Binomial",
+                        "Poisson",
+                        "Exponential",
+                        "Gamma",
+                        "Normal",
+                        "Uniform",
+                        "Pareto",
+                        "Levy",
+                        "dweibull",
+                        "halfcauchy",
+                        "halfnorm",
+                        "powernorm",
+                        "semicircular",
+                        "tukeylambda",
+                        "rdist",
+                    ],
+                )
+                random_or_control_factor = trial.suggest_categorical(
+                    "random_or_control_factor", ["Random", "Random pos", "Controlled"]
+                )
+                p_value = trial.suggest_loguniform("p_value", 0.05, 0.95)
+                mu = trial.suggest_uniform(
+                    "mu", dist_median_lowq_inv, dist_median_high_inv
+                )
+                scale = trial.suggest_int("scale", dist_min_inv, dist_max_inv)
+                parteo_b = trial.suggest_uniform("parteo_b", dist_min_inv, dist_max_inv)
+                uniformity = trial.suggest_uniform(
+                    "uniformity", dist_min_inv, dist_max_inv
+                )
+                location = trial.suggest_int(
+                    "location", dist_median_lowq_inv, dist_median_high_inv
+                )
+                lambda_value = trial.suggest_uniform("lambda_value", 1e-3, 10)
+                c_value = trial.suggest_uniform("c_value", 1e-3, 10)
+                pos_only_location = trial.suggest_uniform("pos_only_location", 0, 100)
 
-                random_factor = trial.suggest_int('random_factor', dist_min, dist_max)
+                random_factor = trial.suggest_int("random_factor", dist_min, dist_max)
                 if random_factor < 0:
                     random_factor_pos = random_factor + abs(dist_min)
                 elif random_factor == 0:
@@ -2937,48 +4137,64 @@ class PreProcessing:
 
                 temp_df_list = []
                 X_train_sample[self.target_variable] = Y_train_sample
-                if problem == 'binary' or problem == 'multiclass':
+                if problem == "binary" or problem == "multiclass":
                     for class_inst in class_cats:
-                        X_train_sample_class = X_train_sample[(X_train_sample[self.target_variable] == class_inst)]
+                        X_train_sample_class = X_train_sample[
+                            (X_train_sample[self.target_variable] == class_inst)
+                        ]
                         size = len(X_train_sample_class.index)
-                        if sample_distribution == 'Uniform':
+                        if sample_distribution == "Uniform":
                             gen_data = np.full((size,), uniformity)
-                        elif sample_distribution == 'Binomial':
-                            gen_data = binom.rvs(n=random_factor_pos, p=p_value, size=size)
-                        elif sample_distribution == 'Poisson':
+                        elif sample_distribution == "Binomial":
+                            gen_data = binom.rvs(
+                                n=random_factor_pos, p=p_value, size=size
+                            )
+                        elif sample_distribution == "Poisson":
                             gen_data = poisson.rvs(mu=mu, size=size)
-                        elif sample_distribution == 'Exponential':
+                        elif sample_distribution == "Exponential":
                             gen_data = expon.rvs(scale=scale, loc=location, size=size)
-                        elif sample_distribution == 'Gamma':
+                        elif sample_distribution == "Gamma":
                             gen_data = gamma.rvs(a=mu, size=size)
-                        elif sample_distribution == 'Uniform':
+                        elif sample_distribution == "Uniform":
                             gen_data = class_inst
-                        elif sample_distribution == 'Normal':
+                        elif sample_distribution == "Normal":
                             gen_data = norm.rvs(size=size, loc=location, scale=scale)
                         elif sample_distribution == "Pareto":
                             gen_data = pareto.rvs(parteo_b, size=size)
                         elif sample_distribution == "Levy":
                             gen_data = levy.rvs(size=size)
-                            if random_or_control_factor == 'Random':
-                                gen_data = gen_data*random_factor
+                            if random_or_control_factor == "Random":
+                                gen_data = gen_data * random_factor
                             elif random_or_control_factor == "Random pos":
-                                gen_data = gen_data*random_factor_pos
+                                gen_data = gen_data * random_factor_pos
                             else:
-                                gen_data += class_inst*2
+                                gen_data += class_inst * 2
                         elif sample_distribution == "dweibull":
                             gen_data = dweibull.rvs(c=pos_only_location, size=size)
-                        elif sample_distribution == 'halfcauchy':
-                            gen_data = halfcauchy.rvs(loc=location, scale=scale, size=size)
-                        elif sample_distribution == 'halfnorm':
-                            gen_data = halfnorm.rvs(loc=location, scale=scale, size=size)
-                        elif sample_distribution == 'powernorm':
-                            gen_data = powernorm.rvs(c_value, loc=location, scale=scale, size=size)
-                        elif sample_distribution == 'semicircular':
-                            gen_data = semicircular.rvs(loc=location, scale=scale, size=size)
-                        elif sample_distribution == 'tukeylambda':
-                            gen_data = tukeylambda.rvs(lambda_value, loc=location, scale=scale, size=size)
-                        elif sample_distribution == 'rdist':
-                            gen_data = rdist.rvs(c_value, loc=location, scale=scale, size=size)
+                        elif sample_distribution == "halfcauchy":
+                            gen_data = halfcauchy.rvs(
+                                loc=location, scale=scale, size=size
+                            )
+                        elif sample_distribution == "halfnorm":
+                            gen_data = halfnorm.rvs(
+                                loc=location, scale=scale, size=size
+                            )
+                        elif sample_distribution == "powernorm":
+                            gen_data = powernorm.rvs(
+                                c_value, loc=location, scale=scale, size=size
+                            )
+                        elif sample_distribution == "semicircular":
+                            gen_data = semicircular.rvs(
+                                loc=location, scale=scale, size=size
+                            )
+                        elif sample_distribution == "tukeylambda":
+                            gen_data = tukeylambda.rvs(
+                                lambda_value, loc=location, scale=scale, size=size
+                            )
+                        elif sample_distribution == "rdist":
+                            gen_data = rdist.rvs(
+                                c_value, loc=location, scale=scale, size=size
+                            )
                         else:
                             gen_data = random_factor
                         try:
@@ -2993,44 +4209,56 @@ class PreProcessing:
                         size = len(X_train_sample_class.index)
                         class_inst = bin_encoder
                         bin_encoder += 1
-                        if sample_distribution == 'Uniform':
+                        if sample_distribution == "Uniform":
                             gen_data = np.full((size,), uniformity)
-                        elif sample_distribution == 'Binomial':
+                        elif sample_distribution == "Binomial":
                             gen_data = binom.rvs(n=random_factor, p=p_value, size=size)
-                        elif sample_distribution == 'Poisson':
+                        elif sample_distribution == "Poisson":
                             gen_data = poisson.rvs(mu=mu, size=size)
-                        elif sample_distribution == 'Exponential':
+                        elif sample_distribution == "Exponential":
                             gen_data = expon.rvs(scale=scale, loc=location, size=size)
-                        elif sample_distribution == 'Gamma':
+                        elif sample_distribution == "Gamma":
                             gen_data = gamma.rvs(a=mu, size=size)
-                        elif sample_distribution == 'Uniform':
+                        elif sample_distribution == "Uniform":
                             gen_data = class_inst
-                        elif sample_distribution == 'Normal':
+                        elif sample_distribution == "Normal":
                             gen_data = norm.rvs(size=size, loc=location, scale=scale)
                         elif sample_distribution == "Pareto":
                             gen_data = pareto.rvs(parteo_b, size=size)
                         elif sample_distribution == "Levy":
                             gen_data = levy.rvs(size=size)
-                            if random_or_control_factor == 'Random':
-                                gen_data = gen_data*random_factor
+                            if random_or_control_factor == "Random":
+                                gen_data = gen_data * random_factor
                             elif random_or_control_factor == "Random pos":
-                                gen_data = gen_data*random_factor_pos
+                                gen_data = gen_data * random_factor_pos
                             else:
-                                gen_data += class_inst*2
+                                gen_data += class_inst * 2
                         elif sample_distribution == "dweibull":
-                           gen_data = dweibull.rvs(c=pos_only_location, size=size)
-                        elif sample_distribution == 'halfcauchy':
-                            gen_data = halfcauchy.rvs(loc=location, scale=scale, size=size)
-                        elif sample_distribution == 'halfnorm':
-                            gen_data = halfnorm.rvs(loc=location, scale=scale, size=size)
-                        elif sample_distribution == 'powernorm':
-                            gen_data = powernorm.rvs(c=c_value, loc=location, scale=scale, size=size)
-                        elif sample_distribution == 'semicircular':
-                            gen_data = semicircular.rvs(loc=location, scale=scale, size=size)
-                        elif sample_distribution == 'tukeylambda':
-                            gen_data = tukeylambda.rvs(lambda_value, loc=location, scale=scale, size=size)
-                        elif sample_distribution == 'rdist':
-                            gen_data = rdist.rvs(c_value, loc=location, scale=scale, size=size)
+                            gen_data = dweibull.rvs(c=pos_only_location, size=size)
+                        elif sample_distribution == "halfcauchy":
+                            gen_data = halfcauchy.rvs(
+                                loc=location, scale=scale, size=size
+                            )
+                        elif sample_distribution == "halfnorm":
+                            gen_data = halfnorm.rvs(
+                                loc=location, scale=scale, size=size
+                            )
+                        elif sample_distribution == "powernorm":
+                            gen_data = powernorm.rvs(
+                                c=c_value, loc=location, scale=scale, size=size
+                            )
+                        elif sample_distribution == "semicircular":
+                            gen_data = semicircular.rvs(
+                                loc=location, scale=scale, size=size
+                            )
+                        elif sample_distribution == "tukeylambda":
+                            gen_data = tukeylambda.rvs(
+                                lambda_value, loc=location, scale=scale, size=size
+                            )
+                        elif sample_distribution == "rdist":
+                            gen_data = rdist.rvs(
+                                c_value, loc=location, scale=scale, size=size
+                            )
                         else:
                             gen_data = random_factor
                         try:
@@ -3044,36 +4272,47 @@ class PreProcessing:
                 Y_temp = temp_df[self.target_variable]
                 temp_df = temp_df.drop(self.target_variable, axis=1)
                 if self.rapids_acceleration:
-                    temp_df = temp_df.astype('float32')
-
+                    temp_df = temp_df.astype("float32")
 
                 # get train scores
-                scores_2 = cross_val_score(model_2_copy, temp_df, Y_temp, cv=10, scoring=metric)
+                scores_2 = cross_val_score(
+                    model_2_copy, temp_df, Y_temp, cv=10, scoring=metric
+                )
                 mae_2 = np.mean(scores_2)
-                train_mae = mae_2*100
+                train_mae = mae_2 * 100
                 # test scores
                 model_2_copy.fit(temp_df, Y_temp)
                 scores_2_test = model_2_copy.predict(X_test)
                 try:
-                   matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
+                    matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
                 except Exception:
                     matthew_2 = 0
 
-                test_mae = matthew_2*100
-                mae = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
+                test_mae = matthew_2 * 100
+                mae = (train_mae + test_mae) / 2 - (abs(train_mae - test_mae)) ** 3
 
                 return mae
 
-            algorithm = 'synthetic_data_augmentation'
+            algorithm = "synthetic_data_augmentation"
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=self.preprocess_decisions["random_state_counter"])
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True,
+                seed=self.preprocess_decisions["random_state_counter"],
+            )
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
 
-            study.optimize(objective,
-                           n_trials=self.hyperparameter_tuning_rounds["synthetic_data_augmentation"],
-                           timeout=self.hyperparameter_tuning_max_runtime_secs["synthetic_data_augmentation"],
-                           show_progress_bar=True
-                           )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[
+                    "synthetic_data_augmentation"
+                ],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[
+                    "synthetic_data_augmentation"
+                ],
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
 
             # get best logic
@@ -3088,48 +4327,91 @@ class PreProcessing:
             else:
                 random_factor_pos = best_parameters["random_factor"]
 
-            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+            if self.class_problem == "binary" or self.class_problem == "multiclass":
                 for class_inst in class_cats:
-                    X_train_sample_class = X_train[(X_train[self.target_variable] == class_inst)]
+                    X_train_sample_class = X_train[
+                        (X_train[self.target_variable] == class_inst)
+                    ]
                     size = len(X_train_sample_class.index)
-                    if best_parameters["sample_distribution"] == 'Uniform':
+                    if best_parameters["sample_distribution"] == "Uniform":
                         gen_data = np.full((size,), best_parameters["uniformity"])
-                    elif best_parameters["sample_distribution"] == 'Binomial':
-                        gen_data = binom.rvs(n=random_factor_pos, p=best_parameters["p_value"], size=size)
-                    elif best_parameters["sample_distribution"] == 'Poisson':
+                    elif best_parameters["sample_distribution"] == "Binomial":
+                        gen_data = binom.rvs(
+                            n=random_factor_pos, p=best_parameters["p_value"], size=size
+                        )
+                    elif best_parameters["sample_distribution"] == "Poisson":
                         gen_data = poisson.rvs(mu=best_parameters["mu"], size=size)
-                    elif best_parameters["sample_distribution"] == 'Exponential':
-                        gen_data = expon.rvs(scale=best_parameters["scale"], loc=best_parameters["location"], size=size)
-                    elif best_parameters["sample_distribution"] == 'Gamma':
+                    elif best_parameters["sample_distribution"] == "Exponential":
+                        gen_data = expon.rvs(
+                            scale=best_parameters["scale"],
+                            loc=best_parameters["location"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "Gamma":
                         gen_data = gamma.rvs(a=best_parameters["mu"], size=size)
-                    elif best_parameters["sample_distribution"] == 'Uniform':
+                    elif best_parameters["sample_distribution"] == "Uniform":
                         gen_data = class_inst
-                    elif best_parameters["sample_distribution"] == 'Normal':
-                        gen_data = norm.rvs(size=size, loc=best_parameters["location"], scale=best_parameters["scale"])
+                    elif best_parameters["sample_distribution"] == "Normal":
+                        gen_data = norm.rvs(
+                            size=size,
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                        )
                     elif best_parameters["sample_distribution"] == "Pareto":
                         gen_data = pareto.rvs(best_parameters["parteo_b"], size=size)
                     elif best_parameters["sample_distribution"] == "Levy":
                         gen_data = levy.rvs(size=size)
-                        if best_parameters["random_or_control_factor"] == 'Random':
-                            gen_data = gen_data*best_parameters["random_factor"]
-                        elif best_parameters["random_or_control_factor"] == "Random pos":
-                            gen_data = gen_data*random_factor_pos
+                        if best_parameters["random_or_control_factor"] == "Random":
+                            gen_data = gen_data * best_parameters["random_factor"]
+                        elif (
+                            best_parameters["random_or_control_factor"] == "Random pos"
+                        ):
+                            gen_data = gen_data * random_factor_pos
                         else:
-                            gen_data += class_inst*2
+                            gen_data += class_inst * 2
                     elif best_parameters["sample_distribution"] == "dweibull":
-                        gen_data = dweibull.rvs(best_parameters["pos_only_location"], size=size)
-                    elif best_parameters["sample_distribution"] == 'halfcauchy':
-                        gen_data = halfcauchy.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
-                    elif best_parameters["sample_distribution"] == 'halfnorm':
-                        gen_data = halfnorm.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
-                    elif best_parameters["sample_distribution"] == 'powernorm':
-                        gen_data = powernorm.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
-                    elif best_parameters["sample_distribution"] == 'semicircular':
-                        gen_data = semicircular.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
-                    elif best_parameters["sample_distribution"] == 'tukeylambda':
-                        gen_data = tukeylambda.rvs(best_parameters["lambda_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
-                    elif best_parameters["sample_distribution"] == 'rdist':
-                        gen_data = rdist.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                        gen_data = dweibull.rvs(
+                            best_parameters["pos_only_location"], size=size
+                        )
+                    elif best_parameters["sample_distribution"] == "halfcauchy":
+                        gen_data = halfcauchy.rvs(
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "halfnorm":
+                        gen_data = halfnorm.rvs(
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "powernorm":
+                        gen_data = powernorm.rvs(
+                            best_parameters["c_value"],
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "semicircular":
+                        gen_data = semicircular.rvs(
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "tukeylambda":
+                        gen_data = tukeylambda.rvs(
+                            best_parameters["lambda_value"],
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "rdist":
+                        gen_data = rdist.rvs(
+                            best_parameters["c_value"],
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
                     else:
                         gen_data = best_parameters["random_factor"]
                     try:
@@ -3144,42 +4426,83 @@ class PreProcessing:
                     size = len(X_train_sample_class.index)
                     class_inst = bin_encoder
                     bin_encoder += 1
-                    if best_parameters["sample_distribution"] == 'Uniform':
+                    if best_parameters["sample_distribution"] == "Uniform":
                         gen_data = np.full((size,), best_parameters["uniformity"])
-                    elif best_parameters["sample_distribution"] == 'Binomial':
-                        gen_data = binom.rvs(n=random_factor_pos, p=best_parameters["p_value"], size=size)
-                    elif best_parameters["sample_distribution"] == 'Poisson':
+                    elif best_parameters["sample_distribution"] == "Binomial":
+                        gen_data = binom.rvs(
+                            n=random_factor_pos, p=best_parameters["p_value"], size=size
+                        )
+                    elif best_parameters["sample_distribution"] == "Poisson":
                         gen_data = poisson.rvs(mu=best_parameters["mu"], size=size)
-                    elif best_parameters["sample_distribution"] == 'Exponential':
-                        gen_data = expon.rvs(scale=best_parameters["scale"], loc=best_parameters["location"], size=size)
-                    elif best_parameters["sample_distribution"] == 'Gamma':
-                        best_parameters["sample_distribution"] = gamma.rvs(a=best_parameters["mu"], size=size)
-                    elif best_parameters["sample_distribution"] == 'Uniform':
+                    elif best_parameters["sample_distribution"] == "Exponential":
+                        gen_data = expon.rvs(
+                            scale=best_parameters["scale"],
+                            loc=best_parameters["location"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "Gamma":
+                        best_parameters["sample_distribution"] = gamma.rvs(
+                            a=best_parameters["mu"], size=size
+                        )
+                    elif best_parameters["sample_distribution"] == "Uniform":
                         gen_data = class_inst
-                    elif best_parameters["sample_distribution"] == 'Normal':
-                        gen_data = norm.rvs(size=size, loc=best_parameters["location"], scale=best_parameters["scale"])
+                    elif best_parameters["sample_distribution"] == "Normal":
+                        gen_data = norm.rvs(
+                            size=size,
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                        )
                     elif best_parameters["sample_distribution"] == "Pareto":
                         gen_data = pareto.rvs(best_parameters["parteo_b"], size=size)
                     elif best_parameters["sample_distribution"] == "Levy":
                         gen_data = levy.rvs(size=size)
-                        if best_parameters["random_or_control_factor"] == 'Random':
-                            gen_data = gen_data*random_factor_pos
+                        if best_parameters["random_or_control_factor"] == "Random":
+                            gen_data = gen_data * random_factor_pos
                         else:
-                            gen_data += class_inst*2
+                            gen_data += class_inst * 2
                     elif best_parameters["sample_distribution"] == "dweibull":
-                        gen_data = dweibull.rvs(best_parameters["pos_only_location"], size=size)
-                    elif best_parameters["sample_distribution"] == 'halfcauchy':
-                        gen_data = halfcauchy.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
-                    elif best_parameters["sample_distribution"] == 'halfnorm':
-                        gen_data = halfnorm.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
-                    elif best_parameters["sample_distribution"] == 'powernorm':
-                        gen_data = powernorm.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
-                    elif best_parameters["sample_distribution"] == 'semicircular':
-                        gen_data = semicircular.rvs(loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
-                    elif best_parameters["sample_distribution"] == 'tukeylambda':
-                        gen_data = tukeylambda.rvs(best_parameters["lambda_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
-                    elif best_parameters["sample_distribution"] == 'rdist':
-                        gen_data = rdist.rvs(best_parameters["c_value"], loc=best_parameters["location"], scale=best_parameters["scale"], size=size)
+                        gen_data = dweibull.rvs(
+                            best_parameters["pos_only_location"], size=size
+                        )
+                    elif best_parameters["sample_distribution"] == "halfcauchy":
+                        gen_data = halfcauchy.rvs(
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "halfnorm":
+                        gen_data = halfnorm.rvs(
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "powernorm":
+                        gen_data = powernorm.rvs(
+                            best_parameters["c_value"],
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "semicircular":
+                        gen_data = semicircular.rvs(
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "tukeylambda":
+                        gen_data = tukeylambda.rvs(
+                            best_parameters["lambda_value"],
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
+                    elif best_parameters["sample_distribution"] == "rdist":
+                        gen_data = rdist.rvs(
+                            best_parameters["c_value"],
+                            loc=best_parameters["location"],
+                            scale=best_parameters["scale"],
+                            size=size,
+                        )
                     else:
                         gen_data = best_parameters["random_factor"]
 
@@ -3198,13 +4521,15 @@ class PreProcessing:
             Y_train = X_train[self.target_variable]
             X_train = X_train.drop(self.target_variable, axis=1)
             if self.rapids_acceleration:
-                X_train = X_train.astype('float32')
+                X_train = X_train.astype("float32")
 
             try:
                 # get train scores
-                scores_2 = cross_val_score(model_3_copy, X_train, Y_train, cv=10, scoring=metric)
+                scores_2 = cross_val_score(
+                    model_3_copy, X_train, Y_train, cv=10, scoring=metric
+                )
                 mae_2 = np.mean(scores_2)
-                train_mae = mae_2*100
+                train_mae = mae_2 * 100
             except Exception:
                 train_mae = 0
 
@@ -3215,21 +4540,32 @@ class PreProcessing:
                 matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
             except Exception:
                 matthew_2 = 0
-            test_mae = matthew_2*100
-            synthetic_mae = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
+            test_mae = matthew_2 * 100
+            synthetic_mae = (train_mae + test_mae) / 2 - (
+                abs(train_mae - test_mae)
+            ) ** 3
 
             print(f"The synthetic score is {synthetic_mae}.")
 
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
 
             # sort by index to return in correct order
             X_train = X_train.sort_index()
 
             # original data or synthetic data?
-            if synthetic_mae > self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"]:
+            if (
+                synthetic_mae
+                > self.preprocess_decisions[
+                    "synthetic_augmentation_parameters_benchmark"
+                ]
+            ):
                 print("Keep synthetic column.")
-                self.preprocess_decisions["synthetic_augmentation_parameters"][column_name] = best_parameters
-                self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = synthetic_mae
+                self.preprocess_decisions["synthetic_augmentation_parameters"][
+                    column_name
+                ] = best_parameters
+                self.preprocess_decisions[
+                    "synthetic_augmentation_parameters_benchmark"
+                ] = synthetic_mae
                 return X_train[column_name]
             else:
                 print("Keep original column. No improvement found.")
@@ -3240,8 +4576,8 @@ class PreProcessing:
         if self.prediction_mode:
             optuna.logging.set_verbosity(optuna.logging.INFO)
         else:
-            logging.info('Start creating synthetic data.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Start creating synthetic data.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             self.preprocess_decisions["synthetic_augmentation_parameters"] = {}
             self.preprocess_decisions["synthetic_augmentation_parameters_benchmark"] = 0
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
@@ -3261,33 +4597,74 @@ class PreProcessing:
             Y_train = Y_train.sort_index()
             X_train = X_train.sort_index()
             # get columns which are floats and from the original dataset
-            float_cols = [x for x, y in self.detected_col_types.items() if y in ['float', 'int', 'bool'] if x in X_train.columns.to_list()]
-            print(f"Synthetic augmentation will be executed on the following columns: {float_cols}")
+            float_cols = [
+                x
+                for x, y in self.detected_col_types.items()
+                if y in ["float", "int", "bool"]
+                if x in X_train.columns.to_list()
+            ]
+            print(
+                f"Synthetic augmentation will be executed on the following columns: {float_cols}"
+            )
             num_float_cols = len(float_cols)
 
             for col in X_train[float_cols].columns.to_list():
-                if self.detected_col_types[col] == 'float':
-                    print(f"Started augmenting column {col}. Progress: {round(((self.preprocess_decisions['random_state_counter']+1)/num_float_cols)*100, 2)}%")
+                if self.detected_col_types[col] == "float":
+                    print(
+                        f"Started augmenting column {col}. Progress: {round(((self.preprocess_decisions['random_state_counter'] + 1) / num_float_cols) * 100, 2)}%"
+                    )
                     self.preprocess_decisions["random_state_counter"] += 1
                     self.set_random_seed()
-                    binom.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
-                    poisson.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
-                    expon.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
-                    gamma.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
-                    norm.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
-                    pareto.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
-                    levy.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
-                    dweibull.random_state = np.random.RandomState(seed=self.preprocess_decisions["random_state_counter"])
-                    X_train[col] = self.synthetic_floating_data_generator(column_name=col, sample_size=sample_size)
+                    binom.random_state = np.random.RandomState(
+                        seed=self.preprocess_decisions["random_state_counter"]
+                    )
+                    poisson.random_state = np.random.RandomState(
+                        seed=self.preprocess_decisions["random_state_counter"]
+                    )
+                    expon.random_state = np.random.RandomState(
+                        seed=self.preprocess_decisions["random_state_counter"]
+                    )
+                    gamma.random_state = np.random.RandomState(
+                        seed=self.preprocess_decisions["random_state_counter"]
+                    )
+                    norm.random_state = np.random.RandomState(
+                        seed=self.preprocess_decisions["random_state_counter"]
+                    )
+                    pareto.random_state = np.random.RandomState(
+                        seed=self.preprocess_decisions["random_state_counter"]
+                    )
+                    levy.random_state = np.random.RandomState(
+                        seed=self.preprocess_decisions["random_state_counter"]
+                    )
+                    dweibull.random_state = np.random.RandomState(
+                        seed=self.preprocess_decisions["random_state_counter"]
+                    )
+                    X_train[col] = self.synthetic_floating_data_generator(
+                        column_name=col, sample_size=sample_size
+                    )
                     self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
                     print(f"Finished augmenting column {col}")
                 else:
-                    print(f"Skipped augmentation for column {col}, because {col} is not of type float.")
+                    print(
+                        f"Skipped augmentation for column {col}, because {col} is not of type float."
+                    )
             print("Export training data with synthetic optimized features.")
             optuna.logging.set_verbosity(optuna.logging.INFO)
+            # shuffle dataframe for Tabnet
+            X_train[self.target_variable] = Y_train
+            X_train = X_train.sample(frac=1.0, random_state=self.global_random_state)
+            X_train = X_train.reset_index(drop=True)
+            Y_train = X_train[self.target_variable].copy()
+            X_train = X_train.drop(self.target_variable, axis=1)
+            try:
+                del X_train[self.target_variable]
+            except KeyError:
+                pass
             return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def automated_feature_selection(self, model=None, metric=None, numeric_only=False):
+    def automated_feature_selection(  # noqa: C901
+        self, model=None, metric=None, numeric_only=False
+    ):
         """
         Uses boostaroota algorithm to automatically chose best features. boostaroota choses XGboost under
         the hood.
@@ -3295,20 +4672,27 @@ class PreProcessing:
         :param float_only: If True, the feature selection will consider integer, floating and boolean columns only.
         :return: Returns reduced dataframe.
         """
-        self.get_current_timestamp('Select best features')
+        self.get_current_timestamp("Select best features")
         if self.prediction_mode:
-            logging.info('Start filtering for preselected columns.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Start filtering for preselected columns.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             if numeric_only:
-                self.dataframe = self.dataframe[self.preprocess_decisions["early_selected_features"]]
+                if len(self.preprocess_decisions["early_selected_features"]) == 0:
+                    print(
+                        "Skipped early numeric feature selection due to missing numerical features."
+                    )
+                else:
+                    self.dataframe = self.dataframe[
+                        self.preprocess_decisions["early_selected_features"]
+                    ]
             else:
                 self.dataframe = self.dataframe[self.selected_feats]
-            logging.info('Finished filtering preselected columns.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished filtering preselected columns.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
-            logging.info('Start automated feature selection.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Start automated feature selection.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
             # get sample size to run brute force feature selection against
@@ -3319,10 +4703,11 @@ class PreProcessing:
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
-            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            X_train_sample = X_train_sample.sample(
+                sample_size, random_state=self.global_random_state
+            )
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
-
 
             for col in X_train.columns:
                 print(f"Features before selection are...{col}")
@@ -3330,38 +4715,58 @@ class PreProcessing:
                 model = model
                 metric = metric
                 br = BoostARoota(clf=model)
-            elif self.class_problem == 'binary':
-                if self.feature_selection_backend == 'lgbm':
-                    model = lgb.LGBMClassifier(random_state=42, objective='binary')
+            elif self.class_problem == "binary":
+                if self.feature_selection_backend == "lgbm":
+                    model = lgb.LGBMClassifier(
+                        random_state=self.global_random_state, objective="binary"
+                    )
                     br = BoostARoota(clf=model)
-                elif self.feature_selection_backend == 'xgboost':
-                    br = BoostARoota(metric='logloss')
-            elif self.class_problem == 'multiclass':
-                if self.feature_selection_backend == 'lgbm':
-                    model = lgb.LGBMClassifier(random_state=42, objective='multiclass')
+                elif self.feature_selection_backend == "xgboost":
+                    br = BoostARoota(metric="logloss")
+            elif self.class_problem == "multiclass":
+                if self.feature_selection_backend == "lgbm":
+                    model = lgb.LGBMClassifier(
+                        random_state=self.global_random_state, objective="multiclass"
+                    )
                     br = BoostARoota(clf=model)
-                elif self.feature_selection_backend == 'xgboost':
-                    br = BoostARoota(metric='mlogloss')
-            elif self.class_problem == 'regression':
-                if self.feature_selection_backend == 'lgbm':
-                    model = lgb.LGBMRegressor(random_state=42, objective='regression')
+                elif self.feature_selection_backend == "xgboost":
+                    br = BoostARoota(metric="mlogloss")
+            elif self.class_problem in ["regression", "time_series"]:
+                if self.feature_selection_backend == "lgbm":
+                    model = lgb.LGBMRegressor(
+                        random_state=self.global_random_state, objective="regression"
+                    )
                     br = BoostARoota(clf=model)
-                elif self.feature_selection_backend == 'xgboost':
-                    br = BoostARoota(metric='mae')
+                elif self.feature_selection_backend == "xgboost":
+                    br = BoostARoota(metric="mae")
 
             if numeric_only:
                 # get columns which are floats and from the original dataset
-                float_cols = [x for x, y in self.detected_col_types.items() if y in ['float', 'int', 'bool'] if x in X_train.columns.to_list()]
-                other_cols = [x for x in X_train.columns.to_list() if x not in float_cols]
-                X_train_temp = X_train_sample[float_cols]
-                br.fit(X_train_temp, Y_train_sample)
-                selected = br.keep_vars_
-                all_cols = selected.values.tolist() + other_cols
-                X_train = X_train[all_cols]
-                X_test = X_test[all_cols]
-                self.preprocess_decisions["early_selected_features"] = all_cols
-                for i in selected:
-                    print(f" Selected features are... {i}.")
+                float_cols = [
+                    x
+                    for x, y in self.detected_col_types.items()
+                    if y in ["float", "int", "bool"]
+                    if x in X_train.columns.to_list()
+                ]
+                other_cols = [
+                    x for x in X_train.columns.to_list() if x not in float_cols
+                ]
+
+                if len(float_cols) == 0:
+                    print(
+                        "Skipped early numeric feature selection due to missing numerical features."
+                    )
+                    self.preprocess_decisions["early_selected_features"] = []
+                else:
+                    X_train_temp = X_train_sample[float_cols]
+                    br.fit(X_train_temp, Y_train_sample)
+                    selected = br.keep_vars_
+                    all_cols = selected.values.tolist() + other_cols
+                    X_train = X_train[all_cols]
+                    X_test = X_test[all_cols]
+                    self.preprocess_decisions["early_selected_features"] = all_cols
+                    for i in selected:
+                        print(f" Selected features are... {i}.")
             else:
                 br.fit(X_train_sample, Y_train_sample)
                 selected = br.keep_vars_
@@ -3370,7 +4775,7 @@ class PreProcessing:
                 self.selected_feats = selected
                 for i in selected:
                     print(f" Selected features are... {i}.")
-            logging.info('Finished automated feature selection.')
+            logging.info("Finished automated feature selection.")
             del br
             del X_train_sample
             del Y_train_sample
@@ -3379,27 +4784,30 @@ class PreProcessing:
             except Exception:
                 pass
             _ = gc.collect()
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            return (
+                self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test),
+                self.selected_feats,
+            )
 
-    def bruteforce_random_feature_selection(self, metric=None):
+    def bruteforce_random_feature_selection(self, metric=None):  # noqa: C901
         """
         Takes a dataframe or a sample of it. Select randomly features and runs Vowpal Wabbit on it with 10-fold cross
         validation. Evaluates performance and optimizes incrementally feature selection by learning from previous attempts.
         :param metric: Scoring metric for cross validation. Must be compatible for Sklearn's cross_val_score.
         :return: Updates class attributes
         """
-        self.get_current_timestamp('Select best features')
+        self.get_current_timestamp("Select best features")
         if self.prediction_mode:
-            logging.info('Start filtering for final preselected columns.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Start filtering for final preselected columns.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             self.dataframe = self.dataframe[self.selected_feats]
-            logging.info('Finished filtering final preselected columns.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished filtering final preselected columns.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             return self.dataframe
         else:
-            logging.info('Start Vowpal bruteforce feature selection.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Start Vowpal bruteforce feature selection.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             optuna.logging.set_verbosity(optuna.logging.WARNING)
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
@@ -3409,12 +4817,12 @@ class PreProcessing:
             problem = self.class_problem
             if metric:
                 metric = metric
-            elif self.class_problem == 'binary':
+            elif self.class_problem == "binary":
                 metric = make_scorer(matthews_corrcoef)
-            elif self.class_problem == 'multiclass':
+            elif self.class_problem == "multiclass":
                 metric = make_scorer(matthews_corrcoef)
-            elif self.class_problem == 'regression':
-                metric = 'neg_mean_squared_error'
+            elif self.class_problem in ["regression", "time_series"]:
+                metric = "neg_mean_squared_error"
 
             data_size = len(X_train.index)
 
@@ -3426,7 +4834,9 @@ class PreProcessing:
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
-            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            X_train_sample = X_train_sample.sample(
+                sample_size, random_state=self.global_random_state
+            )
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
@@ -3439,32 +4849,40 @@ class PreProcessing:
                 for col in all_cols:
                     param[col] = trial.suggest_int(col, 0, 1)
 
-                if brute_force_selection_base_learner == 'auto':
-                    base_learner = trial.suggest_categorical("base_learner", ["lgbm", "vowal_wobbit"])
-                elif brute_force_selection_base_learner == 'double':
+                if brute_force_selection_base_learner == "auto":
+                    base_learner = trial.suggest_categorical(
+                        "base_learner", ["lgbm", "vowal_wobbit"]
+                    )
+                elif brute_force_selection_base_learner == "double":
                     base_learner = None
                 else:
                     base_learner = brute_force_selection_base_learner
 
-                if base_learner == 'lgbm':
-                    if problem == 'binary' or problem == 'multiclass':
-                        model = lgb.LGBMClassifier(random_state=1000)
+                if base_learner == "lgbm":
+                    if problem == "binary" or problem == "multiclass":
+                        model = lgb.LGBMClassifier(
+                            random_state=self.global_random_state
+                        )
                     else:
-                        model = lgb.LGBMRegressor(random_state=1000)
-                elif base_learner == 'vowal_wobbit':
-                    if problem == 'binary' or problem == 'multiclass':
+                        model = lgb.LGBMRegressor(random_state=self.global_random_state)
+                elif base_learner == "vowal_wobbit":
+                    if problem == "binary" or problem == "multiclass":
                         model = VWClassifier()
                     else:
                         model = VWRegressor()
-                elif brute_force_selection_base_learner == 'double':
-                    if problem == 'binary' or problem == 'multiclass':
+                elif brute_force_selection_base_learner == "double":
+                    if problem == "binary" or problem == "multiclass":
                         model_1 = VWClassifier()
-                        model_2 = lgb.LGBMClassifier(random_state=1000)
+                        model_2 = lgb.LGBMClassifier(
+                            random_state=self.global_random_state
+                        )
                     else:
                         model_1 = VWRegressor()
-                        model_2 = lgb.LGBMRegressor(random_state=1000)
+                        model_2 = lgb.LGBMRegressor(
+                            random_state=self.global_random_state
+                        )
                 else:
-                    if problem == 'binary' or problem == 'multiclass':
+                    if problem == "binary" or problem == "multiclass":
                         model = VWClassifier()
                     else:
                         model = VWRegressor()
@@ -3476,33 +4894,59 @@ class PreProcessing:
                     else:
                         pass
 
-                if brute_force_selection_base_learner == 'double':
+                if brute_force_selection_base_learner == "double":
                     try:
-                        scores_1 = cross_val_score(model_1, X_train_sample[temp_features], Y_train_sample, cv=10, scoring=metric)
-                        scores_2 = cross_val_score(model_2, X_train_sample[temp_features], Y_train_sample, cv=10, scoring=metric)
+                        scores_1 = cross_val_score(
+                            model_1,
+                            X_train_sample[temp_features],
+                            Y_train_sample,
+                            cv=10,
+                            scoring=metric,
+                        )
+                        scores_2 = cross_val_score(
+                            model_2,
+                            X_train_sample[temp_features],
+                            Y_train_sample,
+                            cv=10,
+                            scoring=metric,
+                        )
                         mae_1 = np.mean(scores_1)
                         mae_2 = np.mean(scores_2)
-                        mae = (mae_1+mae_2)/2
+                        mae = (mae_1 + mae_2) / 2
                     except Exception:
                         mae = 0
                     return mae
                 else:
                     try:
-                        scores = cross_val_score(model, X_train_sample[temp_features], Y_train_sample, cv=10, scoring=metric)
+                        scores = cross_val_score(
+                            model,
+                            X_train_sample[temp_features],
+                            Y_train_sample,
+                            cv=10,
+                            scoring=metric,
+                        )
                         mae = np.mean(scores)
                     except Exception:
                         mae = 0
                     return mae
 
-            algorithm = 'bruteforce_random'
+            algorithm = "bruteforce_random"
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective,
-                           n_trials=self.hyperparameter_tuning_rounds[algorithm],
-                           timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
-                           gc_after_trial=True,
-                           show_progress_bar=True)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True,
+                seed=self.global_random_state,
+                consider_endpoints=True,
+            )
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
             # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
@@ -3511,14 +4955,18 @@ class PreProcessing:
                 self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
                 fig.show()
             except ZeroDivisionError:
-                print("Plotting of hyperparameter performances failed. This usually implicates an error during training.")
+                print(
+                    "Plotting of hyperparameter performances failed. This usually implicates an error during training."
+                )
 
             if len(X_train.columns) <= 1000:
-               fig = optuna.visualization.plot_param_importances(study)
-               self.optuna_studies[f"{algorithm}_param_importance"] = fig
-               fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
             else:
-                print("Skipped calculating feature importance due to expected runtime being too long.")
+                print(
+                    "Skipped calculating feature importance due to expected runtime being too long."
+                )
 
             best_feature_combination = study.best_trial.params
             final_features = []
@@ -3534,62 +4982,123 @@ class PreProcessing:
             self.selected_feats = final_features
             for i in final_features:
                 print(f" Final features are... {i}.")
-            logging.info('Finished bruteforce random feature selection.')
-            logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+            logging.info("Finished bruteforce random feature selection.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
             optuna.logging.set_verbosity(optuna.logging.INFO)
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test), self.selected_feats
+            return (
+                self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test),
+                self.selected_feats,
+            )
 
     def delete_unpredictable_training_rows(self):
+        self.get_current_timestamp("Delete bad training rows")
+        logging.info("Started deleting bad training rows.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+        def get_test_result(Y_test, scores_2_test):
+            try:
+                if self.class_problem in ["binary", "multiclass"]:
+                    matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
+                    test_mae = matthew_2 * 100
+                else:
+                    test_mae = mean_squared_error(Y_test, scores_2_test, squared=True)
+                    test_mae *= -1
+            except Exception:
+                test_mae = 0
+            return test_mae
+
         if self.prediction_mode:
             pass
         else:
-            from sklearn.linear_model import LogisticRegression, LinearRegression, RidgeClassifier, SGDClassifier, SGDRegressor
-            from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
+            # from sklearn.linear_model import Ridge
+
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
-            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+            columns = X_train.columns.to_list()
+            if self.class_problem == "binary" or self.class_problem == "multiclass":
                 model = lgb.LGBMClassifier()
-                model_2 = VWClassifier()
-                model_3 = RidgeClassifier()
-                model_4 = SGDClassifier()
-                model_5 = GradientBoostingClassifier()
+                # model_3 = RidgeClassifier()
             else:
                 model = lgb.LGBMRegressor()
-                model_2 = VWRegressor()
-                model_3 = Ridge()
-                model_4 = SGDRegressor()
-                model_5 = GradientBoostingRegressor
-            model.fit(X_test, Y_test)
-            preds = model.predict(X_train)
-            model_2.fit(X_test, Y_test)
-            preds_2 = model_2.predict(X_train)
-            model_3.fit(X_test, Y_test)
-            preds_3 = model_3.predict(X_train)
-            model_4.fit(X_test, Y_test)
-            preds_4 = model_4.predict(X_train)
-            model_5.fit(X_test, Y_test)
-            preds_5 = model_5.predict(X_train)
+                # model_3 = Ridge()
 
-            X_train[self.target_variable] = Y_train
-            X_train["lgbm_temp_preds"] = preds
-            X_train["vowpal_temp_preds"] = preds_2
-            X_train["ridge_temp_preds"] = preds_3
-            X_train["sgd_temp_preds"] = preds_4
-            X_train["gradient_boosting_temp_preds"] = preds_5
-            X_train["bad_row"] = ((X_train[self.target_variable] != X_train["lgbm_temp_preds"]) &
-                                  (X_train[self.target_variable] != X_train["vowpal_temp_preds"]) &
-                                  (X_train[self.target_variable] != X_train["ridge_temp_preds"]) &
-                                  (X_train[self.target_variable] != X_train["sgd_temp_preds"]) &
-                                  (X_train[self.target_variable] != X_train["gradient_boosting_temp_preds"]))
-            X_train = X_train[(X_train["bad_row"] == False)]
-            Y_train = X_train[self.target_variable]
-            X_train = X_train.drop(self.target_variable, axis=1)
-            X_train = X_train.drop("lgbm_temp_preds", axis=1)
-            X_train = X_train.drop("vowpal_temp_preds", axis=1)
-            X_train = X_train.drop("ridge_temp_preds", axis=1)
-            X_train = X_train.drop("sgd_temp_preds", axis=1)
-            X_train = X_train.drop("gradient_boosting_temp_preds", axis=1)
-            X_train = X_train.drop("bad_row", axis=1)
-            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            total_rounds = 1000
+            fold_cols_created = []
+            for sample in range(total_rounds):
+                temp_results = []
+                try:
+                    X_train_sample = X_train.sample(frac=0.3, random_state=sample)
+                    X_train_sample = X_train_sample[columns]
+                    y_train_sample = Y_train.iloc[X_train_sample.index]
+                    model.fit(X_train_sample, y_train_sample)
+                    preds = model.predict(X_test)
+                    temp_results.append(get_test_result(Y_test, preds))
+                    # if self.class_problem in ['regression']:
+                    #    model_3.fit(X_train_sample, y_train_sample)
+                    #    preds = model_3.predict(X_test)
+                    #    temp_results.append(get_test_result(Y_test, preds))
+                    mean_results = np.mean(np.array(temp_results))
+                    X_train_sample[f"fold_result_{sample}"] = mean_results
+                    X_train = X_train.merge(
+                        X_train_sample[f"fold_result_{sample}"],
+                        left_index=True,
+                        right_index=True,
+                        how="left",
+                    )
+                    fold_cols_created.append(f"fold_result_{sample}")
+                    print(
+                        f"Started epoch {sample} from {total_rounds} with score of {mean_results}."
+                    )
+                except Exception:
+                    pass
+
+            if self.class_problem in ["binary", "multiclass"]:
+                temp_dfs = []
+                X_train[self.target_variable] = Y_train
+                for one_class in X_train[self.target_variable].unique():
+                    class_df = X_train[
+                        (X_train[self.target_variable] == one_class)
+                    ].copy()
+                    original_len = len(class_df.index)
+                    class_df["all_sample_mean"] = class_df[fold_cols_created].mean(
+                        axis=1, skipna=True
+                    )
+                    std = class_df["all_sample_mean"].std()
+                    class_df = class_df[
+                        (
+                            class_df["all_sample_mean"]
+                            > (class_df["all_sample_mean"].mean() - 1.96 * std)
+                        )
+                    ]
+                    temp_dfs.append(class_df)
+                    new_len = len(class_df.index)
+                    print(
+                        f"Class {one_class} reduced from {original_len} to {new_len} samples."
+                    )
+                X_train = pd.concat(temp_dfs)
+                X_train = X_train.sample(
+                    frac=1.0, random_state=self.global_random_state
+                )
+                X_train = X_train.reset_index(drop=True)
+                Y_train = X_train[self.target_variable].copy()
+                X_train = X_train.drop(self.target_variable, axis=1)
+                try:
+                    del X_train[self.target_variable]
+                except KeyError:
+                    pass
+                X_train = X_train[columns].copy()
+            else:
+                X_train["all_sample_mean"] = X_train[fold_cols_created].mean(
+                    axis=1, skipna=True
+                )
+                quantile = X_train["all_sample_mean"].quantile(0.20)
+                X_train = X_train[(X_train["all_sample_mean"] > quantile)][columns]
+                X_train[self.target_variable] = Y_train
+                X_train = X_train.reset_index(drop=True)
+                Y_train = X_train[self.target_variable]
+                X_train = X_train.drop(self.target_variable, axis=1)
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            logging.info("Finished deleting bad training rows.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
 
     def get_hyperparameter_tuning_sample_df(self):
         if self.prediction_mode:
@@ -3597,26 +5106,45 @@ class PreProcessing:
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
-            if self.hyperparameter_tuning_sample_size > len(X_train.index):
-                sample_size = len(X_train.index)
+            if self.blueprint_step_selection_non_nlp["trained_tokenizer_embedding"]:
+                if self.hyperparameter_tuning_sample_size > self.preprocess_decisions[
+                    "identifier_length"
+                ] - int(self.hyperparameter_tuning_sample_size / 5):
+                    sample_size = self.preprocess_decisions["identifier_length"]
+                else:
+                    sample_size = self.hyperparameter_tuning_sample_size
+                indices = np.random.choice(X_train.shape[0], sample_size, replace=False)
+
+                X_train = np.append(
+                    X_train.toarray(), Y_train.values.reshape(-1, 1), axis=1
+                )
+                X_train_sample = X_train[indices]
+                Y_train_sample = pd.Series(X_train_sample[:, -1:].ravel())
+                X_train_sample = X_train_sample[:, :-1]
+                return X_train_sample, Y_train_sample
             else:
-                sample_size = self.hyperparameter_tuning_sample_size
+                if self.hyperparameter_tuning_sample_size > len(X_train.index):
+                    sample_size = len(X_train.index)
+                else:
+                    sample_size = self.hyperparameter_tuning_sample_size
 
-            X_train[self.target_variable] = Y_train
-            X_train_sample = X_train.sample(sample_size, random_state=42).copy()
-            X_train_sample = X_train_sample.reset_index(drop=True)
-            Y_train_sample = X_train_sample[self.target_variable]#.copy()
+                X_train[self.target_variable] = Y_train
+                X_train_sample = X_train.sample(
+                    sample_size, random_state=self.global_random_state
+                ).copy()
+                X_train_sample = X_train_sample.reset_index(drop=True)
+                Y_train_sample = X_train_sample[self.target_variable]  # .copy()
 
-            X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
-            #Y_train_sample = Y_train_sample.reset_index(drop=True)
+                X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
+                # Y_train_sample = Y_train_sample.reset_index(drop=True)
 
-            try:
-                del X_train[self.target_variable]
-            except KeyError:
-                pass
-            return X_train_sample, Y_train_sample
+                try:
+                    del X_train[self.target_variable]
+                except KeyError:
+                    pass
+                return X_train_sample, Y_train_sample
 
-    def autoencoder_based_oversampling(self):
+    def autoencoder_based_oversampling(self):  # noqa: C901
         if self.prediction_mode:
             pass
         else:
@@ -3636,7 +5164,7 @@ class PreProcessing:
             class Autoencoder(nn.Module):
                 def __init__(self, D_in, H=50, H2=12, latent_dim=3):
 
-                    #Encoder
+                    # Encoder
                     super(Autoencoder, self).__init__()
                     self.linear1 = nn.Linear(D_in, H)
                     self.lin_bn1 = nn.BatchNorm1d(num_features=H)
@@ -3712,26 +5240,31 @@ class PreProcessing:
                     return loss_MSE + loss_KLD
 
             def random_noise(a_series, noise_reduction=1000000):
-                return (np.random.random(len(a_series))*a_series.std()/noise_reduction)-(a_series.std()/(2*noise_reduction))
+                return (
+                    np.random.random(len(a_series)) * a_series.std() / noise_reduction
+                ) - (a_series.std() / (2 * noise_reduction))
 
-            def handle_rarity(all_data, threshold=10, mask_as=99, rarity_cols=None, normalize=False):
+            def handle_rarity(
+                all_data, threshold=10, mask_as=99, rarity_cols=None, normalize=False
+            ):
                 if isinstance(rarity_cols, list):
                     for col in rarity_cols:
                         frequencies = all_data[col].value_counts(normalize=normalize)
                         condition = frequencies < threshold
                         mask_obs = frequencies[condition].index
                         mask_dict = dict.fromkeys(mask_obs, mask_as)
-                        all_data[col] = all_data[col].replace(mask_dict)  # or you could make a copy not to modify original data
+                        all_data[col] = all_data[col].replace(
+                            mask_dict
+                        )  # or you could make a copy not to modify original data
                     del rarity_cols
                 else:
                     pass
                 return all_data
 
-
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             cols = X_train.columns
 
-            if self.class_problem == 'binary' or self.class_problem == 'multiclass':
+            if self.class_problem == "binary" or self.class_problem == "multiclass":
                 # in this part we count how much less rows than the main class we have for all other classes
                 # get unique values
                 unique_classes = np.unique(Y_train.values)
@@ -3743,7 +5276,9 @@ class PreProcessing:
                 # get array with delta of each element count compared to max count
                 max_count = results[1].max()
                 deltas = max_count - results[1]
-                class_deltas = np.vstack((results[0], deltas)) # contains classes and how much they miss until max count
+                # class_deltas = np.vstack(
+                #     (results[0], deltas)
+                # )  # contains classes and how much they miss until max count
             else:
                 X_train[self.target_variable] = Y_train
                 # sort on A
@@ -3751,48 +5286,62 @@ class PreProcessing:
 
                 for bins in [10, 9, 8, 7, 6, 5, 4, 3, 2]:
                     # create bins
-                    X_train['bin'] = pd.cut(X_train[self.target_variable],
-                                         bins, labels=False)
-                    bins_dist = X_train['bin'].value_counts()
-                    print(f"For {bins} bins the smallest bin contains {bins_dist.min()} samples.")
-                    if bins_dist.min() > 5:
+                    X_train["bin"] = pd.qcut(
+                        X_train[self.target_variable],
+                        bins,
+                        labels=False,
+                        duplicates="drop",
+                    )
+                    bins_dist = X_train["bin"].value_counts()
+                    print(
+                        f"For {bins} bins the smallest bin contains {bins_dist.min()} samples."
+                    )
+                    if bins_dist.min() > 1:
                         print(f"Enough minimum samples found with {bins} bins.")
                         break
                     else:
-                        print(f"Not enough minimum samples found with {bins} bins. Reducing no. of bins...")
+                        print(
+                            f"Not enough minimum samples found with {bins} bins. Reducing no. of bins..."
+                        )
 
                 if bins_dist.min() == 2:
-                    X_train = handle_rarity(X_train, rarity_cols=["bin"], threshold=5, mask_as=99)
+                    X_train = handle_rarity(
+                        X_train, rarity_cols=["bin"], threshold=5, mask_as=99
+                    )
 
                 Y_train_original = X_train[self.target_variable]
-                Y_train = X_train['bin']#.astype('float')
+                Y_train = X_train["bin"]  # .astype('float')
 
-                #Y_train_original = X_train[self.target_variable]
+                # Y_train_original = X_train[self.target_variable]
                 X_train = X_train.drop(self.target_variable, axis=1)
 
-                unique_classes = X_train['bin'].unique()
+                unique_classes = X_train["bin"].unique()
                 print("Unique classes are...")
-                print(X_train['bin'].value_counts())
+                print(X_train["bin"].value_counts())
                 # get counts
-                unique, counts = np.unique(X_train['bin'].values, return_counts=True)
+                unique, counts = np.unique(X_train["bin"].values, return_counts=True)
                 results = np.asarray((unique, counts))
                 # get highest count
                 results[1].max()
                 # get array with delta of each element count compared to max count
                 max_count = results[1].max()
                 deltas = max_count - results[1]
-                class_deltas = np.vstack((results[0], deltas)) # contains classes and how much they miss until max count
+                # class_deltas = np.vstack(
+                #     (results[0], deltas)
+                # )  # contains classes and how much they miss until max count
                 X_train = X_train.drop("bin", axis=1)
 
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            #torch.cuda.set_device(0)
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            # torch.cuda.set_device(0)
 
             executed_classes = 0
 
             for i in range(len(unique_classes)):
                 executed_classes += 1
-                print(f"""Starting oversampling for class {i}. 
-                Progress after this step is {round((executed_classes/len(unique_classes))*100, 2)}%.""")
+                print(
+                    f"""Starting oversampling for class {i}.
+                Progress after this step is {round((executed_classes / len(unique_classes)) * 100, 2)}%."""
+                )
                 target_class = unique_classes[i]
                 target_delta = deltas[i]
                 if target_delta == 0:
@@ -3800,33 +5349,48 @@ class PreProcessing:
                 else:
                     X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
 
-                    if self.class_problem == 'regression':
+                    if self.class_problem in ["regression", "time_series"]:
                         X_train[self.target_variable] = Y_train
                         bins_needed = 0
                         for bins in [10, 9, 8, 7, 6, 5, 4, 3, 2]:
                             # create bins
-                            X_train['bin'] = pd.cut(X_train[self.target_variable],
-                                                    bins, labels=False)
-                            bins_dist = X_train['bin'].value_counts()
-                            print(f"For {bins} bins the smallest bin contains {bins_dist.min()} samples.")
+                            X_train["bin"] = pd.qcut(
+                                X_train[self.target_variable],
+                                bins,
+                                labels=False,
+                                duplicates="drop",
+                            )
+                            bins_dist = X_train["bin"].value_counts()
+                            print(
+                                f"For {bins} bins the smallest bin contains {bins_dist.min()} samples."
+                            )
                             if bins_dist.min() > 5:
                                 print(f"Enough minimum samples found with {bins} bins.")
                                 bins_needed = bins
                                 break
                             else:
-                                print(f"Not enough minimum samples found with {bins} bins. Reducing no. of bins...")
+                                print(
+                                    f"Not enough minimum samples found with {bins} bins. Reducing no. of bins..."
+                                )
 
                             if bins_dist.min() == 2:
-                                X_train = handle_rarity(X_train, rarity_cols=["bin"], threshold=5, mask_as=99)
+                                X_train = handle_rarity(
+                                    X_train,
+                                    rarity_cols=["bin"],
+                                    threshold=5,
+                                    mask_as=99,
+                                )
                                 bins_needed = 2
 
                         Y_train_original = X_train[self.target_variable]
-                        Y_train = X_train['bin']#.astype('float')
+                        Y_train = X_train["bin"]  # .astype('float')
                         X_train = X_train.drop(self.target_variable, axis=1)
 
-                        unique_classes = X_train['bin'].unique().tolist()
+                        unique_classes = X_train["bin"].unique().tolist()
                         # get counts
-                        unique, counts = np.unique(X_train['bin'].values, return_counts=True)
+                        unique, counts = np.unique(
+                            X_train["bin"].values, return_counts=True
+                        )
                         X_train = X_train.drop("bin", axis=1)
                         results = np.asarray((unique, counts))
                         # get highest count
@@ -3834,26 +5398,41 @@ class PreProcessing:
                         # get array with delta of each element count compared to max count
                         max_count = results[1].max()
                         deltas = max_count - results[1]
-                        class_deltas = np.vstack((results[0], deltas)) # contains classes and how much they miss until max count
+                        # class_deltas = np.vstack(
+                        #     (results[0], deltas)
+                        # )  # contains classes and how much they miss until max count
 
                         X_test[self.target_variable] = Y_test
 
                         if bins_dist.min() == 2:
-                            X_test = handle_rarity(X_test, rarity_cols=["bin"], threshold=5, mask_as=99)
+                            X_test = handle_rarity(
+                                X_test, rarity_cols=["bin"], threshold=5, mask_as=99
+                            )
                         else:
-                            X_test['bin'] = X_test['bin'] = pd.cut(X_test[self.target_variable]+random_noise(X_test[self.target_variable]),
-                                                                   bins_needed, labels=False)
+                            X_test["bin"] = pd.cut(
+                                X_test[self.target_variable]
+                                + random_noise(X_test[self.target_variable]),
+                                bins_needed,
+                                labels=False,
+                            )
                         Y_test_original = X_test[self.target_variable]
-                        Y_test = X_test['bin']#.astype('float')
+                        Y_test = X_test["bin"]  # .astype('float')
                         X_test = X_test.drop(self.target_variable, axis=1)
                         X_test = X_test.drop("bin", axis=1)
 
+                    X_train_class_only = X_train.iloc[
+                        np.where(Y_train == target_class)[0]
+                    ]
+                    Y_train_class_only = Y_train.iloc[
+                        np.where(Y_train == target_class)[0]
+                    ]
 
-                    X_train_class_only = X_train.iloc[np.where(Y_train == target_class)[0]]
-                    Y_train_class_only = Y_train.iloc[np.where(Y_train == target_class)[0]]
-
-                    X_train_other_classes = X_train.iloc[np.where(Y_train != target_class)[0]]
-                    Y_train_other_classes = Y_train.iloc[np.where(Y_train != target_class)[0]]
+                    X_train_other_classes = X_train.iloc[
+                        np.where(Y_train != target_class)[0]
+                    ]
+                    Y_train_other_classes = Y_train.iloc[
+                        np.where(Y_train != target_class)[0]
+                    ]
 
                     D_in = X_train_class_only.shape[1]
                     X_test_class_only = X_test.iloc[np.where(Y_test == target_class)[0]]
@@ -3864,50 +5443,75 @@ class PreProcessing:
                     trainloader = DataLoader(dataset=traindata_set, batch_size=256)
                     testloader = DataLoader(dataset=testdata_set, batch_size=256)
 
-                    #D_in = X_train_class_only.shape[1]
+                    # D_in = X_train_class_only.shape[1]
                     # HYPERPARAMETER OPTIMIZATION
                     def objective(trial):
-                        optimizer_choice = trial.suggest_categorical("optimizer_choice", ["Adam",
-                                                                                          "AdamW",
-                                                                                          "RMSprop"])
+                        optimizer_choice = trial.suggest_categorical(
+                            "optimizer_choice", ["Adam", "AdamW", "RMSprop"]
+                        )
                         param = {
-                            'nb_epochs': trial.suggest_int('nb_epochs', 2, 5000),
-                            'h': trial.suggest_int('h', 20, 50),
-                            'h2': trial.suggest_int('h2', 2, 19),
-                            'latent_dim': trial.suggest_int('latent_dim', 1, 3),
-                            'optim_weight_decay': trial.suggest_uniform('optim_weight_decay', 0.0, 0.9),
-                            'optim_learning_rate': trial.suggest_loguniform('optim_learning_rate', 1e-5, 0.3)
+                            "nb_epochs": trial.suggest_int("nb_epochs", 2, 200),
+                            "h": trial.suggest_int("h", 20, 50),
+                            "h2": trial.suggest_int("h2", 2, 19),
+                            "latent_dim": trial.suggest_int("latent_dim", 1, 3),
+                            "optim_weight_decay": trial.suggest_uniform(
+                                "optim_weight_decay", 0.0, 0.9
+                            ),
+                            "optim_learning_rate": trial.suggest_loguniform(
+                                "optim_learning_rate", 1e-5, 0.3
+                            ),
                         }
-                        model = Autoencoder(D_in, param["h"], param["h2"], param["latent_dim"]).to(device)
+                        model = Autoencoder(
+                            D_in, param["h"], param["h2"], param["latent_dim"]
+                        ).to(device)
                         if optimizer_choice == "Adam":
-                            optimizer = optim.Adam(model.parameters(), lr=param["optim_learning_rate"], weight_decay=param["optim_weight_decay"])
+                            optimizer = optim.Adam(
+                                model.parameters(),
+                                lr=param["optim_learning_rate"],
+                                weight_decay=param["optim_weight_decay"],
+                            )
                         elif optimizer_choice == "RMSprop":
-                            optimizer = optim.RMSprop(model.parameters(), lr=param["optim_learning_rate"], weight_decay=param["optim_weight_decay"])
+                            optimizer = optim.RMSprop(
+                                model.parameters(),
+                                lr=param["optim_learning_rate"],
+                                weight_decay=param["optim_weight_decay"],
+                            )
                         elif optimizer_choice == "LBFGS":
-                            optimizer = optim.LBFGS(model.parameters(), lr=param["optim_learning_rate"])
+                            optimizer = optim.LBFGS(
+                                model.parameters(), lr=param["optim_learning_rate"]
+                            )
                         elif optimizer_choice == "SGD":
-                            optimizer = optim.SGD(model.parameters(), lr=param["optim_learning_rate"])
+                            optimizer = optim.SGD(
+                                model.parameters(), lr=param["optim_learning_rate"]
+                            )
                         elif optimizer_choice == "SparseAdam":
-                            optimizer = optim.SparseAdam(model.parameters(), lr=param["optim_learning_rate"])
+                            optimizer = optim.SparseAdam(
+                                model.parameters(), lr=param["optim_learning_rate"]
+                            )
                         elif optimizer_choice == "AdamW":
-                            optimizer = optim.AdamW(model.parameters(), lr=param["optim_learning_rate"])
+                            optimizer = optim.AdamW(
+                                model.parameters(), lr=param["optim_learning_rate"]
+                            )
                         else:
-                            optimizer = optim.Adam(model.parameters(), lr=param["optim_learning_rate"])
+                            optimizer = optim.Adam(
+                                model.parameters(), lr=param["optim_learning_rate"]
+                            )
 
-
-                        model = Autoencoder(D_in, param["h"], param["h2"], param["latent_dim"]).to(device)
+                        model = Autoencoder(
+                            D_in, param["h"], param["h2"], param["latent_dim"]
+                        ).to(device)
                         loss_mse = customLoss()
 
                         # train model
-                        log_interval = 1000
-                        val_losses = []
+                        # log_interval = 1000
+                        # val_losses = []
                         train_losses = []
                         test_losses = []
 
                         def train(epoch):
                             model.train()
                             train_loss = 0
-                            for batch_idx, data in enumerate(trainloader):
+                            for data in trainloader:
                                 data = data.to(device)
                                 optimizer.zero_grad()
                                 recon_batch, mu, logvar = model(data)
@@ -3916,27 +5520,38 @@ class PreProcessing:
                                 train_loss += loss.item()
                                 optimizer.step()
                                 if epoch % 200 == 0:
-                                    print('====> Epoch: {} Average training loss: {:.4f}'.format(
-                                    epoch, train_loss / len(trainloader.dataset)))
-                                train_losses.append(train_loss / len(trainloader.dataset))
+                                    print(
+                                        "====> Epoch: {} Average training loss: {:.4f}".format(
+                                            epoch, train_loss / len(trainloader.dataset)
+                                        )
+                                    )
+                                train_losses.append(
+                                    train_loss / len(trainloader.dataset)
+                                )
                                 torch.cuda.empty_cache()
 
                         def test(epoch):
                             with torch.no_grad():
                                 test_loss = 0
-                                for batch_idx, data in enumerate(testloader):
+                                for data in testloader:
                                     data = data.to(device)
                                     optimizer.zero_grad()
                                     recon_batch, mu, logvar = model(data)
                                     loss = loss_mse(recon_batch, data, mu, logvar)
                                     test_loss += loss.item()
                                     if epoch % 200 == 0:
-                                        print('====> Epoch: {} Average test loss: {:.4f}'.format(
-                                            epoch, test_loss / len(testloader.dataset)))
+                                        print(
+                                            "====> Epoch: {} Average test loss: {:.4f}".format(
+                                                epoch,
+                                                test_loss / len(testloader.dataset),
+                                            )
+                                        )
                                     trial.report(test_loss, epoch)
                                     if trial.should_prune():
                                         raise optuna.exceptions.TrialPruned()
-                                    test_losses.append(test_loss / len(testloader.dataset))
+                                    test_losses.append(
+                                        test_loss / len(testloader.dataset)
+                                    )
                                     torch.cuda.empty_cache()
 
                         epochs = param["nb_epochs"]
@@ -3945,34 +5560,46 @@ class PreProcessing:
                             test(epoch)
 
                         with torch.no_grad():
-                            for batch_idx, data in enumerate(testloader):
+                            for data in testloader:
                                 data = data.to(device)
                                 optimizer.zero_grad()
                                 recon_batch, mu, logvar = model(data)
 
                             try:
-                                loss_score = test_losses[-1] #np.sum(test_losses[-1] + abs(np.sum([test_losses[-1], train_losses[-1]]))**2)
+                                loss_score = test_losses[
+                                    -1
+                                ]  # np.sum(test_losses[-1] + abs(np.sum([test_losses[-1], train_losses[-1]]))**2)
                             except IndexError:
                                 loss_score = 10000000000
 
-                            return loss_score #test_losses[-1]
+                            return loss_score  # test_losses[-1]
 
-                    algorithm = 'autoencoder_based_oversampling'
+                    algorithm = "autoencoder_based_oversampling"
 
-                    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
-                    study = optuna.create_study(direction='minimize', sampler=sampler, study_name=f"{algorithm}")
-                    study.optimize(objective,
-                                   n_trials=self.hyperparameter_tuning_rounds[algorithm],
-                                   timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
-                                   gc_after_trial=True,
-                                   show_progress_bar=True)
+                    sampler = optuna.samplers.TPESampler(
+                        multivariate=True,
+                        seed=self.global_random_state,
+                        consider_endpoints=True,
+                    )
+                    study = optuna.create_study(
+                        direction="minimize", sampler=sampler, study_name=f"{algorithm}"
+                    )
+                    study.optimize(
+                        objective,
+                        n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                        timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                        gc_after_trial=True,
+                        show_progress_bar=True,
+                    )
                     self.optuna_studies[f"{algorithm}"] = {}
                     try:
                         fig = optuna.visualization.plot_optimization_history(study)
                         self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
                         fig.show()
                     except ZeroDivisionError:
-                        print("Plotting of hyperparameter performances failed. This usually implicates an error during training.")
+                        print(
+                            "Plotting of hyperparameter performances failed. This usually implicates an error during training."
+                        )
 
                     # FINAL TRAINING
                     best_parameters = study.best_trial.params
@@ -3982,32 +5609,55 @@ class PreProcessing:
 
                     model = Autoencoder(D_in, H, H2, latent_dim).to(device)
                     if best_parameters["optimizer_choice"] == "Adam":
-                        optimizer = optim.Adam(model.parameters(), lr=best_parameters["optim_learning_rate"], weight_decay=best_parameters["optim_weight_decay"])
+                        optimizer = optim.Adam(
+                            model.parameters(),
+                            lr=best_parameters["optim_learning_rate"],
+                            weight_decay=best_parameters["optim_weight_decay"],
+                        )
                     elif best_parameters["optimizer_choice"] == "RMSprop":
-                        optimizer = optim.RMSprop(model.parameters(), lr=best_parameters["optim_learning_rate"], weight_decay=best_parameters["optim_weight_decay"])
+                        optimizer = optim.RMSprop(
+                            model.parameters(),
+                            lr=best_parameters["optim_learning_rate"],
+                            weight_decay=best_parameters["optim_weight_decay"],
+                        )
                     elif best_parameters["optimizer_choice"] == "LBFGS":
-                        optimizer = optim.LBFGS(model.parameters(), lr=best_parameters["optim_learning_rate"])
+                        optimizer = optim.LBFGS(
+                            model.parameters(),
+                            lr=best_parameters["optim_learning_rate"],
+                        )
                     elif best_parameters["optimizer_choice"] == "SGD":
-                        optimizer = optim.SGD(model.parameters(), lr=best_parameters["optim_learning_rate"])
+                        optimizer = optim.SGD(
+                            model.parameters(),
+                            lr=best_parameters["optim_learning_rate"],
+                        )
                     elif best_parameters["optimizer_choice"] == "SparseAdam":
-                        optimizer = optim.SparseAdam(model.parameters(), lr=best_parameters["optim_learning_rate"])
+                        optimizer = optim.SparseAdam(
+                            model.parameters(),
+                            lr=best_parameters["optim_learning_rate"],
+                        )
                     elif best_parameters["optimizer_choice"] == "AdamW":
-                        optimizer = optim.AdamW(model.parameters(), lr=best_parameters["optim_learning_rate"])
+                        optimizer = optim.AdamW(
+                            model.parameters(),
+                            lr=best_parameters["optim_learning_rate"],
+                        )
                     else:
-                        optimizer = optim.Adam(model.parameters(), lr=best_parameters["optim_learning_rate"])
+                        optimizer = optim.Adam(
+                            model.parameters(),
+                            lr=best_parameters["optim_learning_rate"],
+                        )
 
                     loss_mse = customLoss()
 
                     # train model
-                    log_interval = 50
-                    val_losses = []
+                    # log_interval = 50
+                    # val_losses = []
                     train_losses = []
                     test_losses = []
 
                     def train(epoch):
                         model.train()
                         train_loss = 0
-                        for batch_idx, data in enumerate(trainloader):
+                        for data in trainloader:
                             data = data.to(device)
                             optimizer.zero_grad()
                             recon_batch, mu, logvar = model(data)
@@ -4016,22 +5666,28 @@ class PreProcessing:
                             train_loss += loss.item()
                             optimizer.step()
                         if epoch % 200 == 0:
-                            print('====> Epoch: {} Average training loss: {:.4f}'.format(
-                                epoch, train_loss / len(trainloader.dataset)))
+                            print(
+                                "====> Epoch: {} Average training loss: {:.4f}".format(
+                                    epoch, train_loss / len(trainloader.dataset)
+                                )
+                            )
                             train_losses.append(train_loss / len(trainloader.dataset))
 
                     def test(epoch):
                         with torch.no_grad():
                             test_loss = 0
-                            for batch_idx, data in enumerate(testloader):
+                            for data in testloader:
                                 data = data.to(device)
                                 optimizer.zero_grad()
                                 recon_batch, mu, logvar = model(data)
                                 loss = loss_mse(recon_batch, data, mu, logvar)
                                 test_loss += loss.item()
                                 if epoch % 200 == 0:
-                                    print('====> Epoch: {} Average test loss: {:.4f}'.format(
-                                        epoch, test_loss / len(testloader.dataset)))
+                                    print(
+                                        "====> Epoch: {} Average test loss: {:.4f}".format(
+                                            epoch, test_loss / len(testloader.dataset)
+                                        )
+                                    )
                                 test_losses.append(test_loss / len(testloader.dataset))
 
                     epochs = best_parameters["nb_epochs"]
@@ -4040,7 +5696,7 @@ class PreProcessing:
                         test(epoch)
 
                     with torch.no_grad():
-                        for batch_idx, data in enumerate(testloader):
+                        for data in testloader:
                             data = data.to(device)
                             optimizer.zero_grad()
                             recon_batch, mu, logvar = model(data)
@@ -4050,7 +5706,7 @@ class PreProcessing:
                     real_row = testloader.dataset.x[0].cpu().numpy()
                     real_row = np.append(real_row, [1])
 
-                    sigma = torch.exp(logvar/2)
+                    sigma = torch.exp(logvar / 2)
 
                     # sample z from q
                     q = torch.distributions.Normal(mu.mean(axis=0), sigma.mean(axis=0))
@@ -4059,9 +5715,13 @@ class PreProcessing:
                     with torch.no_grad():
                         pred = model.decode(z).cpu().numpy()
 
-                    if self.class_problem == 'regression':
-                        Y_train_class_only = Y_train_original.iloc[np.where(Y_train == target_class)[0]]
-                        Y_train_other_classes = Y_train_original.iloc[np.where(Y_train != target_class)[0]]
+                    if self.class_problem in ["regression", "time_series"]:
+                        Y_train_class_only = Y_train_original.iloc[
+                            np.where(Y_train == target_class)[0]
+                        ]
+                        Y_train_other_classes = Y_train_original.iloc[
+                            np.where(Y_train != target_class)[0]
+                        ]
                         Y_test = Y_test_original
                     else:
                         pass
@@ -4076,21 +5736,36 @@ class PreProcessing:
                     X_train = np.vstack((X_train, X_train_other_classes))
                     X_train = pd.DataFrame(X_train, columns=cols)
 
-                    Y_train = np.append(Y_train_class_only.values, np.repeat(target_class, target_delta))
+                    Y_train = np.append(
+                        Y_train_class_only.values, np.repeat(target_class, target_delta)
+                    )
                     Y_train = np.append(Y_train, Y_train_other_classes)
                     Y_train = pd.Series(Y_train)
 
+                    X_train[self.target_variable] = Y_train
+                    X_train = X_train.sample(
+                        frac=1.0, random_state=self.global_random_state
+                    )
                     X_train = X_train.reset_index(drop=True)
-                    Y_train = Y_train.reset_index(drop=True)
+                    Y_train = X_train[self.target_variable].copy()
+                    X_train = X_train.drop(self.target_variable, axis=1)
+                    try:
+                        del X_train[self.target_variable]
+                    except KeyError:
+                        pass
 
                     self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
 
-    def final_kernel_pca_dimensionality_reduction(self):
-        logging.info('Start final PCA dimensionality reduction.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+    def final_kernel_pca_dimensionality_reduction(self):  # noqa: C901
+        logging.info("Start final PCA dimensionality reduction.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            best_parameters = self.preprocess_decisions[f"final_kernel_pca_dimensionality_reduction_reduction_parameters"]
-            pca = self.preprocess_decisions[f"final_kernel_pca_dimensionality_reduction_model"]
+            best_parameters = self.preprocess_decisions[
+                "final_kernel_pca_dimensionality_reduction_reduction_parameters"
+            ]
+            pca = self.preprocess_decisions[
+                "final_kernel_pca_dimensionality_reduction_model"
+            ]
             dataframe_comps = pca.transform(self.dataframe)
             new_cols = [f"PCA_{i}" for i in range(dataframe_comps.shape[1])]
             self.dataframe = pd.DataFrame(dataframe_comps, columns=new_cols)
@@ -4101,31 +5776,39 @@ class PreProcessing:
             else:
                 sample_size = self.final_pca_dimensionality_reduction_sample_size
 
-            print(f"Number of columns before dimensionality reduction is: {len(X_train.columns.to_list())}")
+            print(
+                f"Number of columns before dimensionality reduction is: {len(X_train.columns.to_list())}"
+            )
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
-            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            X_train_sample = X_train_sample.sample(
+                sample_size, random_state=self.global_random_state
+            )
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
                 metric = make_scorer(matthews_corrcoef)
-            elif self.class_problem == 'multiclass':
+            elif self.class_problem == "multiclass":
                 metric = make_scorer(matthews_corrcoef)
-            elif self.class_problem == 'regression':
-                metric = 'neg_mean_squared_error'
+            elif self.class_problem in ["regression", "time_series"]:
+                metric = "neg_mean_squared_error"
 
             def objective(trial):
                 param = {
-                    'coef0': trial.suggest_loguniform('coef0', 1e-5, 1),
-                    'degree': trial.suggest_int('degree', 2, 10),
-                    'kernel': trial.suggest_categorical('kernel', ['linear', 'poly', 'rbf', 'sigmoid', 'cosine'])
+                    "coef0": trial.suggest_loguniform("coef0", 1e-5, 1),
+                    "degree": trial.suggest_int("degree", 2, 10),
+                    "kernel": trial.suggest_categorical(
+                        "kernel", ["linear", "poly", "rbf", "sigmoid", "cosine"]
+                    ),
                 }
-                pca = KernelPCA(coef0=param["coef0"],
-                                degree=param["degree"],
-                                kernel=param["kernel"],
-                                random_state=1000)
+                pca = KernelPCA(
+                    coef0=param["coef0"],
+                    degree=param["degree"],
+                    kernel=param["kernel"],
+                    random_state=self.global_random_state,
+                )
                 try:
                     train_comps = pca.fit_transform(X_train_sample)
                     test_comps = pca.transform(X_test)
@@ -4136,13 +5819,15 @@ class PreProcessing:
                     X_train_branch = X_train
                     X_test_branch = X_test
 
-                if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-                    model = lgb.LGBMClassifier(random_state=42)
+                if self.class_problem == "binary" or self.class_problem == "multiclass":
+                    model = lgb.LGBMClassifier(random_state=self.global_random_state)
                 else:
-                    model = lgb.LGBMRegressor(random_state=42)
+                    model = lgb.LGBMRegressor(random_state=self.global_random_state)
 
                 try:
-                    scores = cross_val_score(model, X_train_branch, Y_train_sample, cv=10, scoring=metric)
+                    scores = cross_val_score(
+                        model, X_train_branch, Y_train_sample, cv=10, scoring=metric
+                    )
                     train_mae = np.mean(scores)
                     if self.class_problem in ["binary", "multiclass"]:
                         train_mae *= 100
@@ -4157,49 +5842,71 @@ class PreProcessing:
                 try:
                     if self.class_problem in ["binary", "multiclass"]:
                         matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
-                        test_mae = matthew_2*100
+                        test_mae = matthew_2 * 100
                     else:
-                        test_mae = mean_squared_error(Y_test, scores_2_test, squared=True)
+                        test_mae = mean_squared_error(
+                            Y_test, scores_2_test, squared=True
+                        )
                         test_mae *= -1
                 except Exception:
                     test_mae = 0
 
                 print(test_mae)
 
-                meissner_score = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
+                meissner_score = (train_mae + test_mae) / 2 - (
+                    abs(train_mae - test_mae)
+                ) ** 3
                 return meissner_score
 
-            algorithm = 'final_kernel_pca_dimensionality_reduction'
+            algorithm = "final_kernel_pca_dimensionality_reduction"
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective,
-                           n_trials=self.hyperparameter_tuning_rounds[algorithm],
-                           timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
-                           gc_after_trial=True,
-                           show_progress_bar=True)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True,
+                seed=self.global_random_state,
+                consider_endpoints=True,
+            )
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             try:
                 fig = optuna.visualization.plot_optimization_history(study)
                 self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
                 fig.show()
             except ZeroDivisionError:
-                print("Plotting of hyperparameter performances failed. This usually implicates an error during training.")
+                print(
+                    "Plotting of hyperparameter performances failed. This usually implicates an error during training."
+                )
 
             best_parameters = study.best_trial.params
-            pca = KernelPCA(coef0=best_parameters["coef0"],
-                      degree=best_parameters["degree"],
-                      kernel=best_parameters["kernel"],
-                      random_state=1000)
+            pca = KernelPCA(
+                coef0=best_parameters["coef0"],
+                degree=best_parameters["degree"],
+                kernel=best_parameters["kernel"],
+                random_state=self.global_random_state,
+            )
             train_comps = pca.fit_transform(X_train)
             test_comps = pca.transform(X_test)
             new_cols = [f"PCA_{i}" for i in range(train_comps.shape[1])]
             X_train = pd.DataFrame(train_comps, columns=new_cols)
             X_test = pd.DataFrame(test_comps, columns=new_cols)
-            self.preprocess_decisions[f"final_kernel_pca_dimensionality_reduction_reduction_parameters"] = best_parameters
-            self.preprocess_decisions[f"final_kernel_pca_dimensionality_reduction_reduction_model"] = pca
+            self.preprocess_decisions[
+                "final_kernel_pca_dimensionality_reduction_reduction_parameters"
+            ] = best_parameters
+            self.preprocess_decisions[
+                "final_kernel_pca_dimensionality_reduction_reduction_model"
+            ] = pca
 
-            print(f"Number of columns after dimensionality reduction is: {len(X_train.columns.to_list())}")
+            print(
+                f"Number of columns after dimensionality reduction is: {len(X_train.columns.to_list())}"
+            )
 
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
             try:
@@ -4211,15 +5918,17 @@ class PreProcessing:
             except Exception:
                 pass
 
-        logging.info('Finished final PCA dimensionality reduction.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Finished final PCA dimensionality reduction.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
 
     def final_pca_dimensionality_reduction(self):
-        logging.info('Start final PCA dimensionality reduction.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Start final PCA dimensionality reduction.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
         if self.prediction_mode:
-            best_parameters = self.preprocess_decisions[f"final_pca_dimensionality_reduction_parameters"]
-            pca = self.preprocess_decisions[f"final_pca_dimensionality_reduction_model"]
+            best_parameters = self.preprocess_decisions[
+                "final_pca_dimensionality_reduction_parameters"
+            ]
+            pca = self.preprocess_decisions["final_pca_dimensionality_reduction_model"]
             dataframe_comps = pca.transform(self.dataframe)
             new_cols = [f"PCA_{i}" for i in range(best_parameters["n_components"])]
             self.dataframe = pd.DataFrame(dataframe_comps, columns=new_cols)
@@ -4230,42 +5939,54 @@ class PreProcessing:
             else:
                 sample_size = self.final_pca_dimensionality_reduction_sample_size
 
-            max_pca_columns = len(X_train.columns.to_list())-1
+            max_pca_columns = len(X_train.columns.to_list()) - 1
 
-            print(f"Number of columns before dimensionality reduction is: {len(X_train.columns.to_list())}")
+            print(
+                f"Number of columns before dimensionality reduction is: {len(X_train.columns.to_list())}"
+            )
 
             X_train_sample = X_train.copy()
             X_train_sample[self.target_variable] = Y_train
-            X_train_sample = X_train_sample.sample(sample_size, random_state=42)
+            X_train_sample = X_train_sample.sample(
+                sample_size, random_state=self.global_random_state
+            )
             Y_train_sample = X_train_sample[self.target_variable]
             X_train_sample = X_train_sample.drop(self.target_variable, axis=1)
 
-            if self.class_problem == 'binary':
+            if self.class_problem == "binary":
                 metric = make_scorer(matthews_corrcoef)
-            elif self.class_problem == 'multiclass':
+            elif self.class_problem == "multiclass":
                 metric = make_scorer(matthews_corrcoef)
-            elif self.class_problem == 'regression':
-                metric = 'neg_mean_squared_error'
+            elif self.class_problem in ["regression", "time_series"]:
+                metric = "neg_mean_squared_error"
 
             def objective(trial):
                 param = {
-                    'n_components': trial.suggest_int('n_components', 2, max_pca_columns),
-                    'whiten': trial.suggest_categorical('whiten', [True, False])
+                    "n_components": trial.suggest_int(
+                        "n_components", 2, max_pca_columns
+                    ),
+                    "whiten": trial.suggest_categorical("whiten", [True, False]),
                 }
-                pca = PCA(n_components=param["n_components"], whiten=param["whiten"], random_state=1000)
+                pca = PCA(
+                    n_components=param["n_components"],
+                    whiten=param["whiten"],
+                    random_state=self.global_random_state,
+                )
                 train_comps = pca.fit_transform(X_train_sample)
                 test_comps = pca.transform(X_test)
                 new_cols = [f"PCA_{i}" for i in range(param["n_components"])]
                 X_train_branch = pd.DataFrame(train_comps, columns=new_cols)
                 X_test_branch = pd.DataFrame(test_comps, columns=new_cols)
 
-                if self.class_problem == 'binary' or self.class_problem == 'multiclass':
-                    model = lgb.LGBMClassifier(random_state=42)
+                if self.class_problem == "binary" or self.class_problem == "multiclass":
+                    model = lgb.LGBMClassifier(random_state=self.global_random_state)
                 else:
-                    model = lgb.LGBMRegressor(random_state=42)
+                    model = lgb.LGBMRegressor(random_state=self.global_random_state)
 
                 try:
-                    scores = cross_val_score(model, X_train_branch, Y_train_sample, cv=10, scoring=metric)
+                    scores = cross_val_score(
+                        model, X_train_branch, Y_train_sample, cv=10, scoring=metric
+                    )
                     train_mae = np.mean(scores)
                     if self.class_problem in ["binary", "multiclass"]:
                         train_mae *= 100
@@ -4280,46 +6001,68 @@ class PreProcessing:
                 try:
                     if self.class_problem in ["binary", "multiclass"]:
                         matthew_2 = matthews_corrcoef(Y_test, scores_2_test)
-                        test_mae = matthew_2*100
+                        test_mae = matthew_2 * 100
                     else:
-                        test_mae = mean_squared_error(Y_test, scores_2_test, squared=True)
+                        test_mae = mean_squared_error(
+                            Y_test, scores_2_test, squared=True
+                        )
                         test_mae *= -1
                 except Exception:
                     test_mae = 0
 
                 print(test_mae)
 
-                meissner_score = (train_mae+test_mae)/2-(abs(train_mae-test_mae))**3
+                meissner_score = (train_mae + test_mae) / 2 - (
+                    abs(train_mae - test_mae)
+                ) ** 3
                 return meissner_score
 
-            algorithm = 'final_pca_dimensionality_reduction'
+            algorithm = "final_pca_dimensionality_reduction"
 
-            sampler = optuna.samplers.TPESampler(multivariate=True, seed=42, consider_endpoints=True)
-            study = optuna.create_study(direction='maximize', sampler=sampler, study_name=f"{algorithm}")
-            study.optimize(objective,
-                           n_trials=self.hyperparameter_tuning_rounds[algorithm],
-                           timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
-                           gc_after_trial=True,
-                           show_progress_bar=True)
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True,
+                seed=self.global_random_state,
+                consider_endpoints=True,
+            )
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
             self.optuna_studies[f"{algorithm}"] = {}
             try:
                 fig = optuna.visualization.plot_optimization_history(study)
                 self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
                 fig.show()
             except ZeroDivisionError:
-                print("Plotting of hyperparameter performances failed. This usually implicates an error during training.")
+                print(
+                    "Plotting of hyperparameter performances failed. This usually implicates an error during training."
+                )
 
             best_parameters = study.best_trial.params
-            pca = PCA(n_components=best_parameters["n_components"], whiten=best_parameters["whiten"], random_state=1000)
+            pca = PCA(
+                n_components=best_parameters["n_components"],
+                whiten=best_parameters["whiten"],
+                random_state=self.global_random_state,
+            )
             train_comps = pca.fit_transform(X_train)
             test_comps = pca.transform(X_test)
             new_cols = [f"PCA_{i}" for i in range(best_parameters["n_components"])]
             X_train = pd.DataFrame(train_comps, columns=new_cols)
             X_test = pd.DataFrame(test_comps, columns=new_cols)
-            self.preprocess_decisions[f"final_pca_dimensionality_reduction_parameters"] = best_parameters
-            self.preprocess_decisions[f"final_pca_dimensionality_reduction_model"] = pca
+            self.preprocess_decisions[
+                "final_pca_dimensionality_reduction_parameters"
+            ] = best_parameters
+            self.preprocess_decisions["final_pca_dimensionality_reduction_model"] = pca
 
-            print(f"Number of columns after dimensionality reduction is: {len(X_train.columns.to_list())}")
+            print(
+                f"Number of columns after dimensionality reduction is: {len(X_train.columns.to_list())}"
+            )
 
             self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
             try:
@@ -4331,5 +6074,565 @@ class PreProcessing:
             except Exception:
                 pass
 
-        logging.info('Finished final PCA dimensionality reduction.')
-        logging.info(f'RAM memory {psutil.virtual_memory()[2]} percent used.')
+        logging.info("Finished final PCA dimensionality reduction.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+    def shap_based_feature_selection(self):
+        """
+        Takes the training data and trains an LGBM model on it. Calculates SHAP values on 10-fold CV and eliminates
+        features, which have a very high SHAP standard deviation or very low SHAP values overall.
+        :return: Updates class attribute
+        """
+        self.get_current_timestamp("SHAP based feature selection")
+        logging.info("Started SHAP based feature selection.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        if self.prediction_mode:
+            final_features = self.selected_shap_feats
+            self.dataframe = self.dataframe[final_features].copy()
+            logging.info("Finished SHAP based feature selection.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            print(
+                f"Number of columns before SHAP feature selection is: {len(X_train.columns.to_list())}"
+            )
+            original_features = X_train.columns.to_list()
+
+            def global_shap_importance(model, X):
+                """Return a dataframe containing the features sorted by Shap importance
+                Parameters
+                ----------
+                model : The tree-based model
+                X : pd.Dataframe
+                     training set/test set/the whole dataset ... (without the label)
+                Returns
+                -------
+                pd.Dataframe
+                    A dataframe containing the features sorted by Shap importance
+                """
+                explainer = shap.Explainer(model)
+                shap_values = explainer(X)
+                cohorts = {"": shap_values}
+                cohort_exps = list(cohorts.values())
+                for i in range(len(cohort_exps)):
+                    if len(cohort_exps[i].shape) == 2:
+                        cohort_exps[i] = cohort_exps[i].abs.mean(0)
+                feature_names = cohort_exps[0].feature_names
+                values = np.array(
+                    [cohort_exps[i].values for i in range(len(cohort_exps))]
+                )
+                feature_importance = pd.DataFrame(
+                    list(zip(feature_names, sum(values))),
+                    columns=["features", "importance"],
+                )
+
+                return feature_importance
+
+            def get_final_features(quantile=0.05, outlier_factor=2.0):
+                all_shap_values = []
+                # start training, prediction & Shap loop
+                if self.class_problem in ["binary", "multiclass"]:
+                    least_rep_class = Y_test.value_counts().min()
+                    if least_rep_class < 20:
+                        n_folds = least_rep_class
+                    else:
+                        n_folds = 20
+                else:
+                    n_folds = 20
+
+                if self.class_problem in ["binary", "multiclass"]:
+                    skf = StratifiedKFold(
+                        n_splits=n_folds,
+                        random_state=self.global_random_state,
+                        shuffle=True,
+                    )
+                    model = lgb.LGBMClassifier(random_state=self.global_random_state)
+                else:
+                    skf = KFold(
+                        n_splits=n_folds,
+                        random_state=self.global_random_state,
+                        shuffle=True,
+                    )
+                    model = lgb.LGBMRegressor(random_state=self.global_random_state)
+
+                for train_index, test_index in skf.split(X_train, Y_train):
+                    x_train, x_test = (
+                        X_train.iloc[train_index],
+                        X_train.iloc[test_index],
+                    )
+                    y_train = Y_train.iloc[train_index]
+
+                    model.fit(x_train, y_train)
+
+                    all_shap_values.append(global_shap_importance(model, x_test))
+
+                shaps_all_its = pd.concat(all_shap_values)
+
+                def column_sum(lst):
+                    arr = np.array(lst)
+                    res = [np.sum(abs(i)) for i in arr]
+                    return res
+
+                shaps_all_its = shaps_all_its.assign(
+                    Product=lambda x: column_sum(x["importance"])
+                )
+
+                shaps_all_its_all_folds = shaps_all_its.groupby("features").sum()
+                # get standard deviation and sums
+                shap_stds = shaps_all_its_all_folds["Product"].std()
+
+                # get 5th percentile thresholds
+                shap_5th = shaps_all_its_all_folds["Product"].quantile(quantile)
+
+                # filter features for each category
+                shap_stds_cols = shaps_all_its_all_folds[
+                    (
+                        shaps_all_its_all_folds["Product"]
+                        > (
+                            shaps_all_its_all_folds["Product"].mean()
+                            - outlier_factor * shap_stds
+                        )
+                    )
+                ].index.to_list()
+                shap_sums_cols = shaps_all_its_all_folds[
+                    (shaps_all_its_all_folds["Product"] > shap_5th)
+                ].index.to_list()
+
+                # final feature list
+                final_features = set(shap_stds_cols).intersection(shap_sums_cols)
+                return final_features
+
+            final_features = get_final_features()
+
+            self.selected_shap_feats = final_features
+            features_dropped = list(set(original_features) - set(final_features))
+            print("The following features have been dropped....:")
+            for col in features_dropped:
+                print(col)
+            X_train = X_train[final_features].copy()
+            X_test = X_test[final_features].copy()
+            print(
+                f"Number of columns after SHAP feature selection is: {len(X_train.columns.to_list())}"
+            )
+
+            logging.info("Finished SHAP based feature selection.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def random_trees_embedding(self):
+        """
+        Creates random forest tree embeddings adn appends them as features on original dataframe.
+        :return:
+        """
+        self.get_current_timestamp("Random trees embedding")
+        logging.info("Started Random trees embedding.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        if self.prediction_mode:
+            random_trees = self.preprocess_decisions["random_tres_embedder"]
+            X_sparse_embedding = random_trees.transform(self.dataframe)
+            new_cols = [
+                f"Forest_embedding_{i}" for i in range(X_sparse_embedding.shape[1])
+            ]
+            pred_df = pd.DataFrame(X_sparse_embedding.toarray(), columns=new_cols)
+            self.dataframe = self.dataframe.merge(
+                pred_df, left_index=True, right_index=True
+            )
+
+            logging.info("Finished Random trees embedding.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            random_trees = RandomTreesEmbedding(
+                n_estimators=100,
+                random_state=self.global_random_state,
+                max_depth=1,
+                n_jobs=-1,
+            ).fit(X_train)
+            X_sparse_embedding = random_trees.transform(X_train)
+            new_cols = [
+                f"Forest_embedding_{i}" for i in range(X_sparse_embedding.shape[1])
+            ]
+            X_train_df = pd.DataFrame(X_sparse_embedding.toarray(), columns=new_cols)
+            X_train = X_train.merge(X_train_df, left_index=True, right_index=True)
+
+            X_sparse_embedding = random_trees.transform(X_test)
+            X_test_df = pd.DataFrame(X_sparse_embedding.toarray(), columns=new_cols)
+            X_test = X_test.merge(X_test_df, left_index=True, right_index=True)
+
+            self.preprocess_decisions["random_tres_embedder"] = random_trees
+            logging.info("Finished Random trees embedding.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            return self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def automated_feature_transformation(self):
+        """
+        Tries different feature space transformation algorithms and transforms the dataset.
+        :return: Updates class attribute.
+        """
+        self.get_current_timestamp("Automated feature transformation")
+        logging.info("Started automated feature transformation.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+        if self.prediction_mode:
+            best_parameters = self.preprocess_decisions["scaler_param"]
+            if best_parameters["transformer"] == "no_scaling":
+                pass
+            else:
+                scaler = self.preprocess_decisions["automated_scaler"]
+                columns = self.dataframe.columns
+                self.dataframe = pd.DataFrame(
+                    scaler.transform(self.dataframe), columns=columns
+                )
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            columns = X_train.columns
+            if self.class_problem == "binary":
+                metric = make_scorer(matthews_corrcoef)
+            elif self.class_problem == "multiclass":
+                metric = make_scorer(matthews_corrcoef)
+            elif self.class_problem in ["regression", "time_series"]:
+                metric = "neg_mean_squared_error"
+
+            def objective(trial):
+                param = {
+                    "transformer": trial.suggest_categorical(
+                        "transformer",
+                        [
+                            "quantile",
+                            "maxabs",
+                            "robust",
+                            "minmax",
+                            "yeo-johnson",
+                            # "box_cox",
+                            # "l1",
+                            "l2",
+                            "no_scaling",
+                            "standard",
+                            "kbins_discretizer",
+                        ],
+                    ),
+                    "n_quantiles": trial.suggest_uniform("n_quantiles", 5, 20),
+                }
+                scaler = get_scaler(param)
+
+                if param["transformer"] == "no_scaling":
+                    X_train_scaled = X_train
+
+                else:
+                    X_train_scaled = pd.DataFrame(
+                        scaler.fit_transform(X_train), columns=columns
+                    )
+
+                if self.class_problem == "binary" or self.class_problem == "multiclass":
+                    model = LogisticRegression(random_state=self.global_random_state)
+                else:
+                    model = LinearRegression()
+
+                try:
+                    scores = cross_val_score(
+                        model, X_train_scaled, Y_train, cv=10, scoring=metric
+                    )
+                    train_mae = np.mean(scores)
+                    if self.class_problem in ["binary", "multiclass"]:
+                        train_mae *= 100
+                except Exception:
+                    train_mae = 0
+
+                return train_mae
+
+            algorithm = "automated_feature_transformation"
+
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True,
+                seed=self.global_random_state,
+                consider_endpoints=True,
+            )
+            study = optuna.create_study(
+                direction="maximize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=20,
+                timeout=1 * 60 * 60,
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
+            self.optuna_studies[f"{algorithm}"] = {}
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                print(
+                    "Plotting of hyperparameter performances failed. This usually implicates an error during training."
+                )
+
+            best_parameters = study.best_trial.params
+            scaler = get_scaler(best_parameters)
+            if best_parameters["transformer"] == "no_scaling":
+                pass
+            else:
+                X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=columns)
+                X_test = pd.DataFrame(scaler.transform(X_test), columns=columns)
+                self.data_scaled = True
+            self.preprocess_decisions["scaler_param"] = best_parameters
+            if best_parameters["transformer"] == "no_scaling":
+                pass
+            else:
+                self.preprocess_decisions["automated_scaler"] = scaler
+            logging.info("Finished automated feature transformation.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+
+    def autoencoder_based_outlier_detection(self):  # noqa: C901
+        self.get_current_timestamp("Autoencoder based outlier detection")
+        logging.info("Started autoencoder based outlier detection.")
+        logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+
+        class DataBuilder(Dataset):
+            def __init__(self, dataset):
+                self.x = dataset.values
+                self.x = torch.from_numpy(self.x.astype(float)).to(torch.float)
+                self.len = self.x.shape[0]
+
+            def __getitem__(self, index):
+                return self.x[index]
+
+            def __len__(self):
+                return self.len
+
+        class Autoencoder(nn.Module):
+            def __init__(self, D_in, H=50, H2=12, latent_dim=3):
+
+                # Encoder
+                super(Autoencoder, self).__init__()
+                self.linear1 = nn.Linear(D_in, H)
+                self.lin_bn1 = nn.BatchNorm1d(num_features=H)
+                self.linear2 = nn.Linear(H, H2)
+                self.lin_bn2 = nn.BatchNorm1d(num_features=H2)
+                self.linear3 = nn.Linear(H2, H2)
+                self.lin_bn3 = nn.BatchNorm1d(num_features=H2)
+
+                # Latent vectors mu and sigma
+                self.fc1 = nn.Linear(H2, latent_dim)
+                self.bn1 = nn.BatchNorm1d(num_features=latent_dim)
+                self.fc21 = nn.Linear(latent_dim, latent_dim)
+                self.fc22 = nn.Linear(latent_dim, latent_dim)
+
+                # Sampling vector
+                self.fc3 = nn.Linear(latent_dim, latent_dim)
+                self.fc_bn3 = nn.BatchNorm1d(latent_dim)
+                self.fc4 = nn.Linear(latent_dim, H2)
+                self.fc_bn4 = nn.BatchNorm1d(H2)
+
+                # Decoder
+                self.linear4 = nn.Linear(H2, H2)
+                self.lin_bn4 = nn.BatchNorm1d(num_features=H2)
+                self.linear5 = nn.Linear(H2, H)
+                self.lin_bn5 = nn.BatchNorm1d(num_features=H)
+                self.linear6 = nn.Linear(H, D_in)
+                self.lin_bn6 = nn.BatchNorm1d(num_features=D_in)
+
+                self.relu = nn.ReLU()
+
+            def encode(self, x):
+                lin1 = self.relu(self.lin_bn1(self.linear1(x)))
+                lin2 = self.relu(self.lin_bn2(self.linear2(lin1)))
+                lin3 = self.relu(self.lin_bn3(self.linear3(lin2)))
+
+                fc1 = F.relu(self.bn1(self.fc1(lin3)))
+
+                r1 = self.fc21(fc1)
+                r2 = self.fc22(fc1)
+
+                return r1, r2
+
+            def reparameterize(self, mu, logvar):
+                if self.training:
+                    std = logvar.mul(0.5).exp_()
+                    eps = Variable(std.data.new(std.size()).normal_())
+                    return eps.mul(std).add_(mu)
+                else:
+                    return mu
+
+            def decode(self, z):
+                fc3 = self.relu(self.fc_bn3(self.fc3(z)))
+                fc4 = self.relu(self.fc_bn4(self.fc4(fc3)))
+
+                lin4 = self.relu(self.lin_bn4(self.linear4(fc4)))
+                lin5 = self.relu(self.lin_bn5(self.linear5(lin4)))
+                return self.lin_bn6(self.linear6(lin5))
+
+            def forward(self, x):
+                mu, logvar = self.encode(x)
+                z = self.reparameterize(mu, logvar)
+                return self.decode(z), mu, logvar
+
+        class customLoss(nn.Module):
+            def __init__(self):
+                super(customLoss, self).__init__()
+                self.mse_loss = nn.MSELoss(reduction="sum")
+
+            def forward(self, x_recon, x, mu, logvar):
+                loss_MSE = self.mse_loss(x_recon, x)
+                loss_KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+                return loss_MSE + loss_KLD
+
+        def predict(data_loader):
+            loss = nn.MSELoss()
+            predictions = []
+            with torch.no_grad():
+                for data in data_loader:
+                    data = data.to(device)
+                    recon_batch, mu, logvar = model(data)
+                    outlier_scores = [
+                        loss(
+                            recon_batch[i : i + 1, :],
+                            data[i : i + 1, :],
+                        ).item()
+                        for i in range(len(data))
+                    ]
+                    predictions.append(outlier_scores)
+                    torch.cuda.empty_cache()
+            return predictions
+
+        def load_model_states(path=None):
+            logging.info("Load model save states.")
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            if path:
+                pass
+            else:
+                path = os.getcwd()
+            if self.prediction_mode:
+                pthes = [
+                    os.path.join(f"{path}/", s)
+                    for s in os.listdir(f"{path}/")
+                    if "autoencoder_model.pth" in s
+                ]
+                return pthes
+            else:
+                pthes = [
+                    os.path.join(f"{path}/", s)
+                    for s in os.listdir(f"{path}/")
+                    if "autoencoder_model.pth" in s
+                ]
+                return pthes
+
+        if self.prediction_mode:
+            pathes = load_model_states(path=self.autoenc_outlier_save_states_path)
+            pthes = load_model_states(path=self.autoenc_outlier_save_states_path)
+            try:
+                for path in pathes:
+                    if re.search("generator_model.pth", path):
+                        pthes.remove(path)
+            except Exception:
+                pass
+            for m_path in pathes:
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                loss_mse = customLoss()
+                D_in = self.dataframe.shape[1]
+                state = torch.load(m_path)
+                model = Autoencoder(D_in, 32, 8, 2)
+                model.load_state_dict(state["state_dict"])
+                model.to(device)
+                # model.eval()
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                preddata_set = DataBuilder(self.dataframe)
+
+                predloader = DataLoader(dataset=preddata_set, batch_size=256)
+                pred_outlier = predict(predloader)
+
+                self.dataframe["autoencoder_outlier"] = np.hstack(pred_outlier)
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            logging.info("Finished autoencoder based outlier detection.")
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+
+            traindata_set = DataBuilder(X_train)
+            testdata_set = DataBuilder(X_test)
+
+            trainloader = DataLoader(dataset=traindata_set, batch_size=256)
+            testloader = DataLoader(dataset=testdata_set, batch_size=256)
+
+            D_in = X_train.shape[1]
+            # scaler = torch.cuda.amp.GradScaler()  # GPU
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model = Autoencoder(D_in, 32, 8, 2).to(device)
+            optimizer = optim.AdamW(model.parameters(), lr=0.0002)
+            loss_mse = customLoss()
+
+            def train(epoch):
+                model.train()
+                train_loss = 0
+                for data in trainloader:
+                    data = data.to(device)
+                    optimizer.zero_grad()
+                    recon_batch, mu, logvar = model(data)
+                    loss = loss_mse(recon_batch, data, mu, logvar)
+                    loss.backward()
+                    train_loss += loss.item()
+                    optimizer.step()
+                    if epoch % 200 == 0:
+                        print(
+                            "====> Epoch: {} Average training loss: {:.4f}".format(
+                                epoch, train_loss / len(trainloader.dataset)
+                            )
+                        )
+                train_losses.append(train_loss / len(trainloader.dataset))
+                torch.cuda.empty_cache()
+
+            def test(epoch):
+                with torch.no_grad():
+                    test_loss = 0
+                    for data in testloader:
+                        data = data.to(device)
+                        optimizer.zero_grad()
+                        recon_batch, mu, logvar = model(data)
+                        loss = loss_mse(recon_batch, data, mu, logvar)
+                        test_loss += loss.item()
+                        if epoch % 200 == 0:
+                            print(
+                                "====> Epoch: {} Average test loss: {:.4f}".format(
+                                    epoch,
+                                    test_loss / len(testloader.dataset),
+                                )
+                            )
+                test_losses.append(test_loss / len(testloader.dataset))
+                torch.cuda.empty_cache()
+
+            epochs = 10
+            bestscore = None
+            train_losses = []
+            test_losses = []
+            for epoch in range(1, epochs + 1):
+                train(epoch)
+                test(epoch)
+                if bestscore is None:
+                    bestscore = test_losses[-1]
+                    print("Save first model")
+                    state = {
+                        "state_dict": model.state_dict(),
+                        "optimizer_dict": optimizer.state_dict(),
+                        "bestscore": bestscore,
+                    }
+                    torch.save(state, "autoencoder_model" + ".pth")
+                elif test_losses[-1] < bestscore:
+                    bestscore = test_losses[-1]
+                    print("found better point")
+                    state = {
+                        "state_dict": model.state_dict(),
+                        "optimizer_dict": optimizer.state_dict(),
+                        "bestscore": bestscore,
+                    }
+                    torch.save(state, "autoencoder_model" + ".pth")
+
+            train_outlier = predict(trainloader)
+            test_outlier = predict(testloader)
+
+            X_train["autoencoder_outlier"] = np.hstack(train_outlier)
+            X_test["autoencoder_outlier"] = np.hstack(test_outlier)
+
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
+            logging.info(f"RAM memory {psutil.virtual_memory()[2]} percent used.")
+            logging.info("Finished autoencoder based outlier detection.")

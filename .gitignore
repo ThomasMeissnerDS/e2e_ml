@@ -5,6 +5,8 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+# Poetry lock file
+poetry.lock
 
 # C extensions
 *.so

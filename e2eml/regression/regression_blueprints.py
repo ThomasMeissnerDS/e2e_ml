@@ -1,10 +1,19 @@
-from e2eml.regression.regression_models import RegressionModels
-from e2eml.full_processing.preprocessing_blueprints import PreprocessingBluePrint
-from e2eml.regression.nlp_regression import NlpModel
 import logging
 
+from e2eml.full_processing.preprocessing_blueprints import PreprocessingBluePrint
+from e2eml.regression.autotuned_nn_regression import RegressionNNModel
+from e2eml.regression.deep_quantile_regression import DeepQuantileRegression
+from e2eml.regression.nlp_regression import NlpModel
+from e2eml.regression.regression_models import RegressionModels
 
-class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
+
+class RegressionBluePrint(
+    RegressionModels,
+    PreprocessingBluePrint,
+    NlpModel,
+    RegressionNNModel,
+    DeepQuantileRegression,
+):
     """
     Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
     if the predict_mode attribute is True.
@@ -43,9 +52,9 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
     :return: Updates class attributes by its predictions.
     """
 
-    def train_pred_selected_model(self, algorithm=None):
-        logging.info(f'Start ML training {algorithm}')
-        if algorithm == 'xgboost':
+    def train_pred_selected_model(self, algorithm=None):  # noqa: C901
+        logging.info(f"Start ML training {algorithm}")
+        if algorithm == "xgboost":
             # train Xgboost
             if self.prediction_mode:
                 pass
@@ -53,15 +62,15 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.xg_boost_train(autotune=True, tune_mode=self.tune_mode)
             self.xgboost_predict(feat_importance=False)
             self.regression_eval(algorithm=algorithm)
-        elif algorithm == 'ngboost':
+        elif algorithm == "ngboost":
             # train Ngboost
             if self.prediction_mode:
                 pass
             else:
                 self.ngboost_train(tune_mode=self.tune_mode)
-            self.ngboost_predict(feat_importance=True, importance_alg='permutation')
+            self.ngboost_predict(feat_importance=True, importance_alg="permutation")
             self.regression_eval(algorithm=algorithm)
-        elif algorithm == 'lgbm':
+        elif algorithm == "lgbm":
             # train LGBM
             if self.prediction_mode:
                 pass
@@ -72,15 +81,17 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                     self.lgbm_train(tune_mode=self.tune_mode)
             self.lgbm_predict(feat_importance=False)
             self.regression_eval(algorithm=algorithm)
-        elif algorithm == 'vowpal_wabbit':
+        elif algorithm == "vowpal_wabbit":
             # train sklearn ensemble
             if self.prediction_mode:
                 pass
             else:
                 self.vowpal_wabbit_train()
-            self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
+            self.vowpal_wabbit_predict(
+                feat_importance=True, importance_alg="permutation"
+            )
             self.regression_eval(algorithm=algorithm)
-        elif algorithm == 'tabnet':
+        elif algorithm == "tabnet":
             # train sklearn ensemble
             if self.prediction_mode:
                 pass
@@ -88,7 +99,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.tabnet_regression_train()
             self.tabnet_regression_predict()
             self.regression_eval(algorithm=algorithm)
-        elif algorithm == 'ridge':
+        elif algorithm == "ridge":
             # train sklearn ensemble
             if self.prediction_mode:
                 pass
@@ -96,7 +107,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.ridge_regression_train()
             self.ridge_regression_predict()
             self.regression_eval(algorithm=algorithm)
-        elif algorithm == 'elasticnet':
+        elif algorithm == "elasticnet":
             # train sklearn ensemble
             if self.prediction_mode:
                 pass
@@ -104,7 +115,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.elasticnet_regression_train()
             self.elasticnet_regression_predict()
             self.regression_eval(algorithm=algorithm)
-        elif algorithm == 'catboost':
+        elif algorithm == "catboost":
             # train sklearn ensemble
             if self.prediction_mode:
                 pass
@@ -112,7 +123,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.catboost_regression_train()
             self.catboost_regression_predict()
             self.regression_eval(algorithm=algorithm)
-        elif algorithm == 'linear_regression':
+        elif algorithm == "linear_regression":
             # train sklearn ensemble
             if self.prediction_mode:
                 pass
@@ -120,7 +131,7 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
                 self.linear_regression_train()
             self.linear_regression_predict()
             self.regression_eval(algorithm=algorithm)
-        elif algorithm == 'sklearn_ensemble':
+        elif algorithm == "sklearn_ensemble":
             # train sklearn ensemble
             if self.prediction_mode:
                 pass
@@ -144,11 +155,14 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.linear_regression_train()
-        algorithm = 'linear_regression'
-        self.linear_regression_predict(feat_importance=True, importance_alg='permutation')
+        algorithm = "linear_regression"
+        self.linear_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm],
+            importance_alg="permutation",
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp11_regression_full_processing_xgboost(self, df=None):
         """
@@ -165,10 +179,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.xg_boost_train(autotune=True)
-        self.xgboost_predict(feat_importance=True)
-        self.regression_eval('xgboost')
+        algorithm = "xgboost"
+        self.xgboost_predict(feat_importance=self.get_feature_importance[algorithm])
+        self.regression_eval("xgboost")
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp12_regressions_full_processing_lgbm(self, df=None):
         """
@@ -185,10 +200,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.lgbm_train(tune_mode=self.tune_mode)
-        self.lgbm_predict(feat_importance=True)
-        self.regression_eval('lgbm')
+        algorithm = "lgbm"
+        self.lgbm_predict(feat_importance=self.get_feature_importance[algorithm])
+        self.regression_eval("lgbm")
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp13_regression_full_processing_sklearn_stacking_ensemble(self, df=None):
         """
@@ -205,11 +221,14 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.sklearn_ensemble_train()
-        self.sklearn_ensemble_predict(feat_importance=True, importance_alg='permutation')
-        algorithm = 'sklearn_ensemble'
-        self.regression_eval('sklearn_ensemble')
+        algorithm = "sklearn_ensemble"
+        self.sklearn_ensemble_predict(
+            feat_importance=self.get_feature_importance[algorithm],
+            importance_alg="permutation",
+        )
+        self.regression_eval(algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp14_regressions_full_processing_ngboost(self, df=None):
         """
@@ -226,10 +245,14 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.ngboost_train(tune_mode=self.tune_mode)
-        self.ngboost_predict(feat_importance=True, importance_alg='permutation')
-        self.regression_eval('ngboost')
+        algorithm = "ngboost"
+        self.ngboost_predict(
+            feat_importance=self.get_feature_importance[algorithm],
+            importance_alg="permutation",
+        )
+        self.regression_eval(algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp15_regression_full_processing_vowpal_wabbit_reg(self, df=None):
         """
@@ -246,11 +269,14 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.vowpal_wabbit_train()
-        algorithm = 'vowpal_wabbit'
-        self.vowpal_wabbit_predict(feat_importance=True, importance_alg='permutation')
+        algorithm = "vowpal_wabbit"
+        self.vowpal_wabbit_predict(
+            feat_importance=self.get_feature_importance[algorithm],
+            importance_alg="permutation",
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp16_regressions_full_processing_bert_transformer(self, df=None):
         """
@@ -266,10 +292,10 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         else:
             self.transformer_train()
         self.transformer_predict()
-        algorithm = 'nlp_transformer'
+        algorithm = "nlp_transformer"
         self.regression_eval(algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp17_regression_full_processing_tabnet_reg(self, df=None):
         """
@@ -286,11 +312,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.tabnet_regression_train()
-        algorithm = 'tabnet'
+        algorithm = "tabnet"
         self.tabnet_regression_predict()
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp18_regression_full_processing_ridge_reg(self, df=None):
         """
@@ -307,11 +333,13 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.ridge_regression_train()
-        algorithm = 'ridge'
-        self.ridge_regression_predict()
+        algorithm = "ridge"
+        self.ridge_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp19_regression_full_processing_elasticnet_reg(self, df=None):
         """
@@ -328,11 +356,13 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.elasticnet_regression_train()
-        algorithm = 'elasticnet'
-        self.elasticnet_regression_predict()
+        algorithm = "elasticnet"
+        self.elasticnet_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp20_regression_full_processing_catboost(self, df=None):
         """
@@ -349,11 +379,13 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.catboost_regression_train()
-        algorithm = 'catboost'
-        self.catboost_regression_predict()
+        algorithm = "catboost"
+        self.catboost_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp20_regression_full_processing_sgd(self, df=None):
         """
@@ -370,11 +402,13 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.sgd_regression_train()
-        algorithm = 'sgd'
-        self.sgd_regression_predict()
+        algorithm = "sgd"
+        self.sgd_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp21_regression_full_processing_ransac(self, df=None):
         """
@@ -391,11 +425,13 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.ransac_regression_train()
-        algorithm = 'ransac'
-        self.ransac_regression_predict()
+        algorithm = "ransac"
+        self.ransac_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_bp22_regression_full_processing_svm(self, df=None):
         """
@@ -412,13 +448,55 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             pass
         else:
             self.svm_regression_train()
-        algorithm = 'svm_regression'
-        self.svm_regression_predict()
+        algorithm = "svm_regression"
+        self.svm_regression_predict(
+            feat_importance=self.get_feature_importance[algorithm]
+        )
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
-    def ml_special_regression_full_processing_multimodel_avg_blender(self, df=None):
+    def ml_bp23_regressions_full_processing_neural_network(self, df=None):
+        """
+        Runs an NLP transformer blue print specifically for text regression. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_nlp_10" or "bp_nlp_11")
+        :return: Updates class attributes by its predictions.
+        """
+        self.std_preprocessing_pipeline(df=df)
+        if self.prediction_mode:
+            pass
+        else:
+            self.neural_network_train()
+        self.neural_network_predict()
+        algorithm = "neural_network"
+        self.regression_eval(algorithm)
+        self.prediction_mode = True
+        logging.info("Finished blueprint.")
+
+    def ml_bp24_regressions_full_processing_deep_quantile_regression(self, df=None):
+        """
+        Runs an NLP transformer blue print specifically for text regression. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_nlp_10" or "bp_nlp_11")
+        :return: Updates class attributes by its predictions.
+        """
+        self.quantile_regression_nn_preprocessing_pipeline(df=df)
+        if self.prediction_mode:
+            pass
+        else:
+            self.deep_quantile_regression_train()
+        self.deep_quantile_regression_predict()
+        algorithm = "deep_quantile_regression"
+        self.regression_eval(algorithm)
+        self.prediction_mode = True
+        logging.info("Finished blueprint.")
+
+    def ml_special_regression_full_processing_multimodel_avg_blender(  # noqa: C901
+        self, df=None
+    ):
         """
         Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
         if the predict_mode attribute is True.
@@ -470,56 +548,62 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
         if self.special_blueprint_algorithms["sklearn_ensemble"]:
             self.sklearn_ensemble_predict()
 
-        mode_cols = [alg for alg, value in self.special_blueprint_algorithms.items() if value]
+        mode_cols = [
+            alg for alg, value in self.special_blueprint_algorithms.items() if value
+        ]
 
         if self.prediction_mode:
             if self.special_blueprint_algorithms["ngboost"]:
-                self.dataframe["ngboost"] = self.predicted_values[f"ngboost"]
+                self.dataframe["ngboost"] = self.predicted_values["ngboost"]
             if self.special_blueprint_algorithms["lgbm"]:
-                self.dataframe["lgbm"] = self.predicted_values[f"lgbm"]
+                self.dataframe["lgbm"] = self.predicted_values["lgbm"]
             if self.special_blueprint_algorithms["xgboost"]:
-                self.dataframe["xgboost"] = self.predicted_values[f"xgboost"]
+                self.dataframe["xgboost"] = self.predicted_values["xgboost"]
             if self.special_blueprint_algorithms["vowpal_wabbit"]:
-                self.dataframe["vowpal_wabbit"] = self.predicted_values[f"vowpal_wabbit"]
+                self.dataframe["vowpal_wabbit"] = self.predicted_values["vowpal_wabbit"]
             if self.special_blueprint_algorithms["tabnet"]:
-                self.dataframe["tabnet"] = self.predicted_values[f"tabnet"]
+                self.dataframe["tabnet"] = self.predicted_values["tabnet"]
             if self.special_blueprint_algorithms["ridge"]:
-                self.dataframe["ridge"] = self.predicted_values[f"ridge"]
+                self.dataframe["ridge"] = self.predicted_values["ridge"]
             if self.special_blueprint_algorithms["elasticnet"]:
-                self.dataframe["elasticnet"] = self.predicted_values[f"elasticnet"]
+                self.dataframe["elasticnet"] = self.predicted_values["elasticnet"]
             if self.special_blueprint_algorithms["catboost"]:
-                self.dataframe["catboost"] = self.predicted_values[f"catboost"]
+                self.dataframe["catboost"] = self.predicted_values["catboost"]
             if self.special_blueprint_algorithms["sklearn_ensemble"]:
-                self.dataframe["sklearn_ensemble"] = self.predicted_values[f"sklearn_ensemble"]
+                self.dataframe["sklearn_ensemble"] = self.predicted_values[
+                    "sklearn_ensemble"
+                ]
 
-            self.dataframe["blended_preds"] = self.dataframe[mode_cols].sum(axis=1)/len(mode_cols)
-            self.predicted_values[f"blended_preds"] = self.dataframe["blended_preds"]
+            self.dataframe["blended_preds"] = self.dataframe[mode_cols].sum(
+                axis=1
+            ) / len(mode_cols)
+            self.predicted_values["blended_preds"] = self.dataframe["blended_preds"]
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             if self.special_blueprint_algorithms["lgbm"]:
-                X_test["lgbm"] = self.predicted_values[f"lgbm"]
+                X_test["lgbm"] = self.predicted_values["lgbm"]
             if self.special_blueprint_algorithms["ngboost"]:
-                X_test["ngboost"] = self.predicted_values[f"ngboost"]
+                X_test["ngboost"] = self.predicted_values["ngboost"]
             if self.special_blueprint_algorithms["xgboost"]:
-                X_test["xgboost"] = self.predicted_values[f"xgboost"]
+                X_test["xgboost"] = self.predicted_values["xgboost"]
             if self.special_blueprint_algorithms["vowpal_wabbit"]:
-                X_test["vowpal_wabbit"] = self.predicted_values[f"vowpal_wabbit"]
+                X_test["vowpal_wabbit"] = self.predicted_values["vowpal_wabbit"]
             if self.special_blueprint_algorithms["tabnet"]:
-                X_test["tabnet"] = self.predicted_values[f"tabnet"]
+                X_test["tabnet"] = self.predicted_values["tabnet"]
             if self.special_blueprint_algorithms["ridge"]:
-                X_test["ridge"] = self.predicted_values[f"ridge"]
+                X_test["ridge"] = self.predicted_values["ridge"]
             if self.special_blueprint_algorithms["elasticnet"]:
-                X_test["elasticnet"] = self.predicted_values[f"elasticnet"]
+                X_test["elasticnet"] = self.predicted_values["elasticnet"]
             if self.special_blueprint_algorithms["catboost"]:
-                X_test["catboost"] = self.predicted_values[f"catboost"]
+                X_test["catboost"] = self.predicted_values["catboost"]
             if self.special_blueprint_algorithms["sklearn_ensemble"]:
-                X_test["sklearn_ensemble"] = self.predicted_values[f"sklearn_ensemble"]
+                X_test["sklearn_ensemble"] = self.predicted_values["sklearn_ensemble"]
 
-            X_test["blended_preds"] = X_test[mode_cols].sum(axis=1)/len(mode_cols)
-            self.predicted_values[f"blended_preds"] = X_test["blended_preds"]
-        self.regression_eval('blended_preds')
+            X_test["blended_preds"] = X_test[mode_cols].sum(axis=1) / len(mode_cols)
+            self.predicted_values["blended_preds"] = X_test["blended_preds"]
+        self.regression_eval("blended_preds")
         self.prediction_mode = True
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
 
     def ml_special_regression_auto_model_exploration(self, df=None):
         """
@@ -540,11 +624,11 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
             if self.special_blueprint_algorithms["catboost"]:
                 self.train_pred_selected_model(algorithm="catboost")
             if self.special_blueprint_algorithms["lgbm"]:
-                self.train_pred_selected_model(algorithm='lgbm')
+                self.train_pred_selected_model(algorithm="lgbm")
             if self.special_blueprint_algorithms["xgboost"]:
-                self.train_pred_selected_model(algorithm='xgboost')
+                self.train_pred_selected_model(algorithm="xgboost")
             if self.special_blueprint_algorithms["ngboost"]:
-                self.train_pred_selected_model(algorithm='ngboost')
+                self.train_pred_selected_model(algorithm="ngboost")
             if self.special_blueprint_algorithms["vowpal_wabbit"]:
                 self.train_pred_selected_model(algorithm="vowpal_wabbit")
             if self.special_blueprint_algorithms["tabnet"]:
@@ -554,14 +638,16 @@ class RegressionBluePrint(RegressionModels, PreprocessingBluePrint,  NlpModel):
 
             # select best model
             min_mae = 10000000
-            self.best_model = 'xgboost'
+            self.best_model = "xgboost"
             for k, v in self.evaluation_scores.items():
-                if (v['mae']) < min_mae:
-                    min_mae = (v['mae'])
+                if (v["mae"]) < min_mae:
+                    min_mae = v["mae"]
                     self.best_model = k
-                    print(f"Best model is {self.best_model} with mean absolute error of {v}")
+                    print(
+                        f"Best model is {self.best_model} with mean absolute error of {v}"
+                    )
             self.train_pred_selected_model(algorithm=self.best_model)
             self.prediction_mode = True
         else:
             self.train_pred_selected_model(algorithm=self.best_model)
-        logging.info('Finished blueprint.')
+        logging.info("Finished blueprint.")
