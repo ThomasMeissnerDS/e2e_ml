@@ -188,7 +188,15 @@ class UnivariateTimeSeriesModels(postprocessing.FullPipeline):
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             algorithm = "holt_winters"
             tscv = TimeSeriesSplit(n_splits=3)
-            stric_pos = (X_train <= 0).sum().sum() == 0
+            stric_pos = (X_train == 0).sum().sum() == 0
+
+            if not stric_pos:
+                delta = 0 - X_train.min()
+                X_train = X_train + delta + 0.01
+                self.preprocess_decisions["holt_winters_delta"] = delta.values[0]
+
+            stric_pos = (X_train == 0).sum().sum() == 0
+            print((X_train == 0).sum().sum())
 
             def objective(trial):
                 options = ["additive", "multiplicative", None]
@@ -265,7 +273,9 @@ class UnivariateTimeSeriesModels(postprocessing.FullPipeline):
                         optimized=True, method=param["method"], use_brute=True
                     )
                     preds = model.forecast(len(x_test.index))
-                    mae = mean_absolute_error(y_test, preds)
+                    mae = mean_absolute_error(
+                        y_test, preds + self.preprocess_decisions["holt_winters_delta"]
+                    )
                     mean_abs_errors.append(mae)
 
                 return np.mean(np.asarray(mean_abs_errors))
@@ -339,7 +349,9 @@ class UnivariateTimeSeriesModels(postprocessing.FullPipeline):
             predicted_probs = model.forecast(len(X_test.index))
 
         self.predicted_values[f"{algorithm}"] = {}
-        self.predicted_values[f"{algorithm}"] = predicted_probs
+        self.predicted_values[f"{algorithm}"] = (
+            predicted_probs + self.preprocess_decisions["holt_winters_delta"]
+        )
         del model
         _ = gc.collect()
 

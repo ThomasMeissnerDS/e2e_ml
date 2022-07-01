@@ -623,6 +623,7 @@ class DeepQuantileRegression(
                         preds_to_reconvert=X_test[f"preds_up_model{model_no}"].values,
                         mode="revert",
                     )
+                    self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
                 mode_cols.append(f"preds_model{model_no}")
 
                 allpreds.append(preds)
@@ -850,3 +851,4 @@ class DeepQuantileRegression(
             self.predicted_values["deep_quantile_regression"] = X_test[
                 "deep_quantile_regression_median"
             ]
+            self.wrap_test_train_to_dict(X_train, X_test, Y_train, Y_test)
