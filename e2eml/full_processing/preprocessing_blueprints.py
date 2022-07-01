@@ -370,8 +370,7 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
         self.reattach_targets()
         self.get_nb_features()
         if self.blueprint_step_selection_non_nlp["scale_data"]:
-            self.data_scaling()
-            self.data_scaling_target_only(mode="fit")
+            self.scale_with_target(mode="fit")
 
     def regression_for_time_series_preprocessing_pipeline(self, df):
         logging.info("Start blueprint.")

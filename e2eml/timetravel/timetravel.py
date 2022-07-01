@@ -402,7 +402,7 @@ def timewalk_auto_exploration(  # noqa: C901
     speed_up_model_tuning=True,
     name_of_exist_experiment=None,
     experiment_name="timewalk.pkl",
-    experiment_comment=f'Experiment run at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
+    experiment_comment=f'Experiment run at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',  # noqa: B008
 ):
     """
     Timewalk is an extension to TimeTravel. It executes different preprocessing steps an short model training to explore

@@ -8,7 +8,7 @@ import psutil
 import torch
 import torch.nn as nn
 from numpy import inf
-from sklearn.metrics import mean_squared_error, median_absolute_error
+from sklearn.metrics import mean_squared_error
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
@@ -623,13 +623,6 @@ class LstmModel(postprocessing.FullPipeline, TimeSeriesDataset):
 
             del model, optimizer, scheduler
             _ = gc.collect()
-
-    def median_abs_error_eval(self, true_y, predicted):
-        try:
-            median_absolute_error_score = median_absolute_error(true_y, predicted)
-        except Exception:
-            median_absolute_error_score = 0
-        return median_absolute_error_score
 
     def lstm_predict(self):
         logging.info("Start LSTM transformer prediction.")

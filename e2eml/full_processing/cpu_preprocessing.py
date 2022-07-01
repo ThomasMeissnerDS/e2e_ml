@@ -172,7 +172,7 @@ class PreProcessing:
         save_models_path=None,
         train_split_type="cross",
         rapids_acceleration=False,
-        shuffle_during_training=True,
+        shuffle_during_training=None,
         train_size=0.80,
         global_random_state=1000,
     ):
@@ -257,7 +257,14 @@ class PreProcessing:
         else:
             self.train_split_type = "time"
         self.rapids_acceleration = rapids_acceleration
-        self.shuffle_during_training = shuffle_during_training
+
+        if not shuffle_during_training and self.class_problem in ["time_series"]:
+            self.shuffle_during_training = False
+        elif not shuffle_during_training:
+            self.shuffle_during_training = True
+        else:
+            self.shuffle_during_training = shuffle_during_training
+
         self.train_size = train_size
         if self.shuffle_during_training:
             self.booster_random_state = None
@@ -586,13 +593,17 @@ class PreProcessing:
             "weight_decay": 1e-5,
             "seq_len": 5,
             "regression_loss": "mse",
-            "epochs": 100,
+            "epochs": 1000,
             "quantiles": (0.2, 0.5, 0.8),
             "nb_model_to_create": 1,
             "transformer_model_path": self.tabular_nn_model_load_from_path,
             "model_save_states_path": {self.tabular_nn_model_save_states_path},
             "keep_best_model_only": False,
         }
+
+        if self.dataframe.shape[1] > 50:
+            self.lstm_settings["hidden_dim"] = 512
+            self.lstm_settings["layer_dim"] = 3
 
         self.rnn_settings = {
             "train_batch_size": 32,
@@ -612,6 +623,9 @@ class PreProcessing:
             "model_save_states_path": {self.tabular_nn_model_save_states_path},
             "keep_best_model_only": False,
         }
+        if self.dataframe.shape[1] > 50:
+            self.rnn_settings["hidden_dim"] = 512
+            self.rnn_settings["layer_dim"] = 3
 
         self.deesc_settings = {
             "learning_rate": 0.3,

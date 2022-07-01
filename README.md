@@ -417,10 +417,13 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
-* 4.11.00
+* 4.12.00
   * Added fully connected NN for regression with quantile loss
   * Fixed wrong assignment in RNN model
   * Adjusted default preprocessing steps for regression tasks
+  * Shuffling is disabled automatically for all time_series ml_task instances
+  * LSTM & RNN default settings will automatically adjust to a more complex architecture,
+  * if more than 50 features have been detected
 * 4.00.50
   * Added Autoarima & Holt winters for univariate time series predictions
   * Added LSTM & RNN for uni- & multivariate time series prediction

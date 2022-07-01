@@ -8,7 +8,7 @@ import psutil
 import torch
 import torch.nn as nn
 from numpy import inf
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
@@ -372,9 +372,9 @@ class LSTMQuantileModel(
         losses = np.mean(losses)
         # Score with rmse
         try:
-            train_rme_loss = mean_squared_error(alltargets, allpreds)
+            train_rme_loss = mean_absolute_error(alltargets, allpreds)
         except ValueError:
-            train_rme_loss = mean_squared_error(alltargets, allpreds)
+            train_rme_loss = mean_absolute_error(alltargets, allpreds)
         return losses, train_rme_loss
 
     def lstm_quantile_validating(self, valid_dataloader, model):
@@ -420,12 +420,12 @@ class LSTMQuantileModel(
         losses = np.mean(losses)
         # Score with rmse
         try:
-            valid_rme_loss = mean_squared_error(alltargets, allpreds)
+            valid_rme_loss = mean_absolute_error(alltargets, allpreds)
             # valid_rme_loss = np.nan_to_num(valid_rme_loss, nan=0, neginf=0)
         except ValueError:
             allpreds_low = self.fillna_inf(allpreds_low)
             allpreds_up = self.fillna_inf(allpreds_up)
-            valid_rme_loss = mean_squared_error(alltargets, allpreds)
+            valid_rme_loss = mean_absolute_error(alltargets, allpreds)
 
         return allpreds, losses, valid_rme_loss
 
@@ -465,25 +465,6 @@ class LSTMQuantileModel(
                     self.dataframe[f"preds_up_model{model_no}"] = preds_up
 
                     self.dataframe[
-                        f"preds_model{model_no}"
-                    ] = self.data_scaling_target_only(
-                        mode="reverse",
-                        to_scale=self.dataframe[f"preds_model{model_no}"],
-                    )
-                    self.dataframe[
-                        f"preds_low_model{model_no}"
-                    ] = self.data_scaling_target_only(
-                        mode="reverse",
-                        to_scale=self.dataframe[f"preds_low_model{model_no}"],
-                    )
-                    self.dataframe[
-                        f"preds_up_model{model_no}"
-                    ] = self.data_scaling_target_only(
-                        mode="reverse",
-                        to_scale=self.dataframe[f"preds_up_model{model_no}"],
-                    )
-
-                    self.dataframe[
                         f"preds_low_model{model_no}"
                     ] = self.target_skewness_handling(
                         preds_to_reconvert=self.dataframe[
@@ -504,18 +485,6 @@ class LSTMQuantileModel(
                     X_test[f"preds_model{model_no}"] = preds
                     X_test[f"preds_low_model{model_no}"] = preds_low
                     X_test[f"preds_up_model{model_no}"] = preds_up
-
-                    X_test[f"preds_model{model_no}"] = self.data_scaling_target_only(
-                        mode="reverse", to_scale=X_test[f"preds_model{model_no}"]
-                    )
-                    X_test[
-                        f"preds_low_model{model_no}"
-                    ] = self.data_scaling_target_only(
-                        mode="reverse", to_scale=X_test[f"preds_low_model{model_no}"]
-                    )
-                    X_test[f"preds_up_model{model_no}"] = self.data_scaling_target_only(
-                        mode="reverse", to_scale=X_test[f"preds_up_model{model_no}"]
-                    )
 
                     X_test[
                         f"preds_low_model{model_no}"
@@ -753,25 +722,29 @@ class LSTMQuantileModel(
             self.dataframe["lstm_quantile_regression_mean"] = self.dataframe[
                 mode_cols
             ].mean(axis=1)
-            self.dataframe[
+
+            self.dataframe[self.target_variable] = self.dataframe[
                 "lstm_quantile_regression_mean"
-            ] = self.target_skewness_handling(
-                preds_to_reconvert=self.dataframe[
-                    "lstm_quantile_regression_mean"
-                ].values,
+            ]
+            self.scale_with_target(mode="reverse", drop_target=False)
+            self.dataframe[self.target_variable] = self.target_skewness_handling(
+                preds_to_reconvert=self.dataframe[self.target_variable].values,
                 mode="revert",
             )
             self.predicted_values["lstm_quantile_regression"] = self.dataframe[
-                "lstm_quantile_regression_mean"
+                self.target_variable
             ]
 
         else:
             X_test["lstm_quantile_regression_median"] = X_test[mode_cols].median(axis=1)
             X_test["lstm_quantile_regression_mean"] = X_test[mode_cols].mean(axis=1)
-            X_test["lstm_quantile_regression_mean"] = self.target_skewness_handling(
-                preds_to_reconvert=X_test["lstm_quantile_regression_mean"].values,
+
+            X_test[self.target_variable] = X_test["lstm_quantile_regression_mean"]
+            self.scale_with_target(mode="reverse", drop_target=False)
+            X_test[self.target_variable] = self.target_skewness_handling(
+                preds_to_reconvert=X_test[self.target_variable].values,
                 mode="revert",
             )
             self.predicted_values["lstm_quantile_regression"] = X_test[
-                "lstm_quantile_regression_median"
+                self.target_variable
             ]
