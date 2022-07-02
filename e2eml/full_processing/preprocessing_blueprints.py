@@ -337,7 +337,8 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
         if self.blueprint_step_selection_non_nlp["fill_nulls_static"]:
             self.fill_nulls(how="static")  # can only be here when "static"
         if self.blueprint_step_selection_non_nlp["scale_data"]:
-            self.scale_with_target(mode="fit")
+            self.data_scaling()
+            self.data_scaling_target_only()
         if self.blueprint_step_selection_non_nlp["autoencoder_outlier_detection"]:
             self.autoencoder_based_outlier_detection()
         if self.blueprint_step_selection_non_nlp["automated_feature_selection"]:
