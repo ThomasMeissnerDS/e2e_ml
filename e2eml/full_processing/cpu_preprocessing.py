@@ -509,6 +509,7 @@ class PreProcessing:
             "linear_regression": True,
             "ransac": True,
             "multinomial_nb": True,
+            "tweedie": True,
         }
         # store chosen preprocessing settings
         if not preprocess_decisions:
@@ -688,6 +689,8 @@ class PreProcessing:
             "final_pca_dimensionality_reduction": 50,
             "auto_arima": 10,
             "holt_winters": 50,
+            "tweedie": 100,
+            "thymeboost": 100,
         }
 
         self.hyperparameter_tuning_max_runtime_secs = {
@@ -712,6 +715,8 @@ class PreProcessing:
             "final_pca_dimensionality_reduction": 2 * 60 * 60,
             "auto_arima": 2 * 60 * 60,
             "holt_winters": 2 * 60 * 60,
+            "tweedie": 2 * 60 * 60,
+            "thymeboost": 2 * 60 * 60,
         }
 
         self.feature_selection_sample_size = 100000

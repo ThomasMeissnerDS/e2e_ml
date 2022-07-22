@@ -176,6 +176,17 @@ class RegressionNNModel(
             return torch.sqrt(nn.L1Loss()(output, target))
         elif self.autotuned_nn_settings["regression_loss"] == "poisson":
             return torch.sqrt(nn.PoissonNLLLoss()(output, target))
+        elif self.autotuned_nn_settings["regression_loss"] == "smape":
+            return (
+                1
+                / len(output)
+                * torch.sum(
+                    2
+                    * torch.abs(target - output)
+                    / (torch.abs(output) + torch.abs(target))
+                    * 100
+                )
+            )
 
     def get_num_features(self):
         X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()

@@ -154,6 +154,9 @@ There are regression blueprints as well (in regression module):
 - ml_bp20_regression_full_processing_sgd()
 - ml_bp21_regression_full_processing_ransac()
 - ml_bp22_regression_full_processing_svm()
+- ml_bp23_regressions_full_processing_neural_network()  # THIS might change in the future
+- ml_bp24_regressions_full_processing_deep_quantile_regression()
+- ml_bp25_train_test_regression_full_processing_tweedie_reg()
 - ml_bp23_regressions_full_processing_neural_network() # offers fully connected ANN & 1D CNN
 - ml_special_regression_full_processing_multimodel_avg_blender()
 - ml_special_regression_auto_model_exploration()
@@ -417,7 +420,10 @@ We welcome Pull Requests! Please make a PR against the `develop` branch.
 
 ## Release History
 
-* 4.12.00
+* 4.20.00
+  * Added Tweedie regression
+  * Added Thymeboost
+* 4.13.00
   * Added fully connected NN for regression with quantile loss
   * Fixed wrong assignment in RNN model
   * Adjusted default preprocessing steps for regression tasks

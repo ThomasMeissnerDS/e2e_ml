@@ -18,6 +18,7 @@ try:
 except ModuleNotFoundError:
     from statsmodels.tsa.arima_model import ARIMA
 
+from ThymeBoost import ThymeBoost as tb
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from e2eml.full_processing import postprocessing
@@ -181,19 +182,118 @@ class UnivariateTimeSeriesModels(postprocessing.FullPipeline):
         del model
         _ = gc.collect()
 
+    def thymeboost_train(self):
+        if self.prediction_mode:
+            pass
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            algorithm = "thymeboost"
+            tscv = TimeSeriesSplit(n_splits=5)
+
+            def objective(trial):
+                param = {
+                    "seasonal_period": trial.suggest_int("seasonal_period", 2, 24),
+                }
+
+                mean_abs_errors = []
+                for train_index, test_index in tscv.split(X_train):
+                    x_train, x_test = (
+                        X_train.iloc[train_index],
+                        X_train.iloc[test_index],
+                    )
+                    y_train, y_test = (  # noqa: F841
+                        Y_train.iloc[train_index],
+                        Y_train.iloc[test_index],
+                    )
+                    model = tb.ThymeBoost(verbose=0)
+                    try:
+                        output = model.autofit(
+                            pd.Series(x_train), seasonal_period=param["seasonal_period"]
+                        )
+                        preds = model.predict(output, len(x_test.index))
+                        mae = mean_absolute_error(y_test, preds)
+                        mean_abs_errors.append(mae)
+                    except Exception as e:
+                        mae = 9999999999
+                        mean_abs_errors.append(mae)
+                        print(e)
+                return np.mean(np.asarray(mean_abs_errors))
+
+            sampler = optuna.samplers.TPESampler(
+                multivariate=True, seed=self.global_random_state
+            )
+            study = optuna.create_study(
+                direction="minimize", sampler=sampler, study_name=f"{algorithm}"
+            )
+            study.optimize(
+                objective,
+                n_trials=self.hyperparameter_tuning_rounds[algorithm],
+                timeout=self.hyperparameter_tuning_max_runtime_secs[algorithm],
+                gc_after_trial=True,
+                show_progress_bar=True,
+            )
+            self.optuna_studies[f"{algorithm}"] = {}
+            # optuna.visualization.plot_optimization_history(study).write_image('LGBM_optimization_history.png')
+            # optuna.visualization.plot_param_importances(study).write_image('LGBM_param_importances.png')
+            try:
+                fig = optuna.visualization.plot_optimization_history(study)
+                self.optuna_studies[f"{algorithm}_plot_optimization"] = fig
+                fig.show()
+                fig = optuna.visualization.plot_param_importances(study)
+                self.optuna_studies[f"{algorithm}_param_importance"] = fig
+                fig.show()
+            except ZeroDivisionError:
+                pass
+
+            best_parameters = study.best_trial.params
+
+            model = tb.ThymeBoost(verbose=0)
+            model.autofit(
+                pd.concat([X_train, X_test]),
+                seasonal_period=best_parameters["seasonal_period"],
+            )
+            self.trained_models[f"{algorithm}"] = {}
+            self.trained_models[f"{algorithm}"] = model
+            del model
+            _ = gc.collect()
+            return self.trained_models
+
+    def thymeboost_predict(self, n_forecast=1):
+        """
+        Loads the pretrained model from the class itself and predicts on new data.
+        :return: Updates class attributes.
+        """
+        self.get_current_timestamp(task="Predict with Auto Arima")
+        algorithm = "thymeboost"
+        if self.prediction_mode:
+            model = self.trained_models[f"{algorithm}"]
+            predicted_values = model.predict(n_forecast)
+            predicted_values[np.isfinite(predicted_values) is False] = 0
+        else:
+            X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
+            model = self.trained_models[f"{algorithm}"]
+            predicted_values = model.predict(len(X_test.index))
+            predicted_values[np.isfinite(predicted_values) is False] = 0
+        self.predicted_values[f"{algorithm}"] = {}
+        self.predicted_values[f"{algorithm}"] = predicted_values
+        del model
+        _ = gc.collect()
+
     def holt_winters_train(self):
         if self.prediction_mode:
             pass
         else:
             X_train, X_test, Y_train, Y_test = self.unpack_test_train_dict()
             algorithm = "holt_winters"
-            tscv = TimeSeriesSplit(n_splits=3)
+            tscv = TimeSeriesSplit(n_splits=2)
             stric_pos = (X_train == 0).sum().sum() == 0
 
             if not stric_pos:
                 delta = 0 - X_train.min()
                 X_train = X_train + delta + 0.01
                 self.preprocess_decisions["holt_winters_delta"] = delta.values[0]
+            else:
+                self.preprocess_decisions["holt_winters_delta"] = 0
 
             stric_pos = (X_train == 0).sum().sum() == 0
             print((X_train == 0).sum().sum())

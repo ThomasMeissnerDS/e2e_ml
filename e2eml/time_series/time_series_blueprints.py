@@ -185,3 +185,26 @@ class TimeSeriesBluePrint(
         self.regression_eval(algorithm=algorithm)
         self.prediction_mode = True
         logging.info("Finished blueprint.")
+
+    def ml_bp106_univariate_timeseries_full_processing_thymeboost(
+        self, df=None, n_forecast=1
+    ):
+        """
+        Runs a blue print from preprocessing to model training. Can be used as a pipeline to predict on new data,
+        if the predict_mode attribute is True.
+        :param df: Accepts a dataframe to make predictions on new data.
+        :param preprocessing_type: Select the type of preprocessing pipeline. "Minimum" executes the least possible steps,
+        "full" the whole standard preprocessing and "nlp" adds functionality especially for NLP tasks.
+        :param preprocess_bp: Chose the preprocessing pipeline blueprint ("bp_01", "bp_02" or "bp_03")
+        :return: Updates class attributes by its predictions.
+        """
+        self.thymeboost_preprocessing_pipeline()
+        if self.prediction_mode:
+            pass
+        else:
+            self.thymeboost_train()
+        algorithm = "thymeboost"
+        self.thymeboost_predict(n_forecast=n_forecast)
+        self.regression_eval(algorithm=algorithm)
+        self.prediction_mode = True
+        logging.info("Finished blueprint.")

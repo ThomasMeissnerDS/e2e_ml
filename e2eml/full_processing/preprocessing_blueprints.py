@@ -281,6 +281,17 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
         self.keep_target_only()
         self.make_stationary()
 
+    def thymeboost_preprocessing_pipeline(self):
+        logging.info("Start blueprint.")
+        self.runtime_warnings(warn_about="future_architecture_change")
+        self.train_test_split(how=self.train_split_type)
+        if self.blueprint_step_selection_non_nlp["automatic_type_detection_casting"]:
+            self.automatic_type_detection_casting()
+        if self.blueprint_step_selection_non_nlp["remove_duplicate_column_names"]:
+            self.remove_duplicate_column_names()
+        self.reattach_targets()
+        self.keep_target_only()
+
     def lstm_preprocessing_pipeline(self, df):
         logging.info("Start blueprint.")
         self.runtime_warnings(warn_about="future_architecture_change")
@@ -330,6 +341,9 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
             self.add_weekend_flag()
         if self.blueprint_step_selection_non_nlp["datetime_converter"]:
             self.datetime_converter(datetime_handling="all")
+        if self.blueprint_step_selection_non_nlp["reduce_memory_footprint"]:
+            if self.low_memory_mode:
+                self.reduce_memory_footprint()
         if self.blueprint_step_selection_non_nlp["holistic_null_filling"]:
             self.holistic_null_filling(iterative=False)
         if self.blueprint_step_selection_non_nlp["category_encoding"]:
@@ -343,6 +357,8 @@ class PreprocessingBluePrint(TabularGan, NlpPreprocessing, TimeSeriesPreprocessi
             self.autoencoder_based_outlier_detection()
         if self.blueprint_step_selection_non_nlp["automated_feature_selection"]:
             self.automated_feature_selection(numeric_only=False)
+        if self.blueprint_step_selection_non_nlp["use_tabular_gan"]:
+            self.train_tabular_gans()
 
     def lstm_quantile_preprocessing_pipeline(self, df):
         logging.info("Start blueprint.")
