@@ -13,7 +13,10 @@ from joblib import Parallel, delayed
 from lightgbm import LGBMClassifier
 from ngboost import NGBClassifier
 from ngboost.distns import k_categorical
-from pandas.core.common import SettingWithCopyWarning
+try:
+    from pandas.core.common import SettingWithCopyWarning
+except Exception:
+    from pandas.errors import SettingWithCopyWarning
 from pytorch_tabnet.metrics import Metric
 from pytorch_tabnet.pretraining import TabNetPretrainer
 from pytorch_tabnet.tab_model import TabNetClassifier

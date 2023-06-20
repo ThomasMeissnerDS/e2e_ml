@@ -28,7 +28,10 @@ from category_encoders import (
     WOEEncoder,
 )
 from imblearn.over_sampling import SMOTE
-from pandas.core.common import SettingWithCopyWarning
+try:
+    from pandas.core.common import SettingWithCopyWarning
+except Exception:
+    from pandas.errors import SettingWithCopyWarning
 from scipy.stats import (
     binom,
     dweibull,

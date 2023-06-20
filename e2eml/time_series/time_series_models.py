@@ -6,7 +6,10 @@ import numpy as np
 import optuna
 import pandas as pd
 import torch
-from pandas.core.common import SettingWithCopyWarning
+try:
+    from pandas.core.common import SettingWithCopyWarning
+except Exception:
+    from pandas.errors import SettingWithCopyWarning
 from pytorch_tabnet.pretraining import TabNetPretrainer
 from pytorch_tabnet.tab_model import TabNetRegressor
 from sklearn.metrics import mean_absolute_error
