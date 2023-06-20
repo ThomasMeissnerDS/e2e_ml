@@ -32,6 +32,7 @@ try:
     from pandas.core.common import SettingWithCopyWarning
 except Exception:
     from pandas.errors import SettingWithCopyWarning
+
 from scipy.stats import (
     binom,
     dweibull,
